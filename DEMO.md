@@ -1,7 +1,9 @@
 # Demo deployment
 
-The public demo is the app itself, built from this repository as a third
-Vercel project (`tally-demo`) with `DEMO_MODE=1`. It runs on synthetic data
+The public demo is the app itself, deployed as a third Vercel project
+(`tally-demo`) with `DEMO_MODE=1`. It builds from the public snapshot
+repository liz112200/tally-demo — the same code with synthetic test fixtures
+and no history — so changes reach the demo only when synced there. It runs on synthetic data
 in its own Neon database and Vercel Blob store. Production is untouched: no
 migration, no shared credential, no shared store.
 
@@ -34,8 +36,8 @@ hashes only.
 
 ## Provisioning
 
-1. Create the Vercel project `tally-demo` on this repository (root directory
-   `.`). Keep Standard Protection: the production domain is public, previews
+1. Create the Vercel project `tally-demo` on the public snapshot repository
+   (root directory `.`). Keep Standard Protection: the production domain is public, previews
    are not.
 2. Add a NEW Neon database from the Marketplace, connected to `tally-demo`
    only. Never branch from production: a branch is a copy of its data.

@@ -244,9 +244,11 @@ These are decided. Do not reintroduce the alternatives.
   what they are owed back, overstates the debt (it read $1,250.675 where the
   net was $967.77). Hence one Share button per person, not per direction,
   and one sort shared by both lists so the message matches the screen.
-- The public demo is a THIRD Vercel project, `tally-demo`, built from this
-  repository with `DEMO_MODE=1`, deployment protection off, and its own empty
-  Neon database and Blob store; see DEMO.md. Its safety is structural, not
+- The public demo is a THIRD Vercel project, `tally-demo`, with
+  `DEMO_MODE=1`, deployment protection off, and its own empty Neon database
+  and Blob store; see DEMO.md. It deploys from the public snapshot repository
+  liz112200/tally-demo (synthetic fixtures, no history), not from the private
+  one, so app changes reach the demo only when synced there. Its safety is structural, not
   RLS: it never holds production credentials. Two layers enforce that.
   `lib/deploy-guard.ts` (offline, in `next.config.ts` at build and at module
   scope in `db/index.ts` before any connection) fails a demo deployment —
