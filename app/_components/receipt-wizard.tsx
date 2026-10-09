@@ -440,6 +440,30 @@ function ReviewStep({
 
   function save() {
     if (parsed.problem) return;
+    // Saving replaces the receipt's items, and their assignments cascade away
+    // with them. Passing through review without editing anything must not
+    // cost an existing item split its assignments, so skip the write.
+    const unchanged =
+      merchant.trim() === receipt.merchant &&
+      (date === '' ? null : date) === (receipt.date ?? null) &&
+      parsed.subtotalCents === receipt.subtotalCents &&
+      parsed.taxCents === receipt.taxCents &&
+      parsed.tipCents === receipt.tipCents &&
+      parsed.totalCents === receipt.totalCents &&
+      (mismatch && note.trim() !== '' ? note.trim() : null) === (receipt.mismatchNote ?? null) &&
+      items.length === receipt.items.length &&
+      items.every((item, i) => {
+        const stored = receipt.items[i];
+        return (
+          item.description.trim() === stored.description &&
+          (parsed.quantities[i] ?? 1) === stored.quantity &&
+          parsed.itemCents[i] === stored.amountCents
+        );
+      });
+    if (unchanged) {
+      onSaved();
+      return;
+    }
     const payload = JSON.stringify({
       receiptId: receipt.id,
       transactionId: receipt.transactionId,
