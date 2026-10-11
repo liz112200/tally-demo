@@ -258,7 +258,7 @@ These are decided. Do not reintroduce the alternatives.
   fixtures swapped for synthetic ones, quoted real rows rewritten, a denylist
   scan that aborts on any real string), runs the test suite on the result,
   and pushes it to the public `main` with the triggering commit's message and
-  author. A change that moves a substituted string fails the build until the
+  author name, under the GitHub noreply email. A change that moves a substituted string fails the build until the
   table is updated; it never publishes the original. Its safety is structural, not
   RLS: it never holds production credentials. Two layers enforce that.
   `lib/deploy-guard.ts` (offline, in `next.config.ts` at build and at module
