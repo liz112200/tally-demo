@@ -135,7 +135,8 @@ credit is tracked on the settlement, not as a negative balance.
 
 ## Demo
 
-A public demo runs as a separate Vercel project on synthetic data, with its
+A public demo runs at https://tally-demo-one.vercel.app as a separate Vercel
+project on synthetic data, with its
 own database and Blob store; it never holds production credentials, and a
 build guard refuses to start it if it does. Data is generated
 deterministically, relative to the current date, and resets daily. Receipt
