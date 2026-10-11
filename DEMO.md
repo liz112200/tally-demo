@@ -3,7 +3,11 @@
 The public demo is the app itself, deployed as a third Vercel project
 (`tally-demo`) with `DEMO_MODE=1`. It builds from the public snapshot
 repository liz112200/tally-demo — the same code with synthetic test fixtures
-and no history — so changes reach the demo only when synced there. It runs on synthetic data
+and no history. A GitHub Action in the private repository rebuilds that
+snapshot on every push to master (`npm run snapshot -- <dir>` builds it
+locally) and pushes it, which redeploys the demo. The Action authenticates
+with a write deploy key on the public repository, stored as the private
+repository's `PUBLIC_SNAPSHOT_DEPLOY_KEY` secret. It runs on synthetic data
 in its own Neon database and Vercel Blob store. Production is untouched: no
 migration, no shared credential, no shared store.
 

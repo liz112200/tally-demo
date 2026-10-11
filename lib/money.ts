@@ -82,6 +82,9 @@ export function distributeRemainder(totalCents: Cents, count: number): Cents[] {
   );
 }
 
+// Exact rendering for editable inputs (prefilled amounts the user may submit
+// back): never rounds, so parseDollars round-trips to the stored value. For
+// text shown to a reader, use formatUSD.
 export function formatCents(cents: Cents): string {
   const negative = cents < 0;
   const abs = Math.abs(cents);
@@ -97,8 +100,28 @@ export function formatCents(cents: Cents): string {
   return negative ? `-${body}` : body;
 }
 
+// Display formatting. Amounts are stored and computed in mills, but people
+// read dollars and cents: every amount shown as text rounds to whole cents,
+// half to even (bankers' rounding, so ties do not drift upward across a
+// column of shares), and always prints two decimals. Display only — nothing
+// stored or computed is rounded, and editable inputs keep the exact value
+// via formatCents so what is saved is what was owed.
+const MINOR_PER_CENT = MINOR_UNITS_PER_DOLLAR / 100;
+
+// Minor units -> whole cents (hundredths), half to even.
+export function roundHalfEvenToCents(minor: Cents): number {
+  const abs = Math.abs(minor);
+  const whole = Math.floor(abs / MINOR_PER_CENT);
+  const rest = abs - whole * MINOR_PER_CENT;
+  const half = MINOR_PER_CENT / 2;
+  const cents = rest > half || (rest === half && whole % 2 === 1) ? whole + 1 : whole;
+  // A negative amount that rounds to zero is zero, not -0.
+  return minor < 0 && cents !== 0 ? -cents : cents;
+}
+
 export function formatUSD(cents: Cents): string {
-  const negative = cents < 0;
-  const body = formatCents(toCents(Math.abs(cents)));
-  return negative ? `-$${body}` : `$${body}`;
+  const rounded = roundHalfEvenToCents(cents);
+  const abs = Math.abs(rounded);
+  const body = `${Math.floor(abs / 100).toLocaleString('en-US')}.${String(abs % 100).padStart(2, '0')}`;
+  return rounded < 0 ? `-$${body}` : `$${body}`;
 }

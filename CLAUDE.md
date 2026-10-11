@@ -27,8 +27,13 @@ These are decided. Do not reintroduce the alternatives.
   branded `Cents` type and every `*_cents` field/column keep the historical
   name but now hold thousandths, and `MINOR_UNITS_PER_DOLLAR`/`MONEY_DECIMALS`
   in lib/money.ts are the single source of the scale. `parseDollars` accepts
-  up to three decimals; `formatCents` shows the third only for sub-cent
-  amounts (trailing zero trims back to the familiar two). The unit change was
+  up to three decimals. Display and storage precision differ on purpose:
+  every amount shown as text goes through `formatUSD`, which rounds half to
+  even to whole cents and always prints two decimals; `formatCents` stays
+  exact (the third decimal only for sub-cent amounts) and is used only to
+  prefill editable inputs, so a submitted value is the stored one. Rounding
+  is per figure, so displayed shares can differ from a displayed total by a
+  cent. The unit change was
   a one-time data rescale (db/rescale-to-mills.ts, marker-guarded, ×10 on
   every money column, dedup_hash recomputed) — column types never changed, so
   there is no Drizzle migration for it. Sign convention (locked in phase 2):
@@ -241,14 +246,20 @@ These are decided. Do not reintroduce the alternatives.
   so a revoke affordance needs no migration. A list of 8 items or fewer is
   sent whole and publishes no row at all. A snapshot carries BOTH directions
   and states the net: a message listing only what someone owes, while omitting
-  what they are owed back, overstates the debt (it read $1,250.675 where the
+  what they are owed back, overstates the debt (it read $1,250.68 where the
   net was $967.77). Hence one Share button per person, not per direction,
   and one sort shared by both lists so the message matches the screen.
 - The public demo is a THIRD Vercel project, `tally-demo`, with
   `DEMO_MODE=1`, deployment protection off, and its own empty Neon database
   and Blob store; see DEMO.md. It deploys from the public snapshot repository
   liz112200/tally-demo (synthetic fixtures, no history), not from the private
-  one, so app changes reach the demo only when synced there. Its safety is structural, not
+  one. Every push to master here syncs it: `.github/workflows/sync-public-snapshot.yml`
+  builds the tree with `scripts/snapshot/build.mjs` (tracked files only, real
+  fixtures swapped for synthetic ones, quoted real rows rewritten, a denylist
+  scan that aborts on any real string), runs the test suite on the result,
+  and pushes it to the public `main` with the triggering commit's message and
+  author. A change that moves a substituted string fails the build until the
+  table is updated; it never publishes the original. Its safety is structural, not
   RLS: it never holds production credentials. Two layers enforce that.
   `lib/deploy-guard.ts` (offline, in `next.config.ts` at build and at module
   scope in `db/index.ts` before any connection) fails a demo deployment —

@@ -1,10 +1,12 @@
 import { describe, it, expect } from 'vitest';
+import fc from 'fast-check';
 import {
   toCents,
   parseDollars,
   tryParseDollars,
   formatCents,
   formatUSD,
+  roundHalfEvenToCents,
   sumCents,
   distributeRemainder,
 } from './money';
@@ -81,7 +83,49 @@ describe('formatUSD', () => {
     expect(formatUSD(toCents(-12340))).toBe('-$12.34');
     expect(formatUSD(toCents(-1234560))).toBe('-$1,234.56');
     expect(formatUSD(toCents(0))).toBe('$0.00');
-    expect(formatUSD(toCents(80765))).toBe('$80.765');
+  });
+});
+
+describe('formatUSD display rounding (half to even)', () => {
+  const usd = (minor: number) => formatUSD(toCents(minor));
+
+  it('rounds exact half-cent ties to the even cent', () => {
+    expect(usd(5)).toBe('$0.00'); // 0.005
+    expect(usd(15)).toBe('$0.02'); // 0.015
+    expect(usd(25)).toBe('$0.02'); // 0.025
+    expect(usd(35)).toBe('$0.04'); // 0.035
+    expect(usd(80_765)).toBe('$80.76');
+    expect(usd(80_775)).toBe('$80.78');
+    expect(usd(1_234_565)).toBe('$1,234.56');
+  });
+
+  it('rounds non-ties to the nearest cent', () => {
+    expect(usd(4)).toBe('$0.00');
+    expect(usd(6)).toBe('$0.01');
+    expect(usd(167_597)).toBe('$167.60');
+    expect(usd(43_034)).toBe('$43.03');
+  });
+
+  it('mirrors ties for negatives and never shows -$0.00', () => {
+    expect(usd(-5)).toBe('$0.00');
+    expect(usd(-15)).toBe('-$0.02');
+    expect(usd(-25)).toBe('-$0.02');
+    expect(usd(-80_765)).toBe('-$80.76');
+  });
+
+  it('always prints exactly two decimals', () => {
+    for (const minor of [0, 10, 1_000, 999_999, 123_456_789]) {
+      expect(usd(minor)).toMatch(/^-?\$[\d,]+\.\d{2}$/);
+    }
+  });
+
+  it('never moves an amount by more than half a cent', () => {
+    fc.assert(
+      fc.property(fc.integer({ min: -1_000_000_000, max: 1_000_000_000 }), (minor) => {
+        const cents = roundHalfEvenToCents(toCents(minor));
+        expect(Math.abs(cents * 10 - minor)).toBeLessThanOrEqual(5);
+      }),
+    );
   });
 });
 
@@ -95,9 +139,9 @@ describe('round-trip', () => {
     }
   });
 
-  it('parseDollars reverses formatUSD', () => {
+  it('parseDollars reverses formatUSD up to display rounding', () => {
     for (const x of samples) {
-      expect(parseDollars(formatUSD(x))).toBe(x);
+      expect(parseDollars(formatUSD(x))).toBe(roundHalfEvenToCents(x) * 10);
     }
   });
 });

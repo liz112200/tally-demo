@@ -7,6 +7,6 @@
 // demo build whether or not these are filled in; this list is the second,
 // offline layer.
 export const PRODUCTION_FINGERPRINTS = {
-  databaseEndpoints: [] as string[],
-  blobStores: [] as string[],
+  databaseEndpoints: ['7aa88e3195553579a4993423a98189c18f275dae947ccb6d012a0c29af51226d'],
+  blobStores: ['c82091422c9587a95e199eda173e7704693c8209f030ea9216e32ac2790c7081'],
 };

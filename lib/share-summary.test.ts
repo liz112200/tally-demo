@@ -42,8 +42,8 @@ describe('buildShareSummary', () => {
       owed: [line({ outstandingCents: 1_250_675, description: 'Groceries' })],
       owing: [line({ outstandingCents: 282_905, description: 'Rent' })],
     });
-    expect(text).toContain('What you owe me (1 item) — $1,250.675');
-    expect(text).toContain('What I owe you (1 item) — $282.905');
+    expect(text).toContain('What you owe me (1 item) — $1,250.68');
+    expect(text).toContain('What I owe you (1 item) — $282.90');
     expect(text).toContain('Net: you owe me $967.77');
   });
 
@@ -132,8 +132,8 @@ describe('buildShareSummary', () => {
     expect(text).toContain('…and 1 more');
   });
 
-  it('keeps sub-cent amounts exact (mills)', () => {
-    expect(summary({ owed: [line({ outstandingCents: 80_765 })] })).toContain('$80.765');
+  it('shows sub-cent amounts rounded to the cent, half to even', () => {
+    expect(summary({ owed: [line({ outstandingCents: 80_765 })] })).toContain('$80.76');
   });
 });
 
