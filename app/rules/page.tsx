@@ -2,11 +2,13 @@ import { Suspense } from 'react';
 import { getRules, getCategories } from '@/db/queries';
 import { RulesManager, ApplyRulesButton } from '@/app/_components/rules-manager';
 import { CategoriesManager } from '@/app/_components/categories-manager';
+import { BankCategories } from '@/app/_components/bank-categories';
+import { bankCategoryRows } from '@/db/bank-categories';
 import { requireUser } from '@/app/_lib/session';
 
 export default async function RulesPage() {
   await requireUser();
-  const [rules, categories] = await Promise.all([getRules(), getCategories()]);
+  const [rules, categories, bankRows] = await Promise.all([getRules(), getCategories(), bankCategoryRows()]);
   const categoryList = categories.map((c) => ({ id: c.id, name: c.name }));
   const categoryManagerList = categories.map((c) => ({
     id: c.id,
@@ -51,6 +53,10 @@ export default async function RulesPage() {
             <RulesManager rules={ruleList} categories={categoryList} />
           </Suspense>
         </div>
+        <BankCategories
+          rows={bankRows}
+          categories={categories.filter((c) => c.countsAsSpending).map((c) => ({ id: c.id, name: c.name }))}
+        />
       </div>
     </main>
   );

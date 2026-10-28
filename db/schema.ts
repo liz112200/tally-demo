@@ -36,9 +36,12 @@ export const transactionSource = pgEnum('transaction_source', [
 // case-insensitive at match time.
 export const matchType = pgEnum('match_type', ['substring', 'regex']);
 
-// Where a transaction's category came from. NULL means never categorized;
-// rules only ever touch NULL or 'rule' rows, never 'manual'.
-export const categorySource = pgEnum('category_source', ['manual', 'rule']);
+// Where a transaction's category came from. NULL means never categorized.
+// 'bank' is the bank's own category for a synced row, through the owner's
+// mapping (bank_category_map); it fills only uncategorized rows, and rules
+// overwrite it. Rules only ever touch NULL, 'rule' or 'bank' rows, never
+// 'manual'.
+export const categorySource = pgEnum('category_source', ['manual', 'rule', 'bank']);
 
 // How a split divides a transaction. 'item' derives shares from receipt
 // line-item assignments instead of a direct method input.
@@ -319,6 +322,19 @@ export const settlementAllocations = pgTable(
 // only once it is confirmed (`cutoverConfirmedAt`). A ledger account with no
 // CSV history has no cutover and syncs its full history.
 export const ledgerCutoverBasis = pgEnum('ledger_cutover_basis', ['posted', 'transaction']);
+
+// The owner's mapping from the bank's own categories (Plaid's personal
+// finance category, primary level, e.g. FOOD_AND_DRINK) to theirs. Small and
+// editable on /rules. A mapped category must count as spending: a transfer
+// to a person is TRANSFER_OUT to Plaid, and mapping it to Transfers would
+// take real spending out of every total (enforced where the mapping is set).
+export const bankCategoryMap = pgTable('bank_category_map', {
+  plaidCategory: text('plaid_category').primaryKey(),
+  categoryId: uuid('category_id')
+    .notNull()
+    .references(() => categories.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
 
 export const ledgerAccounts = pgTable(
   'ledger_accounts',

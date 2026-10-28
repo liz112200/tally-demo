@@ -25,7 +25,7 @@ export function CategoryCell({
 }: {
   transactionId: string;
   categoryId: string | null;
-  categorySource: 'manual' | 'rule' | null;
+  categorySource: 'manual' | 'rule' | 'bank' | null;
   categories: Category[];
 }) {
   const [pending, startTransition] = useTransition();

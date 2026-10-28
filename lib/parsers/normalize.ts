@@ -11,6 +11,11 @@
 export function normalizeMerchant(description: string): string {
   let s = description.toUpperCase();
 
+  // Plaid's Apple Pay prefix on synced rows ("AplPay NOODLE BAR ..."); the
+  // card's own export does not carry it, so without this the same merchant
+  // reads as two.
+  s = s.replace(/^APLPAY\s+/, '');
+
   // Card-network tokenization tail, e.g. "...CAAPPLE PAY ENDING IN **** 0083..".
   // The state code is often glued to "APPLE" (CAAPPLE, INAPPLE); the optional
   // two leading letters absorb it. Everything from there on is noise.

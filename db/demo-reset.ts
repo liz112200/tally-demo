@@ -27,7 +27,7 @@ const TABLES = [
   'settlement_allocations', 'settlements', 'receipt_item_assignments',
   'receipt_items', 'receipt_images', 'receipts', 'split_shares', 'splits',
   'transactions', 'imports', 'categorization_rules', 'categories', 'persons',
-  'share_links', 'ledger_accounts',
+  'share_links', 'ledger_accounts', 'bank_category_map',
 ];
 
 export async function resetDemo(env: {

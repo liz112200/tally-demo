@@ -368,6 +368,25 @@ surfaced while building go to PHASE11.md, as before.
     after a re-issue. Their handling rests on Plaid's documentation and on
     tests with made-up responses.
 
+## Bank categories
+
+Plaid gives each synced row its own category (personal finance category,
+primary level, e.g. FOOD_AND_DRINK). The owner maps the few that matter to
+their categories on /rules (`bank_category_map`, migration 0028; it starts
+as approved on 2026-10-28: food and drink to Dining, general merchandise to
+Shopping, transportation to Transport, travel to Travel, entertainment to
+Entertainment). A synced row that no rule matches takes the mapped category
+with source `bank`, shown on the row as the bank's, so a wrong guess is seen
+rather than inherited. Rules come first and overwrite it; it never
+overwrites a manual or rule category; a row with a split never moves into a
+category that is not splittable. Only categories that count as spending can
+be mapped: Plaid files a Zelle to a person as TRANSFER_OUT, and mapping that
+to Transfers would remove real spending from the totals. Changing the
+mapping changes no row; "Apply to existing" does, and reports how many rows
+took the bank's category. The normalizer also strips Plaid's "APLPAY "
+prefix, so a merchant reads the same from the bank and from a CSV (0028
+recomputes it on the rows that had it).
+
 ## Environments and guards
 
 `.env.local` currently points at the production database and Blob store

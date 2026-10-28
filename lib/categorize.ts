@@ -46,30 +46,40 @@ export function categorize(
 
 export type RuleTarget = {
   categoryId: string | null;
-  categorySource: 'manual' | 'rule' | null;
+  categorySource: 'manual' | 'rule' | 'bank' | null;
   hasSplit: boolean;
 };
 
+export type RuleOutcome = { categoryId: string | null; categorySource: 'rule' | 'bank' | null };
+
 // What re-running the rules does to one existing row, given the category the
-// rules matched (null for none). Returns the new category and source, or null
-// when the row stays as it is:
+// rules matched (null for none) and, for a synced row, the owner's category
+// for the bank's own category (null for none or unmapped). Returns the new
+// category and source, or null when the row stays as it is:
 //   - a manual category is the owner's and is never touched;
-//   - a match sets the category (source 'rule'); no match clears a stale rule
-//     category, and a never-categorized row stays uncategorized;
+//   - a rule match sets the category (source 'rule'), over a bank one too:
+//     rules come first;
+//   - with no match, a synced row the bank categorizes takes that (source
+//     'bank'), so it is visibly the bank's; otherwise a stale rule or bank
+//     category is cleared, and a never-categorized row stays uncategorized;
 //   - a row with a split is never moved into a category that is not
 //     splittable: the split would keep counting in balances on a row the app
 //     says cannot be split. It keeps its current category instead.
-// Shared by the retroactive apply and bank sync, so the two cannot disagree.
+// Shared by the retroactive apply, bank sync and the bank-category apply, so
+// they cannot disagree.
 export function ruleOutcome(
   row: RuleTarget,
   matched: string | null,
   isSplittable: (categoryId: string) => boolean,
-): { categoryId: string | null; categorySource: 'rule' | null } | null {
+  bankFallback: string | null = null,
+): RuleOutcome | null {
   if (row.categorySource === 'manual') return null;
-  if (matched === null) {
-    return row.categorySource === 'rule' ? { categoryId: null, categorySource: null } : null;
+  const [categoryId, categorySource]: [string | null, 'rule' | 'bank' | null] =
+    matched !== null ? [matched, 'rule'] : bankFallback !== null ? [bankFallback, 'bank'] : [null, null];
+  if (categoryId === null) {
+    return row.categorySource === null ? null : { categoryId: null, categorySource: null };
   }
-  if (row.hasSplit && !isSplittable(matched)) return null;
-  if (row.categoryId === matched && row.categorySource === 'rule') return null;
-  return { categoryId: matched, categorySource: 'rule' };
+  if (row.hasSplit && !isSplittable(categoryId)) return null;
+  if (row.categoryId === categoryId && row.categorySource === categorySource) return null;
+  return { categoryId, categorySource };
 }

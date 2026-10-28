@@ -110,3 +110,41 @@ describe('ruleOutcome', () => {
     ).toEqual({ categoryId: null, categorySource: null });
   });
 });
+
+describe('ruleOutcome with the bank\'s category', () => {
+  const splittable = (id: string) => id !== 'cat-transfers';
+  const row = (o: Partial<Parameters<typeof ruleOutcome>[0]> = {}) => ({ categoryId: null, categorySource: null, hasSplit: false, ...o });
+
+  it('fills an uncategorized row with the bank\'s category, marked as the bank\'s', () => {
+    expect(ruleOutcome(row(), null, splittable, 'cat-dining')).toEqual({ categoryId: 'cat-dining', categorySource: 'bank' });
+  });
+
+  it('lets a rule win over the bank, on a new match and over a bank row', () => {
+    expect(ruleOutcome(row(), 'cat-groceries', splittable, 'cat-dining')).toEqual({ categoryId: 'cat-groceries', categorySource: 'rule' });
+    expect(ruleOutcome(row({ categoryId: 'cat-dining', categorySource: 'bank' }), 'cat-groceries', splittable, 'cat-dining')).toEqual({
+      categoryId: 'cat-groceries',
+      categorySource: 'rule',
+    });
+  });
+
+  it('never touches a manual category, whatever the bank says', () => {
+    expect(ruleOutcome(row({ categoryId: 'cat-travel', categorySource: 'manual' }), null, splittable, 'cat-dining')).toBeNull();
+  });
+
+  it('falls back to the bank when a rule stops matching, and clears a bank row the mapping no longer covers', () => {
+    expect(ruleOutcome(row({ categoryId: 'cat-groceries', categorySource: 'rule' }), null, splittable, 'cat-dining')).toEqual({
+      categoryId: 'cat-dining',
+      categorySource: 'bank',
+    });
+    expect(ruleOutcome(row({ categoryId: 'cat-dining', categorySource: 'bank' }), null, splittable, null)).toEqual({
+      categoryId: null,
+      categorySource: null,
+    });
+    expect(ruleOutcome(row({ categoryId: 'cat-dining', categorySource: 'bank' }), null, splittable, 'cat-dining')).toBeNull();
+  });
+
+  it('never moves a split row into a category that is not splittable', () => {
+    expect(ruleOutcome(row({ hasSplit: true }), null, splittable, 'cat-transfers')).toBeNull();
+  });
+});
+

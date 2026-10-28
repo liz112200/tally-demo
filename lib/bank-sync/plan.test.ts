@@ -463,3 +463,25 @@ describe('describeCounts', () => {
     expect(describeCounts({ ...zero, amountFlagged: 1, removedFlagged: 1 })).toBe('2 need review');
   });
 });
+
+describe('the bank\'s category on new rows', () => {
+  const bankCategories = new Map([['FOOD_AND_DRINK', 'cat-dining-bank']]);
+
+  it('fills a row no rule matches, as the bank\'s; a rule match wins; an unmapped one stays uncategorized', () => {
+    const p = applied(
+      plan({
+        bankCategories,
+        added: [
+          txn({ providerTransactionId: 'noodles', descriptionRaw: 'AplPay NOODLE BARNEW YORK NY', bankCategory: 'FOOD_AND_DRINK' }),
+          txn({ providerTransactionId: 'coffee', descriptionRaw: 'Starbucks', bankCategory: 'FOOD_AND_DRINK' }),
+          txn({ providerTransactionId: 'pay', descriptionRaw: 'Zelle to a friend', bankCategory: 'TRANSFER_OUT' }),
+        ],
+      }),
+    );
+    const by = (id: string) => p.inserts.find((i) => i.providerTransactionId === id);
+    expect(by('noodles')).toMatchObject({ categoryId: 'cat-dining-bank', categorySource: 'bank', merchantNormalized: 'NOODLE BARNEW YORK' });
+    expect(by('coffee')).toMatchObject({ categoryId: 'cat-dining', categorySource: 'rule' });
+    expect(by('pay')).toMatchObject({ categoryId: null, categorySource: null });
+  });
+});
+

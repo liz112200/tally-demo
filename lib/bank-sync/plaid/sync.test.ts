@@ -83,6 +83,17 @@ describe('syncTransactions against the recorded Sandbox page', () => {
     expect(result.pages).toBe(1);
   });
 
+  it("carries Plaid's own category (personal finance category, primary) on each row", async () => {
+    const { impl } = fakeFetch([{ text: pageText('checking') }]);
+    const result = await createPlaidProvider({ ...CONFIG, fetch: impl }).syncTransactions(TOKEN, {
+      providerAccountId: CHECKING,
+      cursor: null,
+    });
+    const starbucks = result.added.find((t) => t.descriptionRaw === 'Starbucks');
+    expect(starbucks?.bankCategory).toBe('FOOD_AND_DRINK');
+    expect(result.added.every((t) => typeof t.bankCategory === 'string')).toBe(true);
+  });
+
   it('keeps the raw object with numbers as their source text', async () => {
     const { impl } = fakeFetch([{ text: pageText('checking') }]);
     const result = await createPlaidProvider({ ...CONFIG, fetch: impl }).syncTransactions(TOKEN, {

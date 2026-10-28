@@ -114,6 +114,10 @@ export type ProviderTransaction = {
   descriptionRaw: string;
   pending: boolean;
   pendingTransactionId: string | null;
+  // The provider's own category for the row (Plaid: personal finance
+  // category, primary level), mapped to the owner's by bank_category_map.
+  // Optional: absent means the provider gave none.
+  bankCategory?: string | null;
   // The provider's object as received (numbers as their source text), kept
   // for debugging and for later slices' date and category logic.
   raw: unknown;

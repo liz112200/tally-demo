@@ -136,8 +136,8 @@ export function ApplyRulesButton() {
       </Button>
       {state.ok && state.result && (
         <p className="text-xs text-muted-foreground">
-          Matched {state.result.matched}, unmatched {state.result.unmatched},
-          skipped {state.result.skippedManual} manually-set.
+          Matched {state.result.matched}, the bank&apos;s category {state.result.bank}, unmatched{' '}
+          {state.result.unmatched}, skipped {state.result.skippedManual} manually-set.
         </p>
       )}
     </form>

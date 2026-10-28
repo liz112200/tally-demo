@@ -14,6 +14,7 @@ import {
 import { db } from './index';
 import {
   bankAccounts,
+  bankCategoryMap,
   ledgerAccounts,
   syncSkippedRows,
   bankConnections,
@@ -202,15 +203,18 @@ export async function deleteRuleById(id: string): Promise<{ matchPattern: string
 // touched; 'manual' rows are never overwritten. A row that matches is set to
 // the winning category with source 'rule'; a previously-'rule' row that no
 // longer matches any rule is cleared. Returns counts for the caller to report.
-// Re-run every rule over the rows rules may touch (uncategorized and 'rule'
-// rows; manual rows are the owner's). One transaction: the candidate rows are
-// locked first (FOR UPDATE, by id) and only then is it read whether each has
-// a split, so a split saved meanwhile is seen, and ruleOutcome
-// (lib/categorize.ts) never moves a split row into a category that is not
-// splittable. Returns how many rows a rule matched, how many matched none, and
+// Re-run every rule over the rows rules may touch (uncategorized, 'rule' and
+// 'bank' rows; manual rows are the owner's). A synced row no rule matches
+// takes the owner's category for the bank's own (bank_category_map), as
+// 'bank'. One transaction: the candidate rows are locked first (FOR UPDATE,
+// by id) and only then is it read whether each has a split, so a split saved
+// meanwhile is seen, and ruleOutcome (lib/categorize.ts) never moves a split
+// row into a category that is not splittable. Returns how many rows a rule
+// matched, how many took the bank's category, how many matched neither, and
 // how many manual rows were left alone.
 export async function applyRulesToExisting(): Promise<{
   matched: number;
+  bank: number;
   unmatched: number;
   skippedManual: number;
 }> {
@@ -226,7 +230,7 @@ export async function applyRulesToExisting(): Promise<{
   return db.transaction(async (tx) => {
     const eligible = and(
       isNull(transactions.deletedAt),
-      or(isNull(transactions.categorySource), eq(transactions.categorySource, 'rule')),
+      or(isNull(transactions.categorySource), inArray(transactions.categorySource, ['rule', 'bank'])),
     );
     await tx.execute(sql`select id from ${transactions} where ${eligible} order by id for update`);
     const candidates = await tx
@@ -236,9 +240,11 @@ export async function applyRulesToExisting(): Promise<{
         categoryId: transactions.categoryId,
         categorySource: transactions.categorySource,
         hasSplit: rowHasSplit(),
+        bankCategory: sql<string | null>`${transactions.providerRaw}->'personal_finance_category'->>'primary'`,
       })
       .from(transactions)
       .where(eligible);
+    const bankMap = await bankCategoryMapOf(tx);
     const nonSplittable = new Set(
       (await tx.select({ id: categories.id }).from(categories).where(eq(categories.isSplittable, false))).map(
         (c) => c.id,
@@ -250,16 +256,27 @@ export async function applyRulesToExisting(): Promise<{
       .where(and(isNull(transactions.deletedAt), eq(transactions.categorySource, 'manual')));
 
     let matched = 0;
+    let bank = 0;
     let unmatched = 0;
     for (const row of candidates) {
       const categoryId = categorize(row.merchantNormalized, engineRules);
+      const fallback = row.bankCategory ? (bankMap.get(row.bankCategory) ?? null) : null;
       if (categoryId) matched += 1;
+      else if (fallback) bank += 1;
       else unmatched += 1;
-      const next = ruleOutcome(row, categoryId, (id) => !nonSplittable.has(id));
+      const next = ruleOutcome(row, categoryId, (id) => !nonSplittable.has(id), fallback);
       if (next) await tx.update(transactions).set(next).where(eq(transactions.id, row.id));
     }
-    return { matched, unmatched, skippedManual };
+    return { matched, bank, unmatched, skippedManual };
   });
+}
+
+// The owner's category for each of the bank's own (bank_category_map).
+export async function bankCategoryMapOf(conn: Pick<Tx, 'select'> = db): Promise<Map<string, string>> {
+  const rows = await conn
+    .select({ plaidCategory: bankCategoryMap.plaidCategory, categoryId: bankCategoryMap.categoryId })
+    .from(bankCategoryMap);
+  return new Map(rows.map((r) => [r.plaidCategory, r.categoryId]));
 }
 
 // Shared insert path for both manual entry and import. Computes the dedup_hash
@@ -2588,6 +2605,7 @@ export async function commitAccountSync(input: {
       storedElsewhere,
       rules: input.rules,
       nonSplittableCategoryIds: new Set(nonSplittable.map((c) => c.id)),
+      bankCategories: await bankCategoryMapOf(tx),
     });
     if (plan.kind === 'stop') return { kind: 'stopped', reason: plan.reason } as const;
 

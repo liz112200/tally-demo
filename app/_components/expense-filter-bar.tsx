@@ -91,6 +91,7 @@ const SPLIT_LABELS: Record<SplitStatusKey, string> = {
 const CATSRC_LABELS: Record<CategorySourceKey, string> = {
   all: 'Any source',
   rule: 'Rule-set',
+  bank: "Bank's category",
   manual: 'Manually set',
   uncategorized: 'Uncategorized',
 };

@@ -1,4 +1,4 @@
-import { Zap } from 'lucide-react';
+import { Landmark, Zap } from 'lucide-react';
 
 // categories.color is unpopulated in v1, so each category gets a stable hue
 // derived from its name: djb2 hash into the eight --cat-* variables defined in
@@ -12,16 +12,31 @@ export function categoryColorVar(name: string): string {
 }
 
 // Category provenance rendering: rule-applied categories are a tinted tag with
-// a zap glyph; manually set ones are plain text with a colored dot. This
-// replaces the earlier hollow/filled source dot.
+// a zap glyph; manually set ones are plain text with a colored dot; the bank's
+// own category (through the owner's mapping) is a dashed outline with a bank
+// glyph and the word "bank", so a guess by the bank never passes for the
+// owner's or a rule's. This replaces the earlier hollow/filled source dot.
 export function CategoryTag({
   name,
   source,
 }: {
   name: string;
-  source: 'manual' | 'rule' | null;
+  source: 'manual' | 'rule' | 'bank' | null;
 }) {
   const color = categoryColorVar(name);
+  if (source === 'bank') {
+    return (
+      <span
+        className="inline-flex items-center gap-1 rounded-md border border-dashed px-1.5 py-0.5 text-xs font-medium"
+        style={{ color, borderColor: `color-mix(in oklch, ${color} 55%, transparent)` }}
+        title="The bank's category, through your mapping on Rules. Choose a category to make it yours."
+      >
+        <Landmark className="size-3" aria-hidden />
+        {name}
+        <span className="font-normal text-muted-foreground">bank</span>
+      </span>
+    );
+  }
   if (source === 'rule') {
     return (
       <span

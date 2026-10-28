@@ -221,9 +221,17 @@ These are decided. Do not reintroduce the alternatives.
   merchant string derived from the raw description on insert),
   case-insensitively, as either a substring or a regex per `match_type`.
   Lower `priority` wins; ties break by `created_at` ascending.
-- `category_source` is `manual`, `rule`, or NULL (never categorized). Rules
-  only ever set or clear NULL and `rule` rows; they never overwrite a
-  `manual` category. A user's inline edit sets `manual` (or clears to NULL),
+- `category_source` is `manual`, `rule`, `bank`, or NULL (never
+  categorized). Rules only ever set or clear NULL, `rule` and `bank` rows;
+  they never overwrite a `manual` category. `bank` is the bank's own
+  category on a synced row, through the owner's mapping
+  (`bank_category_map`, migration 0028, edited on /rules): it fills only a
+  row no rule matches, rules overwrite it, it never overwrites a manual or
+  rule category, and the row shows it as the bank's (dashed tag, "bank"). A
+  mapped category must count as spending, so nothing maps to Transfers: the
+  bank files a payment to a person as a transfer, and mapping that would
+  take real spending out of the totals. Existing rows change only through
+  "Apply to existing". A user's inline edit sets `manual` (or clears to NULL),
   and so does manual entry with a category. A categorized row always has a
   source (CHECK, migration 0022, which backfilled the phase 1 manual entries
   that predated the column): a category with a NULL source would read as

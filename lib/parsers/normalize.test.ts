@@ -19,6 +19,7 @@ describe('normalizeMerchant', () => {
     ['HERTZ CAR RENTAL    RIVERTON            IL', 'HERTZ CAR RENTAL RIVERTON'],
     ['TST*CORNER SANDWICHES OAKDALE ILAPPLE PAY ENDING IN ****00001111222233334444AA', 'TST*CORNER SANDWICHES OAKDALE'],
     ['NORTHWIND LABS   PAYROLL                    PPD ID: 9111111111', 'NORTHWIND LABS PAYROLL PPD ID:'],
+    ['AplPay NOODLE BARNEW YORK NY', 'NOODLE BARNEW YORK'],
   ];
   for (const [input, expected] of cases) {
     it(`normalizes ${JSON.stringify(input.slice(0, 24))}...`, () => {

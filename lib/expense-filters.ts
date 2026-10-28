@@ -9,7 +9,7 @@ export type DateRangeKey = (typeof DATE_RANGES)[number];
 export const SPLIT_STATUSES = ['all', 'split', 'not-split', 'non-splittable'] as const;
 export type SplitStatusKey = (typeof SPLIT_STATUSES)[number];
 
-export const CATEGORY_SOURCES = ['all', 'rule', 'manual', 'uncategorized'] as const;
+export const CATEGORY_SOURCES = ['all', 'rule', 'bank', 'manual', 'uncategorized'] as const;
 export type CategorySourceKey = (typeof CATEGORY_SOURCES)[number];
 
 export const RECEIPT_FILTERS = ['all', 'has', 'none'] as const;
@@ -154,7 +154,7 @@ export type FilterableTransaction = {
   date: string;
   descriptionRaw: string;
   categoryId: string | null;
-  categorySource: 'manual' | 'rule' | null;
+  categorySource: 'manual' | 'rule' | 'bank' | null;
   amountCents: number;
   isSplittable: boolean;
   bankAmountBeforeCents?: number | null;
@@ -198,6 +198,7 @@ export function applyExpenseFilters<T extends FilterableTransaction>(
     }
     if (filters.split === 'non-splittable' && row.isSplittable) return false;
     if (filters.catSource === 'rule' && row.categorySource !== 'rule') return false;
+    if (filters.catSource === 'bank' && row.categorySource !== 'bank') return false;
     if (filters.catSource === 'manual' && row.categorySource !== 'manual') return false;
     if (filters.catSource === 'uncategorized' && row.categoryId !== null) return false;
     if (filters.receipt === 'has' && !ctx.hasReceipt(row.id)) return false;

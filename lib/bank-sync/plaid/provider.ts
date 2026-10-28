@@ -86,6 +86,7 @@ const plaidTransactionSchema = z
     original_description: z.string().nullable().optional(),
     pending: z.boolean(),
     pending_transaction_id: z.string().nullable(),
+    personal_finance_category: z.object({ primary: z.string() }).loose().nullable().optional(),
   })
   .loose();
 
@@ -120,6 +121,7 @@ function toProviderTransaction(t: PlaidTransaction): ProviderTransaction {
     descriptionRaw: description,
     pending: t.pending,
     pendingTransactionId: t.pending_transaction_id,
+    bankCategory: t.personal_finance_category?.primary ?? null,
     raw: t,
   };
 }

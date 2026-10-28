@@ -436,7 +436,7 @@ export type RuleFormState = {
 
 export type ApplyRulesState = {
   ok?: boolean;
-  result?: { matched: number; unmatched: number; skippedManual: number };
+  result?: { matched: number; bank: number; unmatched: number; skippedManual: number };
 };
 
 // ---- Share links ----

@@ -26,7 +26,7 @@ export type StoredRow = {
   date: string;
   descriptionRaw: string;
   categoryId: string | null;
-  categorySource: 'manual' | 'rule' | null;
+  categorySource: 'manual' | 'rule' | 'bank' | null;
   bankAmountBeforeCents: number | null;
   deleted: boolean;
   removedByBank: boolean;
@@ -43,7 +43,7 @@ export type PlannedInsert = {
   descriptionRaw: string;
   merchantNormalized: string;
   categoryId: string | null;
-  categorySource: 'rule' | null;
+  categorySource: 'rule' | 'bank' | null;
   pending: boolean;
   providerRaw: unknown;
 };
@@ -60,7 +60,7 @@ export type PlannedUpdate = {
     merchantNormalized?: string;
     pending?: boolean;
     categoryId?: string | null;
-    categorySource?: 'rule' | null;
+    categorySource?: 'rule' | 'bank' | null;
     providerRaw?: unknown;
     bankAmountBeforeCents?: number | null;
     // 'now' stamps the commit's timestamp; null clears.
@@ -116,9 +116,13 @@ export function planSync(input: {
   rules: readonly CategoryRule[];
   // Categories that may not hold a split (is_splittable = false).
   nonSplittableCategoryIds: ReadonlySet<string>;
+  // The owner's category for each of the bank's own (bank_category_map); a
+  // row no rule matches takes it, as source 'bank'.
+  bankCategories?: ReadonlyMap<string, string>;
 }): SyncPlan {
   const { providerAccountId, stored } = input;
   const isSplittable = (id: string) => !input.nonSplittableCategoryIds.has(id);
+  const bankFor = (txn: ProviderTransaction) => (txn.bankCategory ? (input.bankCategories?.get(txn.bankCategory) ?? null) : null);
 
   const all = [...input.added, ...input.modified, ...input.removed];
   const foreign = all.find((t) => t.providerAccountId !== providerAccountId);
@@ -187,9 +191,10 @@ export function planSync(input: {
   const builtOn = (row: StoredRow) =>
     row.hasSplit || row.hasReceipt || row.hasNote || row.categorySource === 'manual';
 
-  // The category after a description change, through the shared rule.
-  const recategorize = (row: StoredRow, merchantNormalized: string) =>
-    ruleOutcome(row, categorize(merchantNormalized, [...input.rules]), isSplittable);
+  // The category after a description change, through the shared rule: the
+  // rules first, then the bank's category.
+  const recategorize = (row: StoredRow, merchantNormalized: string, txn: ProviderTransaction) =>
+    ruleOutcome(row, categorize(merchantNormalized, [...input.rules]), isSplittable, bankFor(txn));
 
   // The fields of a stored row that a provider row overwrites, and what
   // follows from them (rules, the amount flag). Undefined when nothing
@@ -201,7 +206,7 @@ export function planSync(input: {
     if (txn.descriptionRaw !== row.descriptionRaw) {
       set.descriptionRaw = txn.descriptionRaw;
       set.merchantNormalized = normalizeMerchant(txn.descriptionRaw);
-      const category = recategorize(row, set.merchantNormalized);
+      const category = recategorize(row, set.merchantNormalized, txn);
       if (category) Object.assign(set, category);
     }
     if (txn.pending !== row.pending) set.pending = txn.pending;
@@ -335,15 +340,16 @@ export function planSync(input: {
   for (const { txn, fromAdded } of finals.values()) {
     if (!fromAdded || stored.has(txn.providerTransactionId) || placed.has(txn.providerTransactionId)) continue;
     const merchantNormalized = normalizeMerchant(txn.descriptionRaw);
-    const categoryId = categorize(merchantNormalized, [...input.rules]);
+    const ruled = categorize(merchantNormalized, [...input.rules]);
+    const bank = ruled === null ? bankFor(txn) : null;
     inserts.push({
       providerTransactionId: txn.providerTransactionId,
       date: txn.authorizedDate ?? txn.date,
       amountCents: txn.amountCents,
       descriptionRaw: txn.descriptionRaw,
       merchantNormalized,
-      categoryId,
-      categorySource: categoryId ? 'rule' : null,
+      categoryId: ruled ?? bank,
+      categorySource: ruled ? 'rule' : bank ? 'bank' : null,
       pending: txn.pending,
       providerRaw: txn.raw,
     });
