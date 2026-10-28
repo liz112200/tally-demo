@@ -1,0 +1,1 @@
+ALTER TABLE "transactions" ALTER COLUMN "dedup_hash" SET NOT NULL;

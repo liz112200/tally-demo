@@ -1,0 +1,20 @@
+{
+  "_comment": "Recorded from Plaid Sandbox (First Platypus Bank, user_good) on 2026-10-27: /item/get on a healthy Item, /sandbox/item/reset_login, then /item/get again. Sandbox data is fake. Response bodies are kept as sent.",
+  "calls": [
+    {
+      "path": "/item/get",
+      "status": 200,
+      "response": "{\n  \"item\": {\n    \"available_products\": [\n      \"assets\",\n      \"auth\",\n      \"balance\",\n      \"identity\",\n      \"identity_match\",\n      \"income_verification\",\n      \"investments\",\n      \"investments_auth\",\n      \"liabilities\",\n      \"recurring_transactions\",\n      \"signal\",\n      \"statements\",\n      \"transactions_refresh\",\n      \"transfer\"\n    ],\n    \"billed_products\": [\n      \"transactions\"\n    ],\n    \"consent_expiration_time\": null,\n    \"created_at\": \"2026-10-20T15:03:04Z\",\n    \"error\": null,\n    \"institution_id\": \"ins_109508\",\n    \"institution_name\": \"First Platypus Bank\",\n    \"item_id\": \"MvvAWpa4BaIKNNKdG5xMsjXDepWwNDcDG1EGj\",\n    \"products\": [\n      \"transactions\"\n    ],\n    \"update_type\": \"background\",\n    \"webhook\": \"\"\n  },\n  \"request_id\": \"13c521e3842b888\",\n  \"status\": {\n    \"last_webhook\": null,\n    \"transactions\": {\n      \"last_failed_update\": null,\n      \"last_successful_update\": \"2026-10-27T09:48:58.566Z\"\n    }\n  }\n}"
+    },
+    {
+      "path": "/sandbox/item/reset_login",
+      "status": 200,
+      "response": "{\n  \"request_id\": \"c498ee4cf589156\",\n  \"reset_login\": true\n}"
+    },
+    {
+      "path": "/item/get",
+      "status": 200,
+      "response": "{\n  \"item\": {\n    \"available_products\": [\n      \"assets\",\n      \"auth\",\n      \"balance\",\n      \"identity\",\n      \"identity_match\",\n      \"income_verification\",\n      \"investments\",\n      \"investments_auth\",\n      \"liabilities\",\n      \"recurring_transactions\",\n      \"signal\",\n      \"statements\",\n      \"transactions_refresh\",\n      \"transfer\"\n    ],\n    \"billed_products\": [\n      \"transactions\"\n    ],\n    \"consent_expiration_time\": null,\n    \"created_at\": \"2026-10-20T15:03:04Z\",\n    \"error\": {\n      \"display_message\": null,\n      \"documentation_url\": \"https://plaid.com/docs/errors/item/#item_login_required\",\n      \"error_code\": \"ITEM_LOGIN_REQUIRED\",\n      \"error_message\": \"the login details of this item have changed (credentials, MFA, or required user action) and a user login is required to update this information. use Link's update mode to restore the item to a good state\",\n      \"error_type\": \"ITEM_ERROR\"\n    },\n    \"institution_id\": \"ins_109508\",\n    \"institution_name\": \"First Platypus Bank\",\n    \"item_id\": \"MvvAWpa4BaIKNNKdG5xMsjXDepWwNDcDG1EGj\",\n    \"products\": [\n      \"transactions\"\n    ],\n    \"update_type\": \"background\",\n    \"webhook\": \"\"\n  },\n  \"request_id\": \"cf697f945126b5d\",\n  \"status\": {\n    \"last_webhook\": null,\n    \"transactions\": {\n      \"last_failed_update\": \"2026-10-27T13:45:34.679Z\",\n      \"last_successful_update\": \"2026-10-27T09:48:58.566Z\"\n    }\n  }\n}"
+    }
+  ]
+}

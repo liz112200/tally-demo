@@ -1,0 +1,21 @@
+node_modules/
+.next/
+out/
+build/
+coverage/
+.env
+.env.*
+!.env.example
+*.tsbuildinfo
+next-env.d.ts
+.DS_Store
+.vercel
+.env*
+
+# Local-only fixtures: real receipt photos and walkthrough screenshots
+# carry real-ish personal data and stay out of git.
+tests/fixtures/receipts/
+tests/fixtures/screenshots/
+
+# neonctl context file (org id).
+.neon

@@ -1,0 +1,1 @@
+ALTER TABLE "transactions" ALTER COLUMN "merchant_normalized" SET NOT NULL;

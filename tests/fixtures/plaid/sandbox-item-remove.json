@@ -1,0 +1,15 @@
+{
+  "_comment": "Recorded from Plaid Sandbox (Platypus OAuth Bank) on 2026-10-27: /item/remove on a live Item, then again on the same, already removed Item. Sandbox data is fake. Response bodies are kept as sent.",
+  "calls": [
+    {
+      "path": "/item/remove",
+      "status": 200,
+      "response": "{\n  \"request_id\": \"8de5e08f5348c14\"\n}"
+    },
+    {
+      "path": "/item/remove",
+      "status": 400,
+      "response": "{\n  \"display_message\": null,\n  \"documentation_url\": \"https://plaid.com/docs/errors/item/#item_not_found\",\n  \"error_code\": \"ITEM_NOT_FOUND\",\n  \"error_message\": \"The Item you requested cannot be found. This Item does not exist, has been previously removed via /item/remove, or has had access removed by the user.\",\n  \"error_type\": \"ITEM_ERROR\",\n  \"request_id\": \"f8b357d986ef1a6\",\n  \"suggested_action\": null\n}"
+    }
+  ]
+}

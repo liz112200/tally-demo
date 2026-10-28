@@ -1,0 +1,46 @@
+# The database for `npm run test:db`, locally and in CI: Postgres at Neon's
+# version behind PgBouncer in transaction mode, which is how Neon's pooled
+# endpoint runs. Transaction pooling is the reason every advisory lock in the
+# app is transaction-scoped, so tests connect through PgBouncer, not straight
+# to Postgres. Throwaway by design: data lives in tmpfs, the credentials are
+# fixed test values, and ports bind to localhost only.
+name: tally-test
+
+services:
+  postgres:
+    image: postgres:17.11-alpine
+    environment:
+      POSTGRES_USER: tally
+      POSTGRES_PASSWORD: tally
+      POSTGRES_DB: tally_test
+    tmpfs:
+      - /var/lib/postgresql/data
+    ports:
+      - '127.0.0.1:55432:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U tally -d tally_test']
+      interval: 1s
+      timeout: 3s
+      retries: 30
+
+  pgbouncer:
+    image: edoburu/pgbouncer:v1.26.0-p0
+    environment:
+      DB_HOST: postgres
+      DB_USER: tally
+      DB_PASSWORD: tally
+      DB_NAME: tally_test
+      AUTH_TYPE: scram-sha-256
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: 200
+      DEFAULT_POOL_SIZE: 20
+    ports:
+      - '127.0.0.1:56432:5432'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD-SHELL', 'nc -z 127.0.0.1 5432']
+      interval: 1s
+      timeout: 3s
+      retries: 30
