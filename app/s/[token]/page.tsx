@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getShareLinkByToken, type ShareSnapshotLine } from '@/db/queries';
-import { formatUSD, toCents } from '@/lib/money';
+import { formatPayableUSD as formatUSD, toCents } from '@/lib/money';
 
 // A share snapshot is a fixed document, but it is looked up by a token that
 // only exists once one is published, so it cannot be prerendered.

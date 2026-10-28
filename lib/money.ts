@@ -113,12 +113,13 @@ export function formatCents(cents: Cents): string {
   return negative ? `-${body}` : body;
 }
 
-// Display formatting. Amounts are stored and computed in mills, but people
-// read dollars and cents: every amount shown as text rounds to whole cents,
-// half to even (bankers' rounding, so ties do not drift upward across a
-// column of shares), and always prints two decimals. Display only — nothing
-// stored or computed is rounded, and editable inputs keep the exact value
-// via formatCents so what is saved is what was owed.
+// Display formatting. A displayed amount is never rounded (formatUSD): a
+// whole-cent amount prints two decimals, and one that is not a whole cent
+// prints all three, so a value is never hidden by a tidy display. The one
+// exception is a share link (formatPayableUSD): it is read by the person who
+// owes, who can only pay whole cents, so it rounds half to even (bankers'
+// rounding, so ties do not drift upward across a list). Nothing stored or
+// computed is rounded either way.
 const MINOR_PER_CENT = MINOR_UNITS_PER_DOLLAR / 100;
 
 // Minor units -> whole cents (hundredths), half to even.
@@ -132,7 +133,25 @@ export function roundHalfEvenToCents(minor: Cents): number {
   return minor < 0 && cents !== 0 ? -cents : cents;
 }
 
-export function formatUSD(cents: Cents): string {
+// Exact: "$12.34", or "$1,500.377" when the amount is not a whole cent. With
+// `align`, a whole-cent amount is followed by a figure space, so in a column
+// of tabular figures where some amounts have a third decimal the decimal
+// points still line up.
+export function formatUSD(cents: Cents, options: { align?: boolean } = {}): string {
+  const abs = Math.abs(cents);
+  const whole = Math.floor(abs / MINOR_UNITS_PER_DOLLAR).toLocaleString('en-US');
+  const frac = abs % MINOR_UNITS_PER_DOLLAR;
+  const subCent = frac % MINOR_PER_CENT !== 0;
+  const digits = subCent
+    ? String(frac).padStart(MONEY_DECIMALS, '0')
+    : String(frac / MINOR_PER_CENT).padStart(2, '0') + (options.align ? '\u2007' : '');
+  return `${cents < 0 ? '-' : ''}$${whole}.${digits}`;
+}
+
+// For a share link only (lib/share-summary.ts and the /s/ pages): rounded half
+// to even to whole cents, two decimals, because the reader pays in cents.
+// lib/money.test.ts fails if anything else uses it.
+export function formatPayableUSD(cents: Cents): string {
   const rounded = roundHalfEvenToCents(cents);
   const abs = Math.abs(rounded);
   const body = `${Math.floor(abs / 100).toLocaleString('en-US')}.${String(abs % 100).padStart(2, '0')}`;

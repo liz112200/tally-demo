@@ -35,13 +35,19 @@ These are decided. Do not reintroduce the alternatives.
   branded `Cents` type and every `*_cents` field/column keep the historical
   name but now hold thousandths, and `MINOR_UNITS_PER_DOLLAR`/`MONEY_DECIMALS`
   in lib/money.ts are the single source of the scale. `parseDollars` accepts
-  up to three decimals. Display and storage precision differ on purpose:
-  every amount shown as text goes through `formatUSD`, which rounds half to
-  even to whole cents and always prints two decimals; `formatCents` stays
-  exact (the third decimal only for sub-cent amounts) and is used only to
-  prefill editable inputs, so a submitted value is the stored one. Rounding
-  is per figure; shares divide in whole cents (below), so the displayed
-  parts of a whole-cent total sum to it. The unit change was
+  up to three decimals. A displayed amount is never rounded: every amount
+  shown as text goes through `formatUSD`, which prints two decimals for a
+  whole cent and all three otherwise ($1,500.377), so a value is never hidden
+  by a tidy display (`{ align: true }` pads whole-cent amounts in columns
+  that can hold both). The one exception is a share link (`formatPayableUSD`,
+  half to even, two decimals): it is read by the person who owes, who can
+  only pay whole cents. lib/money.test.ts fails if anything else uses it.
+  Sub-cent amounts exist only in splits saved before the whole-cents rule
+  and in payments recorded against them (2026-10-28: 18 of one person's paid
+  shares, their mirror owner shares, and all three payments); rounding them
+  away is not possible without editing recorded payments, which is
+  forbidden, so they are shown as they are. `formatCents` stays exact and
+  prefills editable inputs, so a submitted value is the stored one. The unit change was
   a one-time data rescale (db/rescale-to-mills.ts, marker-guarded, ×10 on
   every money column, dedup_hash recomputed) — column types never changed, so
   there is no Drizzle migration for it. Sign convention (locked in phase 2):

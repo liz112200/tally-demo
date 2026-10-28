@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import { getSnapshot, type SnapshotLine } from '@/db';
 // Imported from the app's lib rather than copied: the money scale has
 // already widened once, and a duplicate formatter would drift silently.
-import { formatUSD, toCents } from '@shared/money';
+import { formatPayableUSD as formatUSD, toCents } from '@shared/money';
 
 // A share snapshot is a fixed document, but it is looked up by a token that
 // only exists once one is published, so it cannot be prerendered.

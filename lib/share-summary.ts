@@ -9,7 +9,7 @@
 // The output is deliberately plain — no markdown, no column alignment. SMS
 // and messenger clients reflow text in proportional fonts, so padded columns
 // arrive ragged; one item per line survives everywhere.
-import { formatUSD, toCents } from './money';
+import { formatPayableUSD as formatUSD, toCents } from './money';
 
 export type ShareLine = {
   date: string;

@@ -588,7 +588,7 @@ function AllocatorBody({
                         </span>
                       </td>
                       <td className="px-2 py-1 text-right font-mono tracking-normal tabular-nums">
-                        {formatUSD(toCents(group.totalCents))}
+                        {formatUSD(toCents(group.totalCents), { align: true })}
                       </td>
                       <td
                         className={cn(
@@ -679,7 +679,7 @@ function AllocatorFooter({
   onCancel: () => void;
 }) {
   const usd = (cents: number) => (
-    <span className="font-mono tabular-nums">{formatUSD(toCents(cents))}</span>
+    <span className="font-mono tabular-nums">{formatUSD(toCents(cents), { align: true })}</span>
   );
   const selectedCount = incomingCount + outgoingCount;
   const netting = incomingCount > 0 && outgoingCount > 0;
@@ -817,7 +817,7 @@ function QuickChip({
     >
       <span className="font-medium">{label}</span>
       {cents !== undefined && (
-        <span className="font-mono tabular-nums">{formatUSD(toCents(cents))}</span>
+        <span className="font-mono tabular-nums">{formatUSD(toCents(cents), { align: true })}</span>
       )}
       {detail && <span className="text-muted-foreground">· {detail}</span>}
     </button>
@@ -877,7 +877,7 @@ function ShareRow({
       </td>
       <td className="truncate px-2 py-1 text-muted-foreground">{share.category ?? '—'}</td>
       <td className="px-2 py-1 text-right font-mono tabular-nums">
-        {formatUSD(toCents(share.outstandingCents))}
+        {formatUSD(toCents(share.outstandingCents), { align: true })}
         {share.outstandingCents < share.amountCents && (
           <span className="block text-[10px] text-muted-foreground">
             of {formatUSD(toCents(share.amountCents))}

@@ -1,3 +1,5 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import fc from 'fast-check';
 import {
@@ -6,6 +8,7 @@ import {
   tryParseDollars,
   formatCents,
   formatUSD,
+  formatPayableUSD,
   roundHalfEvenToCents,
   sumCents,
   distributeRemainder,
@@ -86,8 +89,27 @@ describe('formatUSD', () => {
   });
 });
 
-describe('formatUSD display rounding (half to even)', () => {
-  const usd = (minor: number) => formatUSD(toCents(minor));
+describe('formatUSD never rounds', () => {
+  const usd = (minor: number, align = false) => formatUSD(toCents(minor), { align });
+
+  it('prints two decimals for a whole cent and all three otherwise', () => {
+    expect(usd(1_500_377)).toBe('$1,500.377');
+    expect(usd(129_665)).toBe('$129.665');
+    expect(usd(5)).toBe('$0.005');
+    expect(usd(-80_765)).toBe('-$80.765');
+    expect(usd(152_560)).toBe('$152.56');
+    expect(usd(-5)).toBe('-$0.005');
+  });
+
+  it('pads a whole-cent amount with a figure space when aligning, so decimal points line up', () => {
+    expect(usd(28_110, true)).toBe('$28.11\u2007');
+    expect(usd(129_665, true)).toBe('$129.665');
+    expect(usd(28_110, true).length).toBe(usd(29_665, true).length);
+  });
+});
+
+describe('formatPayableUSD rounds half to even, for share links only', () => {
+  const usd = (minor: number) => formatPayableUSD(toCents(minor));
 
   it('rounds exact half-cent ties to the even cent', () => {
     expect(usd(5)).toBe('$0.00'); // 0.005
@@ -139,9 +161,15 @@ describe('round-trip', () => {
     }
   });
 
-  it('parseDollars reverses formatUSD up to display rounding', () => {
+  it('parseDollars reverses formatUSD exactly: display hides nothing', () => {
     for (const x of samples) {
-      expect(parseDollars(formatUSD(x))).toBe(roundHalfEvenToCents(x) * 10);
+      expect(parseDollars(formatUSD(x))).toBe(x);
+    }
+  });
+
+  it('parseDollars reverses formatPayableUSD up to its rounding', () => {
+    for (const x of samples) {
+      expect(parseDollars(formatPayableUSD(x))).toBe(roundHalfEvenToCents(x) * 10);
     }
   });
 });
@@ -222,5 +250,21 @@ describe('distributeRemainder', () => {
 
   it('rejects a negative total', () => {
     expect(() => distributeRemainder(toCents(-100), 2)).toThrow();
+  });
+});
+
+// The one place display rounding is allowed (CLAUDE.md): what a share link's
+// reader is asked to pay. Everything else shows the exact value.
+describe('formatPayableUSD is used only by share links', () => {
+  it('is imported nowhere else', () => {
+    const allowed = new Set(['lib/money.ts', 'lib/share-summary.ts', 'app/s/[token]/page.tsx', 'share/app/s/[token]/page.tsx']);
+    const walk = (dir: string): string[] =>
+      readdirSync(join(process.cwd(), dir), { withFileTypes: true }).flatMap((e) =>
+        e.isDirectory()
+          ? e.name === 'node_modules' || e.name === '.next' ? [] : walk(join(dir, e.name))
+          : /\.tsx?$/.test(e.name) && !/\.test\./.test(e.name) ? [join(dir, e.name)] : [],
+      );
+    const users = ['app', 'lib', 'db', 'share/app'].flatMap(walk).filter((f) => readFileSync(join(process.cwd(), f), 'utf8').includes('formatPayableUSD'));
+    expect(users.filter((f) => !allowed.has(f))).toEqual([]);
   });
 });

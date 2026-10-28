@@ -461,7 +461,7 @@ function ShareRow({
           <span className="text-muted-foreground"> of {formatUSD(toCents(share.amountCents))}</span>
         </span>
       ) : (
-        <span className="shrink-0 font-mono">{formatUSD(toCents(share.amountCents))}</span>
+        <span className="shrink-0 font-mono tabular-nums">{formatUSD(toCents(share.amountCents), { align: true })}</span>
       )}
     </>
   );
@@ -548,7 +548,7 @@ function ShareRows({
           <div key={key}>
             <div className="mb-0.5 flex items-baseline justify-between gap-2 text-[11px] text-muted-foreground">
               <span className="font-medium uppercase tracking-wider">{key}</span>
-              <span className="font-mono">{formatUSD(toCents(subtotal))}</span>
+              <span className="font-mono tabular-nums">{formatUSD(toCents(subtotal), { align: true })}</span>
             </div>
             <ul className="space-y-1">{group.map(row)}</ul>
           </div>
@@ -716,7 +716,7 @@ function ShareRowInline({ share }: { share: PersonShare }) {
           <span className="text-muted-foreground"> of {formatUSD(toCents(share.amountCents))}</span>
         </span>
       ) : (
-        <span className="shrink-0 font-mono">{formatUSD(toCents(share.amountCents))}</span>
+        <span className="shrink-0 font-mono tabular-nums">{formatUSD(toCents(share.amountCents), { align: true })}</span>
       )}
     </span>
   );
@@ -785,7 +785,7 @@ function SettlementRow({
                 : 'text-amber-600 dark:text-amber-500',
           )}
         >
-          {formatUSD(toCents(cash ? cash.amountCents : offsetCents))}
+          {formatUSD(toCents(cash ? cash.amountCents : offsetCents), { align: true })}
         </span>
         {onEdit && (
           <Button
@@ -840,7 +840,7 @@ function SettlementRow({
           {credit > 0 && (
             <p className="flex items-baseline gap-2 italic">
               <span className="min-w-0 flex-1 truncate">Unapplied credit (carries forward)</span>
-              <span className="shrink-0 font-mono">{formatUSD(toCents(credit))}</span>
+              <span className="shrink-0 font-mono tabular-nums">{formatUSD(toCents(credit), { align: true })}</span>
             </p>
           )}
         </div>
