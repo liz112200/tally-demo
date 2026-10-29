@@ -80,6 +80,13 @@ describe('splitAtCutover', () => {
     expect(both.setAside.map((x) => x.row.providerTransactionId)).toEqual(['same-amount']);
   });
 
+  it('on a posted-basis account, matches a CSV row on the posting date, not the purchase date', () => {
+    // On the CSV posted 09-10; the bank posts it 09-11 with a purchase date of 09-06.
+    const csv = [{ date: '2026-09-10', amountCents: 4_750 }];
+    const r = split(chase, [row('late', { date: '2026-09-11', authorizedDate: '2026-09-06', amountCents: 4_750 })], csv);
+    expect(r.setAside).toEqual([{ row: expect.objectContaining({ providerTransactionId: 'late' }), reason: 'possible_duplicate' }]);
+  });
+
   it('a change or removal of a set-aside row updates it there and never inserts it', () => {
     const r = splitAtCutover({
       cutover: discover,

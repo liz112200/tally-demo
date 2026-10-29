@@ -51,8 +51,6 @@ export function sameMerchant(a: string | null, b: string | null): boolean {
   return a !== null && b !== null && (a.startsWith(b) || b.startsWith(a));
 }
 
-// The ledger's own date for a synced row (as the planner stores it).
-const ledgerDate = (t: Pick<ProviderTransaction, 'date' | 'authorizedDate'>) => t.authorizedDate ?? t.date;
 
 function addDays(iso: string, days: number): string {
   const d = new Date(`${iso}T00:00:00Z`);
@@ -98,7 +96,10 @@ export function splitAtCutover(input: {
   // A CSV row matched by one synced row is not offered to another. The same
   // amount is tried first, then the same merchant at any amount.
   const matchCsv = (t: ProviderTransaction): boolean => {
-    const near = unmatched.filter((c) => !c.used && daysBetween(c.date, ledgerDate(t)) <= MATCH_DAYS);
+    // Compared on the account's basis, the date its CSV rows carry: a posting
+    // date beside a posting date. A Chase row's purchase date can be days
+    // before its posting date (2026-10-29: up to eight).
+    const near = unmatched.filter((c) => !c.used && daysBetween(c.date, basisDate(t, cutover.basis)) <= MATCH_DAYS);
     const merchant = merchantKey(t.descriptionRaw);
     const hit =
       near.find((c) => c.amountCents === t.amountCents) ??

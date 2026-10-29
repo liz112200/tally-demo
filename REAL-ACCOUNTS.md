@@ -115,6 +115,13 @@ synced rows, which this slice never does).
   states a same-merchant difference as a fact, both amounts, no cause
   (found on the first real card, 2026-10-28: a CSV row the owner had
   raised on purpose, which a guessed cause would have called a hold).
+- **Dates on the account's basis.** For Chase checking the cutover, the
+  boundary review and the held-row match all use the posting date, the date
+  its CSV rows carry; a purchase date can be days earlier (up to eight on
+  the first sync, 2026-10-29). The cutover itself was always judged on the
+  posting date (all 731 rows set aside had posted by Sep 10, and none posted
+  later was set aside); the review showed the purchase date and the match
+  compared it, both now on the basis.
 - A new login's history arrives in two parts: Plaid sends the last 30 days
   first and the rest later, so the first sync may see none of the days
   around the cutover. The sync line says when only the first 30 days have

@@ -273,11 +273,17 @@ export type BoundaryRow = {
 // held as possible duplicates. Read-only apart from the held rows' answers.
 export async function boundaryReview(accountId: string): Promise<{ cutover: string; rows: BoundaryRow[] } | null> {
   const [account] = await db
-    .select({ ledgerAccountId: bankAccounts.ledgerAccountId, cutover: ledgerAccounts.cutoverDate })
+    .select({ ledgerAccountId: bankAccounts.ledgerAccountId, cutover: ledgerAccounts.cutoverDate, basis: ledgerAccounts.cutoverBasis })
     .from(bankAccounts)
     .innerJoin(ledgerAccounts, eq(ledgerAccounts.id, bankAccounts.ledgerAccountId))
     .where(eq(bankAccounts.id, accountId));
   if (!account?.cutover) return null;
+  // Bank rows are shown and compared on the account's basis, the date its CSV
+  // rows carry and the cutover was judged on: the posting date for Chase
+  // checking, where showing the purchase date put a row days away from its
+  // CSV twin (2026-10-29: 09-04 beside 09-08).
+  const posted = account.basis === 'posted';
+  const basisColumn = posted ? syncSkippedRows.postedDate : syncSkippedRows.date;
   const csv = await db
     .select({ date: transactions.date, amountCents: transactions.amountCents, description: transactions.descriptionRaw })
     .from(transactions)
@@ -296,7 +302,7 @@ export async function boundaryReview(accountId: string): Promise<{ cutover: stri
       and(
         eq(syncSkippedRows.bankAccountId, accountId),
         isNull(syncSkippedRows.removedAt),
-        sql`(${syncSkippedRows.reason} = 'possible_duplicate' or ${syncSkippedRows.date} >= ${account.cutover}::date - ${BOUNDARY_DAYS}::int)`,
+        sql`(${syncSkippedRows.reason} = 'possible_duplicate' or ${basisColumn} >= ${account.cutover}::date - ${BOUNDARY_DAYS}::int)`,
       ),
     );
   const days = (a: string, b: string) => Math.abs(Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / 86_400_000;
@@ -317,15 +323,18 @@ export async function boundaryReview(accountId: string): Promise<{ cutover: stri
       resolution: null,
       differsFrom: null,
     })),
-    ...setAside.map((s) => ({
-      providerTransactionId: s.providerTransactionId,
-      date: s.date,
-      amountCents: s.amountCents,
-      description: s.descriptionRaw,
-      kind: s.reason,
-      resolution: s.resolution,
-      differsFrom: differsFrom(s),
-    })),
+    ...setAside.map((s) => {
+      const date = posted ? s.postedDate : s.date;
+      return {
+        providerTransactionId: s.providerTransactionId,
+        date,
+        amountCents: s.amountCents,
+        description: s.descriptionRaw,
+        kind: s.reason,
+        resolution: s.resolution,
+        differsFrom: differsFrom({ ...s, date }),
+      };
+    }),
   ].sort((a, b) => a.date.localeCompare(b.date) || a.kind.localeCompare(b.kind));
   return { cutover: account.cutover, rows };
 }

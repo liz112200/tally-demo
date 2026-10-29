@@ -187,6 +187,20 @@ describe('possible duplicates near the cutover', () => {
 });
 
 describe('the boundary review', () => {
+  it('shows a posted-basis account\'s bank rows on their posting date, as its CSV rows are', async () => {
+    const { ledgerId } = await csvLedger([{ date: '2026-09-08', amountCents: 6_150 }], 'posted');
+    const acc = await newAccount();
+    await setUpAccountSync(acc.accountId, { kind: 'existing', ledgerAccountId: ledgerId, cutoverDate: null });
+    const fare = ptxn(acc, { date: '2026-09-08', authorizedDate: '2026-09-04', amountCents: 6_150 });
+    expect(await sync(acc, { added: [fare] })).toMatchObject({ counts: { beforeCutover: 1 } });
+    const review = await boundaryReview(acc.accountId);
+    expect(review?.rows.map((r) => [r.kind, r.date])).toEqual([
+      ['before_cutover', '2026-09-08'],
+      ['csv', '2026-09-08'],
+    ]);
+  });
+
+
   it('states that a same-merchant bank row differs in amount from its CSV row, both amounts, no cause', async () => {
     const tag = `L${randomUUID().slice(0, 8)}`;
     const [ledger] = await db
