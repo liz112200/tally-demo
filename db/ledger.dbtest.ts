@@ -272,6 +272,29 @@ describe('sign verification', () => {
   });
 });
 
+describe('sign verification on a checking account', () => {
+  it('compares withdrawals and deposits; a statement read with the signs the other way round does not pass', async () => {
+    const acc = await account();
+    await db.update(bankAccounts).set({ verifiedAt: null, type: 'depository', subtype: 'checking' }).where(eq(bankAccounts.id, acc.accountId));
+    await sync(acc, {
+      added: [
+        ptxn(acc, { date: '2026-10-02', amountCents: 41_250, descriptionRaw: 'DEBIT CARD PURCHASE' }),
+        ptxn(acc, { date: '2026-10-05', amountCents: 150_000, descriptionRaw: 'ZELLE PAYMENT TO A FRIEND' }),
+        ptxn(acc, { date: '2026-10-15', amountCents: -2_180_420, descriptionRaw: 'PAYROLL DIRECT DEPOSIT' }),
+      ],
+    });
+    // Withdrawals: money out, positive from the bank. Deposits: money in, negative.
+    const statement = { from: '2026-10-01', to: '2026-10-31', charges: '191.25', credits: '2180.42', excludedKeys: [], confirmed: true };
+    // Totals entered the other way round, as a sign flip would make them match.
+    expect(await recordStatementCheck(acc.accountId, { ...statement, charges: '2180.42', credits: '191.25' }, 'pass')).toEqual({
+      error: 'This does not match the statement yet; nothing was recorded.',
+    });
+    expect(await recordStatementCheck(acc.accountId, statement, 'pass')).toMatchObject({ ok: true });
+    const [verified] = await db.select().from(bankAccounts).where(eq(bankAccounts.id, acc.accountId));
+    expect(verified.verifiedAt).not.toBeNull();
+  });
+});
+
 describe('re-issued accounts', () => {
   it('cannot sync until adopted; adopting continues the same ledger account after the old rows, with nothing counted twice', async () => {
     const acc = await account('acc-before');
