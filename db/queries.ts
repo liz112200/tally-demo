@@ -2632,6 +2632,7 @@ export async function commitAccountSync(input: {
       rules: input.rules,
       nonSplittableCategoryIds: new Set(nonSplittable.map((c) => c.id)),
       bankCategories: await bankCategoryMapOf(tx),
+      dateBasis: account.cutoverBasis ?? 'transaction',
     });
     if (plan.kind === 'stop') return { kind: 'stopped', reason: plan.reason } as const;
 

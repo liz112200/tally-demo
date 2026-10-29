@@ -485,3 +485,12 @@ describe('the bank\'s category on new rows', () => {
   });
 });
 
+describe('the date a synced row is stored on', () => {
+  it('is the posting date on a posted-basis account, as its CSV rows are, else the purchase date', () => {
+    const t = txn({ providerTransactionId: 'fare', date: '2026-09-08', authorizedDate: '2026-09-04' });
+    expect(applied(plan({ added: [t], dateBasis: 'posted' })).inserts[0].date).toBe('2026-09-08');
+    expect(applied(plan({ added: [t], dateBasis: 'transaction' })).inserts[0].date).toBe('2026-09-04');
+    expect(applied(plan({ added: [t] })).inserts[0].date).toBe('2026-09-04');
+  });
+});
+

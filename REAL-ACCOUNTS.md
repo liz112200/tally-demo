@@ -121,7 +121,11 @@ synced rows, which this slice never does).
   the first sync, 2026-10-29). The cutover itself was always judged on the
   posting date (all 731 rows set aside had posted by Sep 10, and none posted
   later was set aside); the review showed the purchase date and the match
-  compared it, both now on the basis.
+  compared it, both now on the basis. Synced rows are also stored on it
+  (the planner and a released held row), so a Chase row reads with its
+  posting date like the CSV history beside it; db/ledger-date-basis.ts moved
+  the rows synced before (4 on production, none built on, none changing
+  month).
 - A new login's history arrives in two parts: Plaid sends the last 30 days
   first and the rest later, so the first sync may see none of the days
   around the cutover. The sync line says when only the first 30 days have

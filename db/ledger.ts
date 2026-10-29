@@ -368,8 +368,13 @@ export async function resolveHeldRow(
       const merchant = normalizeMerchant(held.descriptionRaw);
       const rules = (await getRules()).map((r) => ({ categoryId: r.categoryId, matchPattern: r.matchPattern, matchType: r.matchType, priority: r.priority, createdAt: r.createdAt }));
       const categoryId = categorize(merchant, rules);
+      // Dated as the account's other rows are (REAL-ACCOUNTS.md, one basis).
+      const [ledger] = await tx
+        .select({ basis: ledgerAccounts.cutoverBasis })
+        .from(ledgerAccounts)
+        .where(eq(ledgerAccounts.id, account.ledgerAccountId!));
       await tx.insert(transactions).values({
-        date: held.date,
+        date: ledger?.basis === 'posted' ? held.postedDate : held.date,
         amountCents: held.amountCents,
         descriptionRaw: held.descriptionRaw,
         merchantNormalized: merchant,

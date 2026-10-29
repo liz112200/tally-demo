@@ -16,6 +16,7 @@
 import { normalizeMerchant } from '../parsers/normalize';
 import { categorize, ruleOutcome, type CategoryRule } from '../categorize';
 import type { ProviderTransaction, RemovedTransaction } from './provider';
+import { basisDate, type Cutover } from './cutover';
 
 // A stored row of the account being synced, as the commit read it under lock.
 export type StoredRow = {
@@ -119,9 +120,14 @@ export function planSync(input: {
   // The owner's category for each of the bank's own (bank_category_map); a
   // row no rule matches takes it, as source 'bank'.
   bankCategories?: ReadonlyMap<string, string>;
+  // The ledger account's date basis: a synced row is dated as its CSV rows
+  // are, the posting date for Chase checking, else when the purchase
+  // happened (REAL-ACCOUNTS.md). One account, one basis.
+  dateBasis?: Cutover['basis'];
 }): SyncPlan {
   const { providerAccountId, stored } = input;
   const isSplittable = (id: string) => !input.nonSplittableCategoryIds.has(id);
+  const dateOf = (txn: ProviderTransaction) => basisDate(txn, input.dateBasis ?? 'transaction');
   const bankFor = (txn: ProviderTransaction) => (txn.bankCategory ? (input.bankCategories?.get(txn.bankCategory) ?? null) : null);
 
   const all = [...input.added, ...input.modified, ...input.removed];
@@ -201,7 +207,7 @@ export function planSync(input: {
   // changes.
   function applyFields(row: StoredRow, txn: ProviderTransaction): PlannedUpdate['set'] {
     const set: PlannedUpdate['set'] = {};
-    const date = txn.authorizedDate ?? txn.date;
+    const date = dateOf(txn);
     if (date !== row.date) set.date = date;
     if (txn.descriptionRaw !== row.descriptionRaw) {
       set.descriptionRaw = txn.descriptionRaw;
@@ -280,7 +286,7 @@ export function planSync(input: {
   const addedPosted = new Map<string, ProviderTransaction[]>();
   for (const { txn, fromAdded } of finals.values()) {
     if (!fromAdded || txn.pending || stored.has(txn.providerTransactionId) || placed.has(txn.providerTransactionId)) continue;
-    const key = pairKey(txn.amountCents, txn.authorizedDate ?? txn.date, txn.descriptionRaw);
+    const key = pairKey(txn.amountCents, dateOf(txn), txn.descriptionRaw);
     addedPosted.set(key, [...(addedPosted.get(key) ?? []), txn]);
   }
   for (const [key, rows] of removedPosted) {
@@ -344,7 +350,7 @@ export function planSync(input: {
     const bank = ruled === null ? bankFor(txn) : null;
     inserts.push({
       providerTransactionId: txn.providerTransactionId,
-      date: txn.authorizedDate ?? txn.date,
+      date: dateOf(txn),
       amountCents: txn.amountCents,
       descriptionRaw: txn.descriptionRaw,
       merchantNormalized,

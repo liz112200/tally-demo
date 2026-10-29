@@ -186,6 +186,17 @@ describe('possible duplicates near the cutover', () => {
   });
 });
 
+describe('a synced row on a posted-basis account', () => {
+  it('is stored on its posting date, as the account\'s CSV rows are', async () => {
+    const { ledgerId } = await csvLedger([{ date: '2026-09-08', amountCents: 6_150 }], 'posted');
+    const acc = await newAccount();
+    await setUpAccountSync(acc.accountId, { kind: 'existing', ledgerAccountId: ledgerId, cutoverDate: null });
+    const fare = ptxn(acc, { date: '2026-09-21', authorizedDate: '2026-09-17', amountCents: 7_420 });
+    await sync(acc, { added: [fare] });
+    expect(await row(acc, fare.providerTransactionId)).toMatchObject({ date: '2026-09-21' });
+  });
+});
+
 describe('the boundary review', () => {
   it('shows a posted-basis account\'s bank rows on their posting date, as its CSV rows are', async () => {
     const { ledgerId } = await csvLedger([{ date: '2026-09-08', amountCents: 6_150 }], 'posted');

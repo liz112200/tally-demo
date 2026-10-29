@@ -292,6 +292,11 @@ These are decided. Do not reintroduce the alternatives.
   imports included) and never on or before it; rows in the first week after
   it that match a CSV row within three days, by amount or by merchant, are
   held for the owner; a CSV imported later skips rows a bank already covers.
+  One account, one date basis: a synced row is stored, shown and matched on
+  its ledger account's basis (the posting date for Chase checking, whose CSV
+  rows, cutover and statements use it; else when the purchase happened), so
+  an account never mixes the two (db/ledger-date-basis.ts moved the rows
+  synced before this).
   Synced rows of an account not verified against a statement are not
   splittable and count in no total (CSV and manual rows always count). No
   part of this writes a CSV or manual row. A CSV or manual row's amount is
