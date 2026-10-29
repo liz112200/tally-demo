@@ -9,7 +9,7 @@ import { db } from './index';
 import { bankAccounts, imports, ledgerAccounts, syncSkippedRows, transactions } from './schema';
 import { getInsightRows, getTransactions, insertImport, insertTransaction, saveConnectionAccounts } from './queries';
 import { boundaryReview, choicesFor, ledgerChoices, mapAccountToLedger } from './ledger';
-import { account, owner, person, ptxn, row, split, sync, type TestAccount } from './test/fixtures';
+import { account, owner, person, ptxn, removal, row, split, sync, type TestAccount } from './test/fixtures';
 import { adoptAccount, answerHeldRow, declineReissued, finishBoundaryReview, recordStatementCheck, setUpAccountSync } from '@/app/_actions/ledger';
 import { setAccountSync } from '@/app/_actions/bank';
 import { confirmImport } from '@/app/_actions/import';
@@ -230,6 +230,27 @@ describe('the boundary review', () => {
   });
 });
 
+describe('a held row the owner adds', () => {
+  it('counts once against a statement, and follows the bank afterwards like any synced row', async () => {
+    const { ledgerId } = await csvLedger([{ date: '2026-09-10', amountCents: 4_750 }]);
+    const acc = await newAccount();
+    await setUpAccountSync(acc.accountId, { kind: 'existing', ledgerAccountId: ledgerId, cutoverDate: null });
+    const held = ptxn(acc, { date: '2026-09-11', authorizedDate: null, amountCents: 4_750 });
+    expect(await sync(acc, { added: [held] })).toMatchObject({ counts: { held: 1 } });
+    expect(await answerHeldRow(acc.accountId, held.providerTransactionId, 'released')).toMatchObject({ ok: true });
+
+    // Counted once: the statement shows one $4.75 purchase in the period.
+    const statement = { from: '2026-09-01', to: '2026-09-30', charges: '4.75', credits: '0.00', excludedKeys: [], confirmed: true };
+    expect(await recordStatementCheck(acc.accountId, statement, 'pass')).toMatchObject({ ok: true });
+
+    // The bank later changes it, then removes it: the added row follows.
+    await sync(acc, { modified: [{ ...held, amountCents: 5_000 }] });
+    expect(await row(acc, held.providerTransactionId)).toMatchObject({ amountCents: 5_000 });
+    await sync(acc, { removed: [removal(acc, held.providerTransactionId)] });
+    expect((await row(acc, held.providerTransactionId))?.deletedAt).not.toBeNull();
+  });
+});
+
 describe('sign verification', () => {
   it('until verified, synced rows are not splittable and in no total; CSV rows count as always', async () => {
     // Amounts no other test uses: the database is shared by every test file.
@@ -273,6 +294,33 @@ describe('sign verification', () => {
 });
 
 describe('sign verification on a checking account', () => {
+  it('counts the bank rows set aside before the cutover for a statement that spans it', async () => {
+    // Chase-shaped: CSV history to 09-10 on posted dates, so the cutover is 09-11.
+    const { ledgerId } = await csvLedger([{ date: '2026-09-10', amountCents: 1_230 }], 'posted');
+    const acc = await newAccount();
+    await db.update(bankAccounts).set({ type: 'depository', subtype: 'checking' }).where(eq(bankAccounts.id, acc.accountId));
+    await setUpAccountSync(acc.accountId, { kind: 'existing', ledgerAccountId: ledgerId, cutoverDate: null });
+    expect(
+      await sync(acc, {
+        added: [
+          ptxn(acc, { date: '2026-09-02', authorizedDate: null, amountCents: 48_270, descriptionRaw: 'DEBIT CARD BEFORE' }),
+          ptxn(acc, { date: '2026-09-05', authorizedDate: null, amountCents: -300_000, descriptionRaw: 'PAYROLL BEFORE' }),
+          ptxn(acc, { date: '2026-09-18', authorizedDate: null, amountCents: 120_000, descriptionRaw: 'TRANSFER AFTER' }),
+          ptxn(acc, { date: '2026-09-19', authorizedDate: null, amountCents: -370_100, descriptionRaw: 'PAYROLL AFTER' }),
+        ],
+      }),
+    ).toMatchObject({ kind: 'applied', counts: { inserted: 2, beforeCutover: 2 } });
+    // The statement covers both sides (amounts are mills): withdrawals $48.27
+    // before the cutover + $120.00 after; deposits $300.00 + $370.10.
+    const statement = { from: '2026-08-27', to: '2026-09-25', charges: '168.27', credits: '670.10', excludedKeys: [], confirmed: true };
+    // Only the rows after the cutover would not match: the set-aside rows count.
+    expect(await recordStatementCheck(acc.accountId, { ...statement, charges: '120.00', credits: '370.10' }, 'pass')).toEqual({
+      error: 'This does not match the statement yet; nothing was recorded.',
+    });
+    expect(await recordStatementCheck(acc.accountId, statement, 'pass')).toMatchObject({ ok: true });
+  });
+
+
   it('compares withdrawals and deposits; a statement read with the signs the other way round does not pass', async () => {
     const acc = await account();
     await db.update(bankAccounts).set({ verifiedAt: null, type: 'depository', subtype: 'checking' }).where(eq(bankAccounts.id, acc.accountId));

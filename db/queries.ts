@@ -2531,6 +2531,9 @@ export async function commitAccountSync(input: {
           and(
             eq(syncSkippedRows.bankAccountId, input.accountId),
             inArray(syncSkippedRows.providerTransactionId, fetchedIds.slice(i, i + SYNC_INSERT_CHUNK)),
+            // A released held row is a live transaction now: the bank's later
+            // changes and removal of it go to the planner, like any synced row.
+            sql`${syncSkippedRows.resolution} is distinct from 'released'`,
           ),
         );
       for (const r of rows) setAsideIds.add(r.id);

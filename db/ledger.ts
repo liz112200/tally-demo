@@ -424,6 +424,9 @@ export async function verificationRows(accountId: string, from: string, to: stri
         eq(syncSkippedRows.bankAccountId, accountId),
         eq(syncSkippedRows.pending, false),
         isNull(syncSkippedRows.removedAt),
+        // A held row the owner added ("Different: add it") is a transaction
+        // now, counted above; counting its record too would count it twice.
+        sql`${syncSkippedRows.resolution} is distinct from 'released'`,
         sql`${syncSkippedRows.postedDate} between ${from}::date and ${to}::date`,
       ),
     );
