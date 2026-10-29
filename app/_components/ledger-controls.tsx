@@ -123,7 +123,7 @@ export function SetUpSyncButton({
             <Label htmlFor="cutover">Sync from</Label>
             <Input id="cutover" type="date" value={cutover} min={chosen.defaultCutover ?? undefined} onChange={(e) => setCutover(e.target.value)} />
             <p className="text-xs text-muted-foreground">
-              The day after the last CSV row ({chosen.lastCsvDate}). Bank rows before it are never added. A later date leaves
+              The day after the last CSV row ({chosen.lastCsvDate}, rows in undone imports included). Bank rows before it are never added. A later date leaves
               the days between in neither source; an earlier one would count purchases twice and is refused.
             </p>
           </div>

@@ -14,6 +14,7 @@ import {
   insertRule,
   insertSettlementWithAllocations,
   insertTransaction,
+  softDeleteTransactionById,
 } from './queries';
 import { account, category, owner, person, ptxn, row, split, sync } from './test/fixtures';
 import { attempt } from '@/app/_actions/attempt';
@@ -21,6 +22,7 @@ import { deletePerson, hardDeletePerson } from '@/app/_actions/people';
 import { deleteRule } from '@/app/_actions/rules';
 import { deleteSettlement } from '@/app/_actions/settlements';
 import { deleteExternalExpense } from '@/app/_actions/external-expenses';
+import { createTransaction } from '@/app/_actions/transactions';
 import { removeSplit } from '@/app/_actions/splits';
 import { bulkDeleteTransactions, deleteTransaction } from '@/app/_actions/transactions';
 import { restoreImport, setImportHidden, undoImport } from '@/app/_actions/import';
@@ -240,3 +242,38 @@ describe('attempt', () => {
     expect(log).toBe('insertBad: database error 23502');
   });
 });
+
+// A row typed by hand was dropped by the dedup index when an identical manual
+// row existed, live or deleted, while the form said "Transaction added."
+describe('adding a transaction by hand', () => {
+  const form = (description: string) => {
+    const fd = new FormData();
+    fd.set('date', '2026-08-02');
+    fd.set('amount', '4.50');
+    fd.set('description', description);
+    fd.set('categoryId', '');
+    return fd;
+  };
+  const rows = async (description: string) =>
+    db.select({ deletedAt: transactions.deletedAt }).from(transactions).where(eq(transactions.descriptionRaw, description));
+
+  it('adds a second identical row, and says the first exists', async () => {
+    const d = `COFFEE ${randomUUID().slice(0, 6)}`;
+    expect(await createTransaction({}, form(d))).toEqual({ ok: true, message: 'Transaction added.' });
+    expect(await createTransaction({}, form(d))).toEqual({
+      ok: true,
+      message: 'Transaction added. You already had an identical row on that date (same amount and description); delete one if this was a slip.',
+    });
+    expect(await rows(d)).toHaveLength(2);
+  });
+
+  it('adds a row identical to a deleted one without mentioning it', async () => {
+    const d = `COFFEE ${randomUUID().slice(0, 6)}`;
+    await createTransaction({}, form(d));
+    const [first] = await db.select({ id: transactions.id }).from(transactions).where(eq(transactions.descriptionRaw, d));
+    await softDeleteTransactionById(first.id);
+    expect(await createTransaction({}, form(d))).toEqual({ ok: true, message: 'Transaction added.' });
+    expect((await rows(d)).filter((r) => r.deletedAt === null)).toHaveLength(1);
+  });
+});
+

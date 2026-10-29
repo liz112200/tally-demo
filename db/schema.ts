@@ -456,6 +456,12 @@ export const transactions = pgTable(
     // means no note. Never touched by import or dedup (not part of the
     // hash); purely for the owner's own reference.
     note: text('note'),
+    // A manual row the owner paid off-card alongside another transaction
+    // (PAID-ALONGSIDE.md): cash for gas on a trip next to its car rental.
+    // Context only, never read for an amount; manual rows only (CHECK).
+    alongsideTransactionId: uuid('alongside_transaction_id').references((): AnyPgColumn => transactions.id, {
+      onDelete: 'set null',
+    }),
     // Soft delete. Splits, shares, and receipts referencing a deleted
     // transaction stay in the database unchanged, but every read path —
     // including balance derivation via share history — filters them out.
@@ -486,6 +492,10 @@ export const transactions = pgTable(
     check(
       'transactions_category_has_source',
       sql`${table.categoryId} is null or ${table.categorySource} is not null`,
+    ),
+    check(
+      'transactions_alongside_is_manual',
+      sql`${table.alongsideTransactionId} is null or ${table.source} = 'manual'`,
     ),
     // Exactly one identity: a content hash (CSV and manual rows) or a
     // provider id with its account (synced rows), never both or neither.

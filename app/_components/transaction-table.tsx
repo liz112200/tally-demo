@@ -422,6 +422,18 @@ export function TransactionTable({
 
   const summary = useMemo(() => summarizeView(visible), [visible]);
 
+  // Paid alongside (PAID-ALONGSIDE.md): each row's charge, and each charge's
+  // purchases, from every live row (not just the filtered view).
+  const alongsideLinks = useMemo(() => {
+    const byId = new Map(data.map((r) => [r.id, { id: r.id, descriptionRaw: r.descriptionRaw, amountCents: r.amountCents }]));
+    const byAnchor = new Map<string, { id: string; descriptionRaw: string; amountCents: number }[]>();
+    for (const r of data) {
+      if (!r.alongsideOfId) continue;
+      byAnchor.set(r.alongsideOfId, [...(byAnchor.get(r.alongsideOfId) ?? []), byId.get(r.id)!]);
+    }
+    return { byId, byAnchor };
+  }, [data]);
+
   // Upload-batch grouping (null = flat view: the Manual tab, or no imports).
   // Batch stats come from the unfiltered data so headers keep reading as
   // the statement period while filters narrow the rows.
@@ -600,6 +612,8 @@ export function TransactionTable({
                 defaultParticipantIds={defaultParticipantIds}
                 replacementCandidates={replacementCandidates[row.original.id] ?? []}
                 creditByPerson={creditByPerson}
+                alongsideOf={alongsideLinks.byId.get(row.original.alongsideOfId ?? '') ?? null}
+                alongside={alongsideLinks.byAnchor.get(row.original.id) ?? []}
               />
             </td>
           </tr>

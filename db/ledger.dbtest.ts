@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { db } from './index';
 import { bankAccounts, imports, ledgerAccounts, syncSkippedRows, transactions } from './schema';
-import { getInsightRows, getTransactions, insertImport, insertTransaction, saveConnectionAccounts } from './queries';
+import { getInsightRows, getTransactions, insertImport, insertTransaction, saveConnectionAccounts, softDeleteTransactionById } from './queries';
 import { boundaryReview, choicesFor, ledgerChoices, mapAccountToLedger } from './ledger';
 import { account, owner, person, ptxn, removal, row, split, sync, type TestAccount } from './test/fixtures';
 import { adoptAccount, answerHeldRow, declineReissued, finishBoundaryReview, recordStatementCheck, setUpAccountSync } from '@/app/_actions/ledger';
@@ -227,6 +227,22 @@ describe('the boundary review', () => {
     expect(await reviewedAt()).toBeNull();
     const review = await boundaryReview(acc.accountId);
     expect(review?.rows.filter((r) => r.kind === 'possible_duplicate').map((r) => r.providerTransactionId)).toEqual([late.providerTransactionId]);
+  });
+});
+
+describe('a statement check and deleted rows', () => {
+  it('counts a synced row the owner deleted, still on the statement, but not one the bank removed', async () => {
+    const acc = await account();
+    await db.update(bankAccounts).set({ verifiedAt: null }).where(eq(bankAccounts.id, acc.accountId));
+    const kept = ptxn(acc, { date: '2026-10-03', amountCents: 25_000 });
+    const mine = ptxn(acc, { date: '2026-10-04', amountCents: 12_000 });
+    const gone = ptxn(acc, { date: '2026-10-05', amountCents: 9_000 });
+    await sync(acc, { added: [kept, mine, gone] });
+    const mineRow = (await row(acc, mine.providerTransactionId))!;
+    await softDeleteTransactionById(mineRow.id);
+    await sync(acc, { removed: [removal(acc, gone.providerTransactionId)] });
+    const statement = { from: '2026-10-01', to: '2026-10-31', charges: '37.00', credits: '0.00', excludedKeys: [], confirmed: true };
+    expect(await recordStatementCheck(acc.accountId, statement, 'pass')).toMatchObject({ ok: true });
   });
 });
 

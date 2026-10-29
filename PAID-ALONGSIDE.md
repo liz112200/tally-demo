@@ -1,4 +1,4 @@
-# Paid alongside (spec, not built)
+# Paid alongside
 
 Recording what the owner paid off-card next to a charge (cash for gas and
 food on a trip, another card), split with the same people, without editing
@@ -76,3 +76,39 @@ deleting the charge leaves the purchase. Structural tests cover the actions.
 
 An "owes me" entry that is not spending: none of the edited rows is that
 case, so it waits for one.
+
+## As built (2026-10-29)
+
+Migration 0029 (`transactions.alongside_transaction_id`, CHECK manual
+only); `db/alongside.ts` (the insert, the original-amount recovery, the
+conversion with its before/after comparison); `app/_actions/alongside.ts`;
+the block in a transaction's detail (`app/_components/paid-alongside.tsx`):
+the link both ways, "Add what you paid alongside this", and, on a row whose
+values no longer match its dedup_hash, "Move the extra into a purchase paid
+alongside", which previews every person's share, owed, paid and credit, the
+spending total and the month's Insights before anything is written. The
+preview is the conversion itself, rolled back. Database tests: exact figures
+before and after, a partly paid share, the allocation moved within the same
+settlement, refusals (amount as it came in, uneven extra, synced row, no
+description).
+
+Found on dev (2026-10-29): after the owner added "Gas $10.00" alongside a
+raised row, converting it with the description "Gas" restored the row's
+amount and then hit the duplicate; the error was returned inside the
+transaction, which committed the amount alone, leaving the shares on the old
+amount. Every check now runs before the first write, a refusal after it
+throws, an extra already recorded alongside the row is refused by name (it
+would be counted twice), a clashing manual row is named with what to do,
+Convert stays disabled under a refusal, and a row already at the amount it
+came in with says so. Tests cover both sequences and assert nothing is
+written.
+
+Found in the re-test (2026-10-29): after deleting the clashing row as the
+refusal told them to, the owner was refused again, naming the row they had
+deleted. The clash check counted soft-deleted rows. A deleted twin now never
+blocks (the new row goes in dedup_exempt, past the index that still holds
+the deleted row's hash); a live one is still refused by name. The sweep found
+manual entry silently dropping such a row while reporting success, the Set
+up dialog's cutover default counting undone imports without saying so, and
+verification leaving out synced rows the owner deleted; all three fixed.
+

@@ -27,6 +27,7 @@ import {
 } from '@/app/_components/edit-transaction-form';
 import { ConfirmDialog } from '@/app/_components/confirm-dialog';
 import { NoteBlock } from '@/app/_components/note-block';
+import { PaidAlongsideBlock, type AlongsideLink } from '@/app/_components/paid-alongside';
 import { BankFlagBlock, dropSentence } from '@/app/_components/bank-flag-block';
 import { ReceiptWizardDialog } from '@/app/_components/receipt-wizard';
 import {
@@ -367,6 +368,8 @@ export function TransactionDetailPanel({
   defaultParticipantIds,
   replacementCandidates,
   creditByPerson,
+  alongsideOf = null,
+  alongside = [],
 }: {
   row: TransactionRow;
   split: SplitSummary | null;
@@ -375,6 +378,8 @@ export function TransactionDetailPanel({
   defaultParticipantIds: string[];
   replacementCandidates: ReplacementCandidate[];
   creditByPerson: Record<string, number>;
+  alongsideOf?: AlongsideLink | null;
+  alongside?: AlongsideLink[];
 }) {
   // Inline edit of description / amount / date (phase 7); the form
   // replaces the static description block while open. Synced rows are the
@@ -413,6 +418,9 @@ export function TransactionDetailPanel({
               <p className="mt-1 text-xs">
                 <CategoryProvenance row={row} />
               </p>
+              <div className="mt-1.5">
+                <PaidAlongsideBlock row={row} alongsideOf={alongsideOf} alongside={alongside} hasSplit={split !== null} />
+              </div>
               <div className="mt-1.5">
                 {synced ? (
                   <p className="text-[11px] text-muted-foreground">

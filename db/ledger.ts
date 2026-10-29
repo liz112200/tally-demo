@@ -409,7 +409,10 @@ export async function verificationRows(accountId: string, from: string, to: stri
   const inserted = (await db.execute(sql`
     select t.id::text as key, coalesce(t.provider_raw->>'date', t.date::text) as posted, t.amount_cents, t.description_raw
     from transactions t
-    where t.bank_account_id = ${accountId} and t.deleted_at is null and not t.pending
+    where t.bank_account_id = ${accountId} and not t.pending
+      -- A synced row the owner deleted is still the bank's, and on its
+      -- statement; one the bank removed is not.
+      and (t.deleted_at is null or t.removed_by_bank_at is null)
       and coalesce(t.provider_raw->>'date', t.date::text)::date between ${from}::date and ${to}::date`)) as unknown as {
     key: string;
     posted: string;

@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { parseDollars } from '@/lib/money';
 import {
   bulkUpdateTransactionCategory,
+  hasLiveTwin,
   insertTransaction,
   softDeleteTransactionById,
   softDeleteTransactionsByIds,
@@ -60,16 +61,28 @@ export async function createTransaction(
     return { errors: fieldErrors(parsed.error) };
   }
 
-  await insertTransaction({
+  const fields = {
     date: parsed.data.date,
     amountCents: parseDollars(parsed.data.amount),
     descriptionRaw: parsed.data.description,
     categoryId: parsed.data.categoryId,
     note: parsed.data.note,
-  });
+  };
+  // A row typed by hand is the owner's say-so. When the dedup index skips it
+  // (an identical manual row exists, live or deleted), it goes in exempt,
+  // as an approved duplicate does; it used to be dropped while this said
+  // "Transaction added." A live twin is named, in case it was a slip.
+  let message = 'Transaction added.';
+  if (!(await insertTransaction(fields)).inserted) {
+    const live = await hasLiveTwin({ source: 'manual', accountLabel: null, ...fields });
+    await insertTransaction({ ...fields, dedupExempt: true });
+    if (live) {
+      message = 'Transaction added. You already had an identical row on that date (same amount and description); delete one if this was a slip.';
+    }
+  }
 
   revalidatePath('/');
-  return { ok: true, message: 'Transaction added.' };
+  return { ok: true, message };
 }
 
 // Set or clear a transaction's note from the row detail. Notes never touch

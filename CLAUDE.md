@@ -64,7 +64,13 @@ These are decided. Do not reintroduce the alternatives.
   each get one extra cent so shares sum to the total exactly; a total that
   is not whole cents puts its sub-cent part on the first person. Participant
   order is person `created_at` ascending. Splits saved before this rule
-  (2026-10-26) keep their stored mills until re-saved.
+  (2026-10-26) keep their stored mills until re-saved. A conversion into a
+  paid-alongside purchase (PAID-ALONGSIDE.md) adjusts a split rather than
+  re-dividing it: each share drops by that person's whole-cent part of the
+  extra and keeps its mills, because re-dividing would move half a cent
+  between people. The paid part above a share's new amount moves, as an
+  allocation of the same settlement, to the person's share of the extra; no
+  settlement is written.
 - Tax and tip are split equally among all participants regardless of
   method (for item-level splits, independent of what each ordered). The
   engine divides `abs(amount) - tax - tip` by the chosen method and adds
@@ -106,6 +112,13 @@ These are decided. Do not reintroduce the alternatives.
   is therefore never salted; only `dedup_exempt` bends. Exempt rows are
   ignored when detecting future duplicates, so a hash that matches only
   exempt rows imports as new. Unapproved duplicates skip exactly as before.
+  A row typed by hand (manual entry, a purchase paid alongside) is the
+  owner's say-so: when an identical manual row exists it goes in exempt. A
+  deleted twin never blocks it or is mentioned, since the owner cannot see
+  it; a live twin is named (manual entry adds and says so, paid alongside
+  refuses and says what to do). Manual entry used to drop such a row while
+  saying "Transaction added."; a check that counts rows the screen hides must
+  say so or not count them.
 - The owner is modeled as a Person with `is_owner`. Their own share is
   never owed, and the owner never appears as a debtor: on /people (which
   absorbed /balances in phase 6) the owner is a pinned summary row, not a
@@ -442,6 +455,16 @@ These are decided. Do not reintroduce the alternatives.
   "synthetic" fixtures were real exports with names swapped, and published
   real dates and amounts for two weeks). Test values are invented too, never
   an amount seen in the ledger; the snapshot scan rejects one that matches.
+- Inside a `db.transaction` callback, a refusal after any write must throw;
+  returning commits what was already written. Check everything first, write
+  after, and throw from the first write on. A conversion that returned an
+  error after updating an amount committed the amount alone (dev,
+  2026-10-29); its tests had only refused before writing.
+  lib/tx-refusals.test.ts enforces this: with the type checker it reads every
+  transaction callback in db/, app/ and lib/, works out which calls write
+  (directly, in raw SQL, or through a helper handed the transaction), and
+  fails on a return whose type can carry `error` after a write. It reads the
+  source, so a new transaction is checked without anyone adding it.
 - Zod schemas are the single source of truth for validation and are shared
   by forms, Server Actions, and importers.
 - Database behaviour that pure tests cannot reach (transactions, locks,

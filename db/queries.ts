@@ -33,7 +33,7 @@ import {
   splitShares,
   transactions,
 } from './schema';
-import { dedupHash } from '@/lib/parsers/dedup';
+import { dedupHash, type DedupFields } from '@/lib/parsers/dedup';
 import { normalizeMerchant } from '@/lib/parsers/normalize';
 import { categorize, ruleOutcome, type CategoryRule } from '@/lib/categorize';
 import { allocateFifo } from '@/lib/allocations';
@@ -103,11 +103,22 @@ export type TransactionRow = {
   // (REAL-ACCOUNTS.md): not splittable and in no total until it is. Always
   // false for CSV and manual rows.
   unverified: boolean;
+  // The transaction this manual row was paid alongside (PAID-ALONGSIDE.md).
+  alongsideOfId: string | null;
+  // A CSV or manual row whose date, amount or description no longer matches
+  // its dedup_hash: edited after it came in (PAID-ALONGSIDE.md offers to move
+  // a raised amount into a paid-alongside purchase).
+  editedAfterImport: boolean;
   // The amount the split was built on, when the bank has since changed it.
   bankAmountBeforeCents: number | null;
   // Set when the bank removed a row the owner had built on.
   removedByBankAt: Date | null;
 };
+
+// The dedup hash of a row's current values, in SQL: the canonical string of
+// lib/parsers/dedup.ts (source|account label|date|amount|description), so a
+// row whose stored hash differs was edited after it came in.
+export const importHashSql = sql`encode(sha256(convert_to(${transactions.source}::text || '|' || coalesce(${transactions.accountLabel}, '') || '|' || ${transactions.date}::text || '|' || ${transactions.amountCents}::text || '|' || ${transactions.descriptionRaw}, 'UTF8')), 'hex')`;
 
 export async function getTransactions(): Promise<TransactionRow[]> {
   const rows = await db
@@ -129,6 +140,8 @@ export async function getTransactions(): Promise<TransactionRow[]> {
       bankAmountBeforeCents: transactions.bankAmountBeforeCents,
       removedByBankAt: transactions.removedByBankAt,
       unverified: sql<boolean>`(${transactions.bankAccountId} is not null and ${bankAccounts.verifiedAt} is null)`,
+      alongsideOfId: transactions.alongsideTransactionId,
+      editedAfterImport: sql<boolean>`(${transactions.providerTransactionId} is null and ${transactions.dedupHash} is not null and ${transactions.dedupHash} <> ${importHashSql})`,
     })
     .from(transactions)
     .leftJoin(categories, eq(transactions.categoryId, categories.id))
@@ -277,6 +290,16 @@ export async function bankCategoryMapOf(conn: Pick<Tx, 'select'> = db): Promise<
     .select({ plaidCategory: bankCategoryMap.plaidCategory, categoryId: bankCategoryMap.categoryId })
     .from(bankCategoryMap);
   return new Map(rows.map((r) => [r.plaidCategory, r.categoryId]));
+}
+
+// Whether a live (not deleted, not exempt) row has these dedup fields: an
+// identical manual entry the owner can still see.
+export async function hasLiveTwin(fields: DedupFields): Promise<boolean> {
+  const [row] = await db
+    .select({ id: transactions.id })
+    .from(transactions)
+    .where(and(eq(transactions.dedupHash, dedupHash(fields)), eq(transactions.dedupExempt, false), isNull(transactions.deletedAt)));
+  return row !== undefined;
 }
 
 // Shared insert path for both manual entry and import. Computes the dedup_hash
