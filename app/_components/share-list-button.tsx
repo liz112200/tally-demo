@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { Check, Share2 } from 'lucide-react';
+import { Check, Link2, Share2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import {
   absoluteShareUrl,
   buildShareSummary,
@@ -77,6 +78,41 @@ export function ShareListButton({
     }
   }
 
+  // Publish this list as a snapshot and return its address, or null when
+  // publishing failed. Snapshots are served by a separate Vercel project
+  // whose only routes are /s/[token] and a dead end, so trimming a shared
+  // link reveals no ledger. Falls back to this origin in local dev, where the
+  // app still serves /s/ itself. absoluteShareUrl supplies the scheme, which
+  // the dashboard-copied value omits.
+  async function publishLink(): Promise<string | null> {
+    const published = await createShareLink({
+      personName,
+      groupedByCategory: groupBy === 'category',
+      owed,
+      owing,
+    });
+    return published.ok
+      ? absoluteShareUrl(process.env.NEXT_PUBLIC_SHARE_BASE_URL || window.location.origin, published.token)
+      : null;
+  }
+
+  // The link on its own, whatever the list's length: for a short list the
+  // owner would rather send as a page than as text.
+  const [linkStatus, setLinkStatus] = useState<'idle' | 'working' | 'copied' | 'failed'>('idle');
+  async function onCopyLink() {
+    if (!text) return;
+    setLinkStatus('working');
+    const url = await publishLink();
+    try {
+      if (!url) throw new Error('not published');
+      await navigator.clipboard.writeText(url);
+      setLinkStatus('copied');
+    } catch {
+      setLinkStatus('failed');
+    }
+    setTimeout(() => setLinkStatus('idle'), 2500);
+  }
+
   async function onShare() {
     if (!text) return;
 
@@ -86,32 +122,12 @@ export function ShareListButton({
     let message = text;
     if (needsLink) {
       setStatus('working');
-      const published = await createShareLink({
-        personName,
-        groupedByCategory: groupBy === 'category',
-        owed,
-        owing,
-      });
+      const url = await publishLink();
       setStatus('idle');
       // If publishing fails, fall back to sending the list inline rather
       // than sending nothing — long is better than lost.
-      message = published.ok
-        ? buildShareSummary({
-            personName,
-            owed,
-            owing,
-            groupBy,
-            limit: TEASER_LINES,
-            // Snapshots are served by a separate Vercel project whose only
-            // routes are /s/[token] and a dead end, so trimming a shared link
-            // reveals no ledger. Falls back to this origin in local dev,
-            // where the app still serves /s/ itself. absoluteShareUrl
-            // supplies the scheme, which the dashboard-copied value omits.
-            linkUrl: absoluteShareUrl(
-              process.env.NEXT_PUBLIC_SHARE_BASE_URL || window.location.origin,
-              published.token,
-            ),
-          })
+      message = url
+        ? buildShareSummary({ personName, owed, owing, groupBy, limit: TEASER_LINES, linkUrl: url })
         : text;
     }
 
@@ -151,34 +167,59 @@ export function ShareListButton({
   }
 
   return (
-    <Button
-      type="button"
-      variant="outline"
-      size="sm"
-      className={className}
-      onClick={onShare}
-      disabled={!text || status === 'working'}
-      title={
-        text
-          ? `Share where you stand with ${personName}`
-          : 'Nothing outstanding to share'
-      }
-    >
-      {status === 'working' ? (
-        'Preparing…'
-      ) : status === 'copied' ? (
-        <>
-          <Check data-icon="inline-start" />
-          Copied
-        </>
-      ) : status === 'failed' ? (
-        'Copy failed'
-      ) : (
-        <>
-          <Share2 data-icon="inline-start" />
-          Share
-        </>
-      )}
-    </Button>
+    <span className={cn('inline-flex gap-1', className)}>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={onShare}
+        disabled={!text || status === 'working'}
+        title={
+          text
+            ? `Share where you stand with ${personName}`
+            : 'Nothing outstanding to share'
+        }
+      >
+        {status === 'working' ? (
+          'Preparing…'
+        ) : status === 'copied' ? (
+          <>
+            <Check data-icon="inline-start" />
+            Copied
+          </>
+        ) : status === 'failed' ? (
+          'Copy failed'
+        ) : (
+          <>
+            <Share2 data-icon="inline-start" />
+            Share
+          </>
+        )}
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        onClick={onCopyLink}
+        disabled={!text || linkStatus === 'working'}
+        title={text ? `Publish where you stand with ${personName} as a page, and copy its link` : 'Nothing outstanding to share'}
+      >
+        {linkStatus === 'working' ? (
+          'Publishing…'
+        ) : linkStatus === 'copied' ? (
+          <>
+            <Check data-icon="inline-start" />
+            Link copied
+          </>
+        ) : linkStatus === 'failed' ? (
+          'Link failed'
+        ) : (
+          <>
+            <Link2 data-icon="inline-start" />
+            Copy link
+          </>
+        )}
+      </Button>
+    </span>
   );
 }

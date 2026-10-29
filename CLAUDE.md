@@ -379,7 +379,8 @@ These are decided. Do not reintroduce the alternatives.
   addressed by `NEXT_PUBLIC_SHARE_BASE_URL` on the app —
   unset, links fall back to the app's own origin, which is local dev. `revoked_at` is read as "gone" already,
   so a revoke affordance needs no migration. A list of 8 items or fewer is
-  sent whole and publishes no row at all. A snapshot carries BOTH directions
+  sent whole and publishes no row at all, unless the owner chooses Copy link,
+  which publishes a snapshot of any list and copies only its address. A snapshot carries BOTH directions
   and states the net: a message listing only what someone owes, while omitting
   what they are owed back, overstates the debt (it read $1,250.68 where the
   net was $967.77). Hence one Share button per person, not per direction,
