@@ -126,6 +126,23 @@ synced rows, which this slice never does).
   posting date like the CSV history beside it; db/ledger-date-basis.ts moved
   the rows synced before (4 on production, none built on, none changing
   month).
+- **A transaction basis without an authorized date.** Capital One sends no
+  authorized date (none on 240 of 242 Discover rows, 2026-10-29), so a
+  synced Discover row falls back to its posting date, 0 to 3 days after the
+  date the CSV recorded for the same purchase. The two bases are therefore
+  not the same there, and nothing can make them so; MATCH_DAYS covers the
+  lag seen. Of the Discover purchases on the CSV up to the cutover, every
+  one paired with a bank row set aside (before the cutover or held), none
+  with an inserted row.
+- **Pairing is one to one, equal amounts first.** The hold and the review
+  pair bank rows with CSV rows across all of them at once (`pairWithCsv`):
+  every equal-amount pair, then the same merchant at another amount among
+  the rest, nearest dates first. Pairing row by row let a same-merchant row
+  take the CSV row another bank row matched exactly, and the review's CSV
+  rows began on the window's first day, so a bank row near it lost a twin
+  dated a few days earlier (2026-10-29: a bank row named as differing from
+  a CSV row that a held row matched exactly). The review fetches both sides
+  2 × MATCH_DAYS further back than it shows.
 - A new login's history arrives in two parts: Plaid sends the last 30 days
   first and the rest later, so the first sync may see none of the days
   around the cutover. The sync line says when only the first 30 days have

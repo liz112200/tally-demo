@@ -52,7 +52,45 @@ export function sameMerchant(a: string | null, b: string | null): boolean {
 }
 
 
-function addDays(iso: string, days: number): string {
+// Pairs bank rows with CSV rows dated within MATCH_DAYS, each CSV row with one
+// bank row at most: every equal-amount pair first, then the same merchant at
+// another amount among the rows left, nearest dates first within each pass.
+// Pairing row by row let a same-merchant row take the CSV row another bank
+// row had at the exact amount, which on a sync leaves that purchase to be
+// added twice and in the boundary review named the wrong CSV row as the
+// differing one (2026-10-29). Dates are on the account's basis. Returns the
+// index of each bank row's CSV row, or null.
+export function pairWithCsv(
+  bank: readonly { date: string; amountCents: number; description: string }[],
+  csv: readonly { date: string; amountCents: number; description?: string }[],
+): (number | null)[] {
+  const paired: (number | null)[] = bank.map(() => null);
+  const used = new Set<number>();
+  const bankMerchant = bank.map((t) => merchantKey(t.description));
+  const csvMerchant = csv.map((c) => (c.description ? merchantKey(c.description) : null));
+  const pass = (fits: (b: number, c: number) => boolean) => {
+    const candidates: { b: number; c: number; gap: number }[] = [];
+    bank.forEach((t, b) => {
+      if (paired[b] !== null) return;
+      csv.forEach((r, c) => {
+        const gap = daysBetween(r.date, t.date);
+        if (!used.has(c) && gap <= MATCH_DAYS && fits(b, c)) candidates.push({ b, c, gap });
+      });
+    });
+    candidates.sort((x, y) => x.gap - y.gap || x.b - y.b || x.c - y.c);
+    for (const { b, c } of candidates) {
+      if (paired[b] === null && !used.has(c)) {
+        paired[b] = c;
+        used.add(c);
+      }
+    }
+  };
+  pass((b, c) => csv[c].amountCents === bank[b].amountCents);
+  pass((b, c) => sameMerchant(csvMerchant[c], bankMerchant[b]));
+  return paired;
+}
+
+export function addDays(iso: string, days: number): string {
   const d = new Date(`${iso}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
@@ -92,38 +130,27 @@ export function splitAtCutover(input: {
     return { ...out, added: [...input.added], modified: [...input.modified], removed: [...input.removed] };
   }
   const windowEnd = addDays(cutover.date, BOUNDARY_DAYS);
-  const unmatched = input.csvRows.map((r) => ({ ...r, merchant: r.description ? merchantKey(r.description) : null, used: false }));
-  // A CSV row matched by one synced row is not offered to another. The same
-  // amount is tried first, then the same merchant at any amount.
-  const matchCsv = (t: ProviderTransaction): boolean => {
-    // Compared on the account's basis, the date its CSV rows carry: a posting
-    // date beside a posting date. A Chase row's purchase date can be days
-    // before its posting date (2026-10-29: up to eight).
-    const near = unmatched.filter((c) => !c.used && daysBetween(c.date, basisDate(t, cutover.basis)) <= MATCH_DAYS);
-    const merchant = merchantKey(t.descriptionRaw);
-    const hit =
-      near.find((c) => c.amountCents === t.amountCents) ??
-      near.find((c) => sameMerchant(c.merchant, merchant));
-    if (hit) hit.used = true;
-    return hit !== undefined;
-  };
-  const classify = (t: ProviderTransaction): SetAside['reason'] | null => {
-    const d = basisDate(t, cutover.basis);
-    if (d < cutover.date) return 'before_cutover';
-    if (d < windowEnd && matchCsv(t)) return 'possible_duplicate';
-    return null;
-  };
+  // Compared on the account's basis, the date its CSV rows carry: a posting
+  // date beside a posting date. A Chase row's purchase date can be days
+  // before its posting date (2026-10-29: up to eight).
+  const dateOf = (t: ProviderTransaction) => basisDate(t, cutover.basis);
+  const near = input.added.filter((t) => dateOf(t) >= cutover.date && dateOf(t) < windowEnd);
+  const pairs = pairWithCsv(
+    near.map((t) => ({ date: dateOf(t), amountCents: t.amountCents, description: t.descriptionRaw })),
+    input.csvRows,
+  );
+  const held = new Set(near.filter((_, i) => pairs[i] !== null));
 
   for (const t of input.added) {
-    const reason = classify(t);
-    if (reason) out.setAside.push({ row: t, reason });
+    if (dateOf(t) < cutover.date) out.setAside.push({ row: t, reason: 'before_cutover' });
+    else if (held.has(t)) out.setAside.push({ row: t, reason: 'possible_duplicate' });
     else out.added.push(t);
   }
   for (const t of input.modified) {
     if (input.setAsideIds.has(t.providerTransactionId)) {
       // Updated in place; whatever it was set aside for still holds until the
       // owner decides (a possible duplicate) or forever (before the cutover).
-      out.setAside.push({ row: t, reason: classify(t) ?? 'possible_duplicate' });
+      out.setAside.push({ row: t, reason: dateOf(t) < cutover.date ? 'before_cutover' : 'possible_duplicate' });
     } else {
       out.modified.push(t);
     }

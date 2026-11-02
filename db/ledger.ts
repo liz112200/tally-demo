@@ -3,7 +3,7 @@ import { and, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import { db } from './index';
 import { bankAccounts, bankConnections, imports, ledgerAccounts, syncSkippedRows, transactions } from './schema';
 import { getRules, lockConnection, SYNCABLE_ACCOUNT_TYPES, type Tx } from './queries';
-import { BOUNDARY_DAYS, MATCH_DAYS, cutoverProblem, defaultCutover, merchantKey, sameMerchant } from '@/lib/bank-sync/cutover';
+import { BOUNDARY_DAYS, MATCH_DAYS, addDays, cutoverProblem, defaultCutover, pairWithCsv } from '@/lib/bank-sync/cutover';
 import { categorize } from '@/lib/categorize';
 import { normalizeMerchant } from '@/lib/parsers/normalize';
 
@@ -262,9 +262,9 @@ export type BoundaryRow = {
   description: string;
   kind: 'csv' | 'before_cutover' | 'possible_duplicate';
   resolution: 'same' | 'released' | null;
-  // On a bank row: the CSV row of the same merchant within MATCH_DAYS whose
-  // amount differs, when no CSV row there has the bank's amount. Stated as a
-  // fact; the cause is the owner's to know (an edit, a hold, a tip).
+  // On a bank row: the CSV row it pairs with (pairWithCsv) when that row is
+  // the same merchant at another amount. Stated as a fact; the cause is the
+  // owner's to know (an edit, a hold, a tip).
   differsFrom: { date: string; amountCents: number } | null;
 };
 
@@ -284,6 +284,12 @@ export async function boundaryReview(accountId: string): Promise<{ cutover: stri
   // CSV twin (2026-10-29: 09-04 beside 09-08).
   const posted = account.basis === 'posted';
   const basisColumn = posted ? syncSkippedRows.postedDate : syncSkippedRows.date;
+  // Shown: the last BOUNDARY_DAYS before the cutover. Paired: further back on
+  // both sides, so a shown row's twin is never cut off at the window's edge
+  // (2026-10-29: a bank row of 09-06 lost its CSV twin of 09-03 to a window
+  // starting 09-04, and was named as differing from another row).
+  const shownFrom = addDays(account.cutover, -BOUNDARY_DAYS);
+  const pairedFrom = addDays(account.cutover, -(BOUNDARY_DAYS + 2 * MATCH_DAYS));
   const csv = await db
     .select({ date: transactions.date, amountCents: transactions.amountCents, description: transactions.descriptionRaw })
     .from(transactions)
@@ -292,48 +298,51 @@ export async function boundaryReview(accountId: string): Promise<{ cutover: stri
       and(
         eq(imports.ledgerAccountId, account.ledgerAccountId!),
         isNull(transactions.deletedAt),
-        sql`${transactions.date} >= ${account.cutover}::date - ${BOUNDARY_DAYS}::int`,
+        sql`${transactions.date} >= ${pairedFrom}::date`,
       ),
     );
-  const setAside = await db
-    .select()
-    .from(syncSkippedRows)
-    .where(
-      and(
-        eq(syncSkippedRows.bankAccountId, accountId),
-        isNull(syncSkippedRows.removedAt),
-        sql`(${syncSkippedRows.reason} = 'possible_duplicate' or ${basisColumn} >= ${account.cutover}::date - ${BOUNDARY_DAYS}::int)`,
-      ),
-    );
-  const days = (a: string, b: string) => Math.abs(Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / 86_400_000;
-  const differsFrom = (bank: { date: string; amountCents: number; descriptionRaw: string }) => {
-    const merchant = merchantKey(bank.descriptionRaw);
-    const near = csv.filter((c) => days(c.date, bank.date) <= MATCH_DAYS);
-    if (merchant === null || near.some((c) => c.amountCents === bank.amountCents)) return null;
-    const other = near.find((c) => sameMerchant(merchantKey(c.description), merchant));
-    return other ? { date: other.date, amountCents: other.amountCents } : null;
-  };
+  const setAside = (
+    await db
+      .select()
+      .from(syncSkippedRows)
+      .where(
+        and(
+          eq(syncSkippedRows.bankAccountId, accountId),
+          isNull(syncSkippedRows.removedAt),
+          sql`(${syncSkippedRows.reason} = 'possible_duplicate' or ${basisColumn} >= ${pairedFrom}::date)`,
+        ),
+      )
+  ).map((s) => ({ ...s, shownDate: posted ? s.postedDate : s.date }));
+  const pairs = pairWithCsv(
+    setAside.map((s) => ({ date: s.shownDate, amountCents: s.amountCents, description: s.descriptionRaw })),
+    csv,
+  );
   const rows: BoundaryRow[] = [
-    ...csv.map((c) => ({
-      providerTransactionId: null,
-      date: c.date,
-      amountCents: c.amountCents,
-      description: c.description,
-      kind: 'csv' as const,
-      resolution: null,
-      differsFrom: null,
-    })),
-    ...setAside.map((s) => {
-      const date = posted ? s.postedDate : s.date;
-      return {
-        providerTransactionId: s.providerTransactionId,
-        date,
-        amountCents: s.amountCents,
-        description: s.descriptionRaw,
-        kind: s.reason,
-        resolution: s.resolution,
-        differsFrom: differsFrom({ ...s, date }),
-      };
+    ...csv
+      .filter((c) => c.date >= shownFrom)
+      .map((c) => ({
+        providerTransactionId: null,
+        date: c.date,
+        amountCents: c.amountCents,
+        description: c.description,
+        kind: 'csv' as const,
+        resolution: null,
+        differsFrom: null,
+      })),
+    ...setAside.flatMap((s, i) => {
+      if (s.reason !== 'possible_duplicate' && s.shownDate < shownFrom) return [];
+      const twin = pairs[i] === null ? null : csv[pairs[i]];
+      return [
+        {
+          providerTransactionId: s.providerTransactionId,
+          date: s.shownDate,
+          amountCents: s.amountCents,
+          description: s.descriptionRaw,
+          kind: s.reason,
+          resolution: s.resolution,
+          differsFrom: twin && twin.amountCents !== s.amountCents ? { date: twin.date, amountCents: twin.amountCents } : null,
+        },
+      ];
     }),
   ].sort((a, b) => a.date.localeCompare(b.date) || a.kind.localeCompare(b.kind));
   return { cutover: account.cutover, rows };

@@ -232,6 +232,32 @@ describe('the boundary review', () => {
     expect(bank(flight.providerTransactionId)?.differsFrom).toBeNull();
   });
 
+  it('pairs a bank row with its twin before the window, not with a CSV row another bank row has exactly', async () => {
+    // The bank posts a few days after the CSV's date: the 09-06 row is the CSV
+    // row of 09-03, before the review's first day (09-04); the held 09-11 row
+    // is the CSV row of 09-09.
+    const tag = `L${randomUUID().slice(0, 8)}`;
+    const [ledger] = await db
+      .insert(ledgerAccounts)
+      .values({ displayName: `Card ${tag}`, csvSource: 'discover', csvAccountLabel: tag, cutoverBasis: 'transaction' })
+      .returning({ id: ledgerAccounts.id });
+    const { importId } = await insertImport({ source: 'discover', filename: `${tag}.csv`, displayName: tag, rowCount: 2, ledgerAccountId: ledger.id });
+    const grocer = 'SYNTHETIC GROCER #12 SPRINGFIELD IL';
+    await insertTransaction({ date: '2026-09-03', amountCents: 3_150, descriptionRaw: grocer, categoryId: null, source: 'discover', accountLabel: tag, importId });
+    await insertTransaction({ date: '2026-09-09', amountCents: 1_420, descriptionRaw: grocer, categoryId: null, source: 'discover', accountLabel: tag, importId });
+    const acc = await newAccount();
+    await setUpAccountSync(acc.accountId, { kind: 'existing', ledgerAccountId: ledger.id, cutoverDate: '2026-09-11' });
+    const early = ptxn(acc, { date: '2026-09-06', authorizedDate: null, amountCents: 3_150, descriptionRaw: 'SYNTHETIC GROCER #12' });
+    const held = ptxn(acc, { date: '2026-09-11', authorizedDate: null, amountCents: 1_420, descriptionRaw: 'SYNTHETIC GROCER #12' });
+    expect(await sync(acc, { added: [early, held] })).toMatchObject({ kind: 'applied', counts: { beforeCutover: 1, held: 1 } });
+    const review = await boundaryReview(acc.accountId);
+    expect(review?.rows.map((r) => [r.kind, r.date, r.differsFrom])).toEqual([
+      ['before_cutover', '2026-09-06', null],
+      ['csv', '2026-09-09', null],
+      ['possible_duplicate', '2026-09-11', null],
+    ]);
+  });
+
 
   it('reopens when a later sync holds a row after it was closed', async () => {
     const { ledgerId } = await csvLedger([

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { basisDate, cutoverProblem, defaultCutover, merchantKey, sameMerchant, splitAtCutover, type Cutover } from './cutover';
+import { basisDate, cutoverProblem, defaultCutover, merchantKey, pairWithCsv, sameMerchant, splitAtCutover, type Cutover } from './cutover';
 import type { ProviderTransaction } from './provider';
 
 const row = (id: string, over: Partial<ProviderTransaction> = {}): ProviderTransaction => ({
@@ -78,6 +78,15 @@ describe('splitAtCutover', () => {
       row('same-merchant', { date: '2026-09-11', amountCents: 1_000, descriptionRaw: 'SYNTHETIC CAR HIRE SPRINGFIELD IL' }),
     ], csv);
     expect(both.setAside.map((x) => x.row.providerTransactionId)).toEqual(['same-amount']);
+    // Whatever the order rows arrive in: a same-merchant row first must not
+    // take the CSV row a later row has at the exact amount, which would add
+    // that purchase a second time.
+    const reversed = split(discover, [
+      row('same-merchant', { date: '2026-09-11', amountCents: 1_000, descriptionRaw: 'SYNTHETIC CAR HIRE SPRINGFIELD IL' }),
+      row('exact', { date: '2026-09-12', amountCents: 120_000, descriptionRaw: 'SYNTHETIC CAR HIRE SPRINGFIELD IL' }),
+    ], csv);
+    expect(reversed.setAside.map((x) => x.row.providerTransactionId)).toEqual(['exact']);
+    expect(reversed.added.map((t) => t.providerTransactionId)).toEqual(['same-merchant']);
   });
 
   it('on a posted-basis account, matches a CSV row on the posting date, not the purchase date', () => {
@@ -100,6 +109,24 @@ describe('splitAtCutover', () => {
     expect(r.modified.map((t) => t.providerTransactionId)).toEqual(['stored']);
     expect(r.setAsideRemoved).toEqual(['old']);
     expect(r.removed.map((t) => t.providerTransactionId)).toEqual(['kept']);
+  });
+});
+
+describe('pairWithCsv', () => {
+  const grocer = (date: string, amountCents: number) => ({ date, amountCents, description: 'SYNTHETIC GROCER #12 SPRINGFIELD' });
+  it('pairs every equal amount before any merchant, one CSV row per bank row', () => {
+    const csv = [grocer('2026-09-03', 3_150), grocer('2026-09-09', 1_420)];
+    const bank = [grocer('2026-09-06', 3_150), grocer('2026-09-11', 1_420), grocer('2026-09-10', 9_990)];
+    expect(pairWithCsv(bank, csv)).toEqual([0, 1, null]);
+  });
+  it('pairs by merchant at another amount only what no equal amount took, nearest first', () => {
+    const csv = [grocer('2026-09-08', 4_000), grocer('2026-09-10', 4_400)];
+    expect(pairWithCsv([grocer('2026-09-11', 5_000), grocer('2026-09-09', 4_000)], csv)).toEqual([1, 0]);
+  });
+  it('never pairs beyond three days, another merchant at another amount, or a CSV row twice', () => {
+    expect(pairWithCsv([grocer('2026-09-13', 1_420)], [grocer('2026-09-09', 1_420)])).toEqual([null]);
+    expect(pairWithCsv([{ date: '2026-09-10', amountCents: 500, description: 'EXAMPLE CINEMA' }], [grocer('2026-09-09', 1_420)])).toEqual([null]);
+    expect(pairWithCsv([grocer('2026-09-10', 1_420), grocer('2026-09-10', 1_420)], [grocer('2026-09-09', 1_420)])).toEqual([0, null]);
   });
 });
 
