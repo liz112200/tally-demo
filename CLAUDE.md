@@ -24,6 +24,13 @@ references unqualified in single-table selects, timestamps losing
 microseconds through a JS Date, and tests whose cents-scale literals
 asserted something other than their comments after the move to mills.
 
+A claim about what an outside source sends (a bank, Plaid, an export) is
+checked against the stored rows, not the code that handles them. Code shows
+what happens to a field; only the rows show whether the field is there. The
+Discover date bases were declared the same because the transaction-basis
+branch had not changed, while Capital One sends no authorized date and the
+branch always fell back to the posting date (2026-10-29).
+
 ## Invariants
 
 These are decided. Do not reintroduce the alternatives.
@@ -290,13 +297,17 @@ These are decided. Do not reintroduce the alternatives.
   CSV parser records), are never inserted; an account cannot sync until its
   cutover is confirmed, defaulting to the day after its last CSV row (undone
   imports included) and never on or before it; rows in the first week after
-  it that match a CSV row within three days, by amount or by merchant, are
-  held for the owner; a CSV imported later skips rows a bank already covers.
+  it that match a CSV row within seven days (the whole first week; three
+  survived a lag of three, REAL-ACCOUNTS.md), by amount or by merchant, are
+  held for the owner, paired one to one with every bank row near the
+  cutover, set aside ones included; a CSV imported later skips rows a bank already covers.
   One account, one date basis: a synced row is stored, shown and matched on
   its ledger account's basis (the posting date for Chase checking, whose CSV
   rows, cutover and statements use it; else when the purchase happened), so
-  an account never mixes the two (db/ledger-date-basis.ts moved the rows
-  synced before this).
+  an account never mixes the two where the bank sends both
+  (db/ledger-date-basis.ts moved the rows synced before this). Capital One
+  sends no purchase date, so Discover's synced rows carry the posting date,
+  0 to 3 days after the date its CSV rows carry; nothing can align them.
   Synced rows of an account not verified against a statement are not
   splittable and count in no total (CSV and manual rows always count). No
   part of this writes a CSV or manual row. A CSV or manual row's amount is

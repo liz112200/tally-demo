@@ -186,6 +186,28 @@ describe('possible duplicates near the cutover', () => {
   });
 });
 
+describe('rows set aside by an earlier sync', () => {
+  it('keep the CSV rows they match: a later first-week row is held only for a CSV row with no bank twin yet', async () => {
+    const { ledgerId } = await csvLedger([
+      { date: '2026-09-06', amountCents: 2_900 },
+      { date: '2026-09-07', amountCents: 2_900 },
+      { date: '2026-09-10', amountCents: 2_900 },
+    ]);
+    const acc = await newAccount();
+    await setUpAccountSync(acc.accountId, { kind: 'existing', ledgerAccountId: ledgerId, cutoverDate: null });
+    const before = [
+      ptxn(acc, { date: '2026-09-07', authorizedDate: null, amountCents: 2_900 }),
+      ptxn(acc, { date: '2026-09-08', authorizedDate: null, amountCents: 2_900 }),
+    ];
+    expect(await sync(acc, { added: before })).toMatchObject({ kind: 'applied', counts: { beforeCutover: 2 } });
+    const first = ptxn(acc, { date: '2026-09-11', authorizedDate: null, amountCents: 2_900 });
+    const later = ptxn(acc, { date: '2026-09-13', authorizedDate: null, amountCents: 2_900 });
+    expect(await sync(acc, { added: [first, later] })).toMatchObject({ kind: 'applied', counts: { inserted: 1, held: 1 } });
+    expect(await row(acc, first.providerTransactionId)).toBeUndefined();
+    expect(await row(acc, later.providerTransactionId)).toMatchObject({ date: '2026-09-13', amountCents: 2_900 });
+  });
+});
+
 describe('a synced row on a posted-basis account', () => {
   it('is stored on its posting date, as the account\'s CSV rows are', async () => {
     const { ledgerId } = await csvLedger([{ date: '2026-09-08', amountCents: 6_150 }], 'posted');

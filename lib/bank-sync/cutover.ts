@@ -9,8 +9,9 @@
 //     CSV row of the same ledger account (ledger dates within MATCH_DAYS, and
 //     the same amount or the same merchant) is held as a possible duplicate
 //     for the owner. Plaid often sends a row before its authorized date is
-//     known and fills it in later, so a purchase the CSV has on the last day
-//     before the cutover can first arrive dated on or after it. The amount
+//     known and fills it in later, and some banks never send one (Capital
+//     One), so a purchase the CSV has on the last days before the cutover
+//     can arrive dated on or after it. The amount
 //     alone is not enough: the owner sometimes edits a CSV row's amount on
 //     purpose, and a hold can settle at a different amount, so a same-merchant
 //     row of another amount is held too. Holding too much costs the owner an
@@ -22,7 +23,14 @@ import { normalizeMerchant } from '../parsers/normalize';
 import type { ProviderTransaction, RemovedTransaction } from './provider';
 
 export const BOUNDARY_DAYS = 7;
-export const MATCH_DAYS = 3;
+// As wide as the first week: with the cutover on the day after the last CSV
+// row, a bank row on day k of the week is k + 1 days from the nearest CSV row,
+// so a narrower window can hold only the first MATCH_DAYS - 1 days of it. It
+// was 3, and the largest lag seen was 3 (Discover, posting date against the
+// CSV's purchase date): survived, not chosen. Pairing every row the bank has
+// sent near the cutover is what keeps the wider window from holding more: on
+// the real accounts, 7 days holds the same rows 3 did (REAL-ACCOUNTS.md).
+export const MATCH_DAYS = 7;
 
 export type Cutover = { date: string; basis: 'posted' | 'transaction' };
 
@@ -120,6 +128,10 @@ export function splitAtCutover(input: {
   removed: readonly RemovedTransaction[];
   // Ids already set aside for this account (any reason).
   setAsideIds: ReadonlySet<string>;
+  // Rows earlier syncs set aside near the cutover, before it or held and not
+  // released, on the basis date. They take part in the pairing, so a CSV row
+  // whose bank twin has already arrived is not offered to a later row.
+  setAsideRows: readonly { date: string; amountCents: number; description: string }[];
   // The ledger account's CSV rows near the cutover: live, with their ledger
   // date, amount and description. Each may stand for one synced row only.
   csvRows: readonly { date: string; amountCents: number; description?: string }[];
@@ -134,12 +146,17 @@ export function splitAtCutover(input: {
   // date beside a posting date. A Chase row's purchase date can be days
   // before its posting date (2026-10-29: up to eight).
   const dateOf = (t: ProviderTransaction) => basisDate(t, cutover.basis);
-  const near = input.added.filter((t) => dateOf(t) >= cutover.date && dateOf(t) < windowEnd);
+  // Every bank row up to the end of the first week is paired at once: those
+  // set aside earlier, this sync's rows before the cutover, and the first
+  // week's. Only a first-week row's pairing holds it; the others claim their
+  // CSV twins. Without them a 7-day window held fares whose CSV rows already
+  // had their bank twins set aside (simulated on Discover, 2026-11-02).
+  const near = input.added.filter((t) => dateOf(t) < windowEnd);
   const pairs = pairWithCsv(
-    near.map((t) => ({ date: dateOf(t), amountCents: t.amountCents, description: t.descriptionRaw })),
+    [...near.map((t) => ({ date: dateOf(t), amountCents: t.amountCents, description: t.descriptionRaw })), ...input.setAsideRows],
     input.csvRows,
   );
-  const held = new Set(near.filter((_, i) => pairs[i] !== null));
+  const held = new Set(near.filter((t, i) => dateOf(t) >= cutover.date && pairs[i] !== null));
 
   for (const t of input.added) {
     if (dateOf(t) < cutover.date) out.setAside.push({ row: t, reason: 'before_cutover' });

@@ -40,7 +40,7 @@ import { allocateFifo } from '@/lib/allocations';
 import { planNetting, type Alloc } from '@/lib/netting';
 import { formatUSD, toCents } from '@/lib/money';
 import { planSync, referencedPendingIds, type StoredRow, type SyncCounts } from '@/lib/bank-sync/plan';
-import { BOUNDARY_DAYS, MATCH_DAYS, splitAtCutover, type Cutover } from '@/lib/bank-sync/cutover';
+import { BOUNDARY_DAYS, MATCH_DAYS, addDays, splitAtCutover, type Cutover } from '@/lib/bank-sync/cutover';
 import type { ProviderTransaction, RemovedTransaction } from '@/lib/bank-sync/provider';
 import type { InsightRow } from '@/lib/insights';
 
@@ -2562,7 +2562,11 @@ export async function commitAccountSync(input: {
       for (const r of rows) setAsideIds.add(r.id);
     }
     // The ledger account's CSV rows around the cutover, for the possible-
-    // duplicate check (amount or merchant); only its imports' live rows.
+    // duplicate check (amount or merchant); only its imports' live rows. Both
+    // sides from 3 x MATCH_DAYS before it: a first-week row pairs with CSV
+    // rows at most MATCH_DAYS before the cutover, whose bank twins are at most
+    // MATCH_DAYS earlier, and they compete with CSV rows as far again.
+    const pairedFrom = cutover === null ? null : addDays(cutover.date, -3 * MATCH_DAYS);
     const csvRows =
       cutover === null
         ? []
@@ -2574,16 +2578,38 @@ export async function commitAccountSync(input: {
               and(
                 eq(imports.ledgerAccountId, account.ledgerAccountId),
                 isNull(transactions.deletedAt),
-                sql`${transactions.date} >= ${cutover.date}::date - ${MATCH_DAYS + 1}::int`,
+                sql`${transactions.date} >= ${pairedFrom}::date`,
                 sql`${transactions.date} < ${cutover.date}::date + ${BOUNDARY_DAYS + MATCH_DAYS}::int`,
               ),
             );
+    const setAsideRows =
+      cutover === null
+        ? []
+        : (
+            await tx
+              .select({
+                date: syncSkippedRows.date,
+                postedDate: syncSkippedRows.postedDate,
+                amountCents: syncSkippedRows.amountCents,
+                description: syncSkippedRows.descriptionRaw,
+              })
+              .from(syncSkippedRows)
+              .where(
+                and(
+                  eq(syncSkippedRows.bankAccountId, input.accountId),
+                  isNull(syncSkippedRows.removedAt),
+                  sql`${syncSkippedRows.resolution} is distinct from 'released'`,
+                  sql`${cutover.basis === 'posted' ? syncSkippedRows.postedDate : syncSkippedRows.date} >= ${pairedFrom}::date`,
+                ),
+              )
+          ).map((r) => ({ date: cutover.basis === 'posted' ? r.postedDate : r.date, amountCents: r.amountCents, description: r.description }));
     const split = splitAtCutover({
       cutover,
       added: input.added,
       modified: input.modified,
       removed: input.removed,
       setAsideIds,
+      setAsideRows,
       csvRows,
     });
 

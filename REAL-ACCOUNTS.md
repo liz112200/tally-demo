@@ -106,7 +106,7 @@ synced rows, which this slice never does).
   was exported is in neither source; this is where the owner sees it, and
   adds it by hand if it is real.
 - **Held rows match on merchant too.** A bank row in the first week is held
-  when a CSV row within three days has its amount or its merchant (the first
+  when a CSV row within seven days has its amount or its merchant (the first
   word of the normalized description past wallet and processor prefixes such
   as APLPAY and TST*, one key a prefix of the other, since the bank runs the
   city on). The amount alone missed real cases: the owner edits CSV amounts
@@ -130,10 +130,42 @@ synced rows, which this slice never does).
   authorized date (none on 240 of 242 Discover rows, 2026-10-29), so a
   synced Discover row falls back to its posting date, 0 to 3 days after the
   date the CSV recorded for the same purchase. The two bases are therefore
-  not the same there, and nothing can make them so; MATCH_DAYS covers the
-  lag seen. Of the Discover purchases on the CSV up to the cutover, every
-  one paired with a bank row set aside (before the cutover or held), none
-  with an inserted row.
+  not the same there, and nothing can make them so. Of the Discover
+  purchases on the CSV up to the cutover, every one paired with a bank row
+  set aside (before the cutover or held), none with an inserted row.
+- **The match window is seven days, the length of the first week.** Lag
+  between a CSV row's date and its bank twin's, on the basis, measured over
+  the purchases set aside before each cutover that can pair only one way
+  (no other row of that amount and merchant within 14 days on either side;
+  repeated transit fares pair any way and were left out), 2026-11-02:
+
+  | Account | Basis | Pairs | Lag in days |
+  |---|---|---|---|
+  | Amex | transaction (authorized date sent) | 2 | 0: 2 |
+  | Chase checking | posted | 80 | 0: 80 |
+  | Discover | transaction (no authorized date) | 69 | 0: 4, 1: 32, 2: 32, 3: 1 |
+
+  The window was 3 days, and one Discover row lagged exactly 3: a margin of
+  zero that the window survived, not one it was chosen for. A posting lag
+  has no fixed ceiling (a weekend and a holiday add days), and a missed
+  match counts a purchase twice with nothing to catch it (a statement
+  verifies the bank rows, which include it), while an extra match costs
+  one answer. The structural reason sets the number: the cutover defaults
+  to the day after the last CSV row, so a bank row on day k of the first
+  week is at least k + 1 days from any CSV row, and a window of N days can
+  hold only the first N - 1 days of a week the hold is meant to cover.
+  Seven covers the week. Beyond it the week has ended and nothing is held
+  at any width.
+
+  Widened alone, it held more: three fares in the first week paired with
+  CSV fares whose bank twins had already been set aside before the cutover,
+  because the hold only paired the first week's rows. The sync therefore
+  pairs every bank row near the cutover at once (rows earlier syncs set
+  aside and not released, this sync's rows before the cutover, the first
+  week's), and only a first-week row's pairing holds it. Simulated on the
+  three real accounts, 7 days with that pairing holds exactly the rows 3
+  days held (the two Discover rows, both answered the same purchase), and
+  the boundary reviews are unchanged.
 - **Pairing is one to one, equal amounts first.** The hold and the review
   pair bank rows with CSV rows across all of them at once (`pairWithCsv`):
   every equal-amount pair, then the same merchant at another amount among
@@ -142,7 +174,8 @@ synced rows, which this slice never does).
   rows began on the window's first day, so a bank row near it lost a twin
   dated a few days earlier (2026-10-29: a bank row named as differing from
   a CSV row that a held row matched exactly). The review fetches both sides
-  2 × MATCH_DAYS further back than it shows.
+  2 × MATCH_DAYS further back than it shows; a sync, 3 × MATCH_DAYS before
+  the cutover.
 - A new login's history arrives in two parts: Plaid sends the last 30 days
   first and the rest later, so the first sync may see none of the days
   around the cutover. The sync line says when only the first 30 days have

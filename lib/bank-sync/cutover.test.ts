@@ -19,8 +19,12 @@ const row = (id: string, over: Partial<ProviderTransaction> = {}): ProviderTrans
 
 const discover: Cutover = { date: '2026-09-11', basis: 'transaction' };
 const chase: Cutover = { date: '2026-09-11', basis: 'posted' };
-const split = (cutover: Cutover | null, added: ProviderTransaction[], csvRows: { date: string; amountCents: number; description?: string }[] = []) =>
-  splitAtCutover({ cutover, added, modified: [], removed: [], setAsideIds: new Set(), csvRows });
+const split = (
+  cutover: Cutover | null,
+  added: ProviderTransaction[],
+  csvRows: { date: string; amountCents: number; description?: string }[] = [],
+  setAsideRows: { date: string; amountCents: number; description: string }[] = [],
+) => splitAtCutover({ cutover, added, modified: [], removed: [], setAsideIds: new Set(), setAsideRows, csvRows });
 
 describe('basisDate', () => {
   it('is the posted date for a posted-basis account, else the authorized date when known', () => {
@@ -54,13 +58,13 @@ describe('splitAtCutover', () => {
     expect(r.added).toEqual([]);
   });
 
-  it('matches each CSV row once, only by equal amount within three days, and only near the cutover', () => {
+  it('matches each CSV row once, only by equal amount within seven days, and only in the first week', () => {
     const csv = [{ date: '2026-09-10', amountCents: 4_750 }];
     const r = split(discover, [row('one', { date: '2026-09-11', amountCents: 4_750 }), row('two', { date: '2026-09-12', amountCents: 4_750 })], csv);
     expect(r.setAside.map((s) => s.row.providerTransactionId)).toEqual(['one']);
     expect(r.added.map((t) => t.providerTransactionId)).toEqual(['two']);
     expect(split(discover, [row('cents', { date: '2026-09-11', amountCents: 4_751 })], csv).added).toHaveLength(1);
-    expect(split(discover, [row('far', { date: '2026-09-14', amountCents: 4_750 })], csv).added).toHaveLength(1);
+    expect(split(discover, [row('far', { date: '2026-09-11', amountCents: 4_750 })], [{ date: '2026-09-03', amountCents: 4_750 }]).added).toHaveLength(1);
     expect(split(discover, [row('late', { date: '2026-09-18', amountCents: 4_750 })], [{ date: '2026-09-17', amountCents: 4_750 }]).added).toHaveLength(1);
   });
 
@@ -69,9 +73,9 @@ describe('splitAtCutover', () => {
     const csv = [{ date: '2026-09-10', amountCents: 120_000, description: 'SYNTHETIC CAR HIRE    SPRINGFIELD          IL' }];
     const r = split(discover, [row('car', { date: '2026-09-11', amountCents: 110_000, descriptionRaw: 'SYNTHETIC CAR HIRE SPRINGFIELD IL' })], csv);
     expect(r.setAside).toEqual([{ row: expect.objectContaining({ providerTransactionId: 'car' }), reason: 'possible_duplicate' }]);
-    // Another merchant at another amount is added; so is the same merchant beyond three days or the first week.
+    // Another merchant at another amount is added; so is the same merchant after the first week.
     expect(split(discover, [row('other', { date: '2026-09-11', amountCents: 110_000, descriptionRaw: 'EXAMPLE RENTALS' })], csv).added).toHaveLength(1);
-    expect(split(discover, [row('later', { date: '2026-09-14', amountCents: 110_000, descriptionRaw: 'SYNTHETIC CAR HIRE SPRINGFIELD IL' })], csv).added).toHaveLength(1);
+    expect(split(discover, [row('later', { date: '2026-09-18', amountCents: 110_000, descriptionRaw: 'SYNTHETIC CAR HIRE SPRINGFIELD IL' })], csv).added).toHaveLength(1);
     // The equal amount is matched first, so the same-merchant row is not offered the CSV row it took.
     const both = split(discover, [
       row('same-amount', { date: '2026-09-11', amountCents: 120_000, descriptionRaw: 'SOMETHING ELSE' }),
@@ -89,6 +93,38 @@ describe('splitAtCutover', () => {
     expect(reversed.added.map((t) => t.providerTransactionId)).toEqual(['same-merchant']);
   });
 
+  it('holds a purchase that posts four days after the CSV date, past the old three-day window', () => {
+    // The largest lag seen was three days; a fourth would have counted this twice.
+    const r = split(discover, [row('slow', { date: '2026-09-11', amountCents: 2_260 })], [{ date: '2026-09-07', amountCents: 2_260 }]);
+    expect(r.setAside.map((s) => [s.row.providerTransactionId, s.reason])).toEqual([['slow', 'possible_duplicate']]);
+  });
+
+  it('a CSV row whose bank twin already arrived is not offered to a first-week row', () => {
+    const fare = { amountCents: 2_900, description: 'SYNTHETIC TRANSIT FARE' };
+    const csv = [{ date: '2026-09-06', ...fare }, { date: '2026-09-07', ...fare }, { date: '2026-09-10', ...fare }];
+    const first = row('first-week', { date: '2026-09-11', amountCents: 2_900, descriptionRaw: 'SYNTHETIC TRANSIT FARE' });
+    const later = row('later-week', { date: '2026-09-13', amountCents: 2_900, descriptionRaw: 'SYNTHETIC TRANSIT FARE' });
+    // Set aside by an earlier sync, posted the day after the CSV rows of 09-06 and 09-07.
+    const earlier = [{ date: '2026-09-07', ...fare }, { date: '2026-09-08', ...fare }];
+    const r = split(discover, [first, later], csv, earlier);
+    expect(r.setAside.map((s) => s.row.providerTransactionId)).toEqual(['first-week']);
+    expect(r.added.map((t) => t.providerTransactionId)).toEqual(['later-week']);
+    // The same when they arrive in this sync, dated before the cutover.
+    const now = split(discover, [
+      row('b1', { date: '2026-09-07', amountCents: 2_900, descriptionRaw: 'SYNTHETIC TRANSIT FARE' }),
+      row('b2', { date: '2026-09-08', amountCents: 2_900, descriptionRaw: 'SYNTHETIC TRANSIT FARE' }),
+      first,
+      later,
+    ], csv);
+    expect(now.setAside.map((s) => [s.row.providerTransactionId, s.reason])).toEqual([
+      ['b1', 'before_cutover'],
+      ['b2', 'before_cutover'],
+      ['first-week', 'possible_duplicate'],
+    ]);
+    // Without them, both first-week fares would take a CSV row.
+    expect(split(discover, [first, later], csv).setAside).toHaveLength(2);
+  });
+
   it('on a posted-basis account, matches a CSV row on the posting date, not the purchase date', () => {
     // On the CSV posted 09-10; the bank posts it 09-11 with a purchase date of 09-06.
     const csv = [{ date: '2026-09-10', amountCents: 4_750 }];
@@ -103,6 +139,7 @@ describe('splitAtCutover', () => {
       modified: [row('held', { date: '2026-09-20' }), row('stored', { date: '2026-09-20' })],
       removed: [{ providerTransactionId: 'old', providerAccountId: 'acc' }, { providerTransactionId: 'kept', providerAccountId: 'acc' }],
       setAsideIds: new Set(['held', 'old']),
+      setAsideRows: [],
       csvRows: [],
     });
     expect(r.setAside.map((s) => [s.row.providerTransactionId, s.reason])).toEqual([['held', 'possible_duplicate']]);
@@ -123,8 +160,9 @@ describe('pairWithCsv', () => {
     const csv = [grocer('2026-09-08', 4_000), grocer('2026-09-10', 4_400)];
     expect(pairWithCsv([grocer('2026-09-11', 5_000), grocer('2026-09-09', 4_000)], csv)).toEqual([1, 0]);
   });
-  it('never pairs beyond three days, another merchant at another amount, or a CSV row twice', () => {
-    expect(pairWithCsv([grocer('2026-09-13', 1_420)], [grocer('2026-09-09', 1_420)])).toEqual([null]);
+  it('never pairs beyond seven days, another merchant at another amount, or a CSV row twice', () => {
+    expect(pairWithCsv([grocer('2026-09-17', 1_420)], [grocer('2026-09-09', 1_420)])).toEqual([null]);
+    expect(pairWithCsv([grocer('2026-09-16', 1_420)], [grocer('2026-09-09', 1_420)])).toEqual([0]);
     expect(pairWithCsv([{ date: '2026-09-10', amountCents: 500, description: 'EXAMPLE CINEMA' }], [grocer('2026-09-09', 1_420)])).toEqual([null]);
     expect(pairWithCsv([grocer('2026-09-10', 1_420), grocer('2026-09-10', 1_420)], [grocer('2026-09-09', 1_420)])).toEqual([0, null]);
   });
