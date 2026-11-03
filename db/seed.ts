@@ -23,16 +23,16 @@ const STARTER_CATEGORIES = [
   'Health',
   'Travel',
   'Other',
-  // Added in phase 3 for later phases (not rule-matched yet).
+  // No seed rule names these; the owner's rules do.
   'Income',
   'Rent',
 ];
 
 // Seed categorization rules, keyed by category name (resolved to ids below).
 // Grounded in the bank exports (tests/fixtures). Deliberately no
-// rules for payroll, rent, Zelle, or transfer rows — those stay uncategorized
-// for a later not-splittable filter. Income/Rent categories are intentionally
-// unused here.
+// rules for payroll, rent, Zelle, or transfer rows: those are the owner's to
+// write (CLAUDE.md, Invariants), so the Income and Rent categories are unused
+// here.
 type SeedRule = {
   matchPattern: string;
   matchType: 'substring' | 'regex';

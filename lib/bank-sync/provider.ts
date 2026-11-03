@@ -120,7 +120,7 @@ export type ProviderTransaction = {
   // Optional: absent means the provider gave none.
   bankCategory?: string | null;
   // The provider's object as received (numbers as their source text), kept
-  // for debugging and for later slices' date and category logic.
+  // for debugging; its posted date and category are read from the stored copy.
   raw: unknown;
 };
 

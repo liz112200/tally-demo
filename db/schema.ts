@@ -431,8 +431,8 @@ export const transactions = pgTable(
     categorySource: categorySource('category_source'),
     // Synced rows only: the linked account the row came from, the provider's
     // id for it (unique per account), and the provider's object as received,
-    // numbers as their source text (debugging; later slices read its dates
-    // and category).
+    // numbers as their source text (debugging; the posted date and the bank's
+    // category are read from it, slice 7).
     bankAccountId: uuid('bank_account_id').references(() => bankAccounts.id, {
       onDelete: 'restrict',
     }),

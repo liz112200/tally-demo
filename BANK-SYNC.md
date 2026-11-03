@@ -14,8 +14,9 @@ surfaced while building go to PHASE11.md, as before.
   The budget is a hard invariant in CLAUDE.md, not a convention.
 - **Behind our own interface.** `BankProvider` (lib/bank-sync/provider.ts)
   is the only thing the sync engine knows. Plaid is one implementation; the
-  demo's synthetic provider is the second, so every demo row goes through
-  the real sync code. Methods are added per slice as needed, never ahead.
+  demo's synthetic provider is the second, so the demo's linked accounts
+  sync through the real sync code (its Discover rows come through the CSV
+  importer). Methods are added per slice as needed, never ahead.
 - **Plain `fetch`, no Plaid server SDK.** A thin typed client for the
   endpoints we call, responses validated by Zod. The SDK's axios layer parses
   JSON into floats before we can see it, and we need the raw numeric text

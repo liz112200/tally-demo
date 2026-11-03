@@ -230,8 +230,8 @@ export default async function AccountsPage() {
   const live = connections.filter((c) => c.status !== 'removed');
   const accountCount = live.reduce((n, c) => n + c.accounts.length, 0);
   const sandbox = process.env.PLAID_ENV === 'sandbox';
-  // Production has no Plaid credentials until real accounts are linked
-  // (BANK-SYNC.md, slice 7); say so instead of offering a button that fails.
+  // A deployment without Plaid credentials (a dev database, a preview) says
+  // so instead of offering a button that fails.
   const configured = Boolean(
     process.env.PLAID_ENV && process.env.PLAID_CLIENT_ID && process.env.PLAID_SECRET,
   );

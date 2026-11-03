@@ -1,5 +1,5 @@
 // URL-persisted table view state. The URL search params are the single
-// source of truth for sorting (and, in later slices, filters), so reload,
+// source of truth for sorting (filters too, lib/expense-filters.ts), so reload,
 // back/forward, and shared links all reproduce the view. These are pure
 // string <-> state functions with no Next.js dependency; the useTableState
 // hook applies the patches to the real location.

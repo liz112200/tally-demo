@@ -9,16 +9,16 @@ roll forward unchanged.
 - **Inline edits on synced rows.** Resolved in slice 3: date, amount and
   description of a synced row are the bank's and cannot be edited; note and
   category still can.
-- **Plaid's own category is stored, not used.** `provider_raw` keeps
-  `personal_finance_category`; the Transfers work may read it as a signal,
-  and an LLM-free categorization fallback could later.
+- **Plaid's own category is stored, not used.** Resolved in slice 7: the
+  owner maps it to a category on /rules (`bank_category_map`), and it files
+  a synced row no rule matches.
 - **Identical group headers.** Two Items at one institution show each shared
   account twice, under identical headers. Different logins at one bank
   (personal and business) hold different accounts, whose names and masks
   already differ, so identical headers only arise when the same account is
   linked twice — the Item-budget mistake. Slice 4 warns about that on
-  /accounts instead of disambiguating it, and slice 7's ledger accounts
-  replace these headers.
+  /accounts instead of disambiguating it. Resolved in slice 7: synced
+  groups take their ledger account's name.
 
 ## Surfaced in the Transfers slice
 
@@ -26,7 +26,9 @@ roll forward unchanged.
   `LOAN_PAYMENTS_CREDIT_CARD_PAYMENT` and `TRANSFER_*` in `provider_raw`.
   Using it needs a third category source beside `rule` and `manual` (the
   retroactive apply re-runs rules over `'rule'` rows and would clear it).
-  Decided at slice 7, against real descriptions.
+  Decided at slice 7, against real descriptions: not used. Nothing maps to
+  Transfers, since the bank files a payment to a person as a transfer
+  (CLAUDE.md, Invariants).
 - **No category editing.** Categories can be created but not renamed,
   re-flagged, or deleted in the app; a non-spending category's delete is
   refused by trigger regardless.
@@ -40,8 +42,7 @@ roll forward unchanged.
   category is the wrong fix. The general problem is linking a bank row to a
   settlement (PHASE10.md, "External payment tracking"), larger in the real
   data than assumed.
-- **Uncategorized rent.** A large uncategorized bucket comes from rent
-  payments with no rule yet. The owner adds the rule; no code change.
+- **Uncategorized rent.** Resolved 2026-10-29: the owner added the rule.
 - **Demo loses Transfers on reset.** Resolved in slice 8a (DEMO-SYNC.md):
   the catalog has Transfers (not spending, not splittable) and a rule for
   card payments and the savings transfer, since the synthetic provider now

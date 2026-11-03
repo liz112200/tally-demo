@@ -31,6 +31,14 @@ Discover date bases were declared the same because the transaction-basis
 branch had not changed, while Capital One sends no authorized date and the
 branch always fell back to the posting date (2026-10-29).
 
+Finishing a slice includes searching the codebase and the docs for that
+slice's name and number, and for anything deferred to it ("until", "when it
+lands", "for now", "once", "later slice", PHASE11.md): each is done in the
+slice or re-pointed at a named later one, never left waiting on a slice that
+has shipped. Slice 8a shipped with the demo nav still hiding Accounts "until
+the synthetic provider lands", and the demo without Transfers, deferred "until
+slice 8"; a sweep for `isDemoMode()` calls missed the first.
+
 A check has to show that it looked. A test outside the directories a runner
 covers does not fail, it never runs (lib/test-locations.test.ts now fails on
 one); a denylist only knew the strings someone listed; the transaction scan
@@ -244,7 +252,9 @@ These are decided. Do not reintroduce the alternatives.
   count as spending. Uncategorized rows count as spending. A trigger refuses
   deleting a non-spending category while rows reference it: `on delete set
   null` would make them uncategorized, quietly counting them again. The
-  transfer patterns live in the owner's rules, never in the repository.
+  transfer patterns live in the owner's rules, never in code. (The demo's
+  synthetic owner has its own rule for the catalog's invented descriptors,
+  lib/demo/catalog.ts.)
   A row with a split never moves into a category that is not splittable:
   rules (`ruleOutcome`, lib/categorize.ts, shared by the retroactive apply
   and bank sync) leave it as it is, and a manual change is refused with a
