@@ -218,6 +218,13 @@
       "when": 1793657535438,
       "tag": "0030_synthetic_provider",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1793720044706,
+      "tag": "0031_ledger_closing_days",
+      "breakpoints": true
     }
   ]
 }

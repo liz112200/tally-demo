@@ -57,6 +57,7 @@ export default async function VerifyAccountPage({ params }: { params: Promise<{ 
         accountId={accountId}
         chargesLabel={card ? 'Purchases + fees + interest' : 'Withdrawals'}
         creditsLabel={card ? 'Payments + credits' : 'Deposits'}
+        card={card}
         sample={sample}
       />
     </main>

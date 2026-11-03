@@ -13,7 +13,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { adoptAccount, answerHeldRow, declineReissued, finishBoundaryReview, setUpAccountSync } from '@/app/_actions/ledger';
+import {
+  adoptAccount,
+  answerHeldRow,
+  declineReissued,
+  finishBoundaryReview,
+  removeClosingDay,
+  setClosingDay,
+  setUpAccountSync,
+} from '@/app/_actions/ledger';
+import { EVERY_STATEMENT, ordinal, type ClosingDayEntry } from '@/lib/statement-cycles';
 import type { ActionResult } from '@/lib/action-result';
 import { resultMessage } from './action-message';
 import { useLoginResult } from './login-result';
@@ -211,5 +220,80 @@ export function FinishReviewButton({ accountId }: { accountId: string }) {
     <Button size="sm" variant="outline" disabled={pending} onClick={() => run(() => finishBoundaryReview(accountId))}>
       Done reviewing
     </Button>
+  );
+}
+
+// The statement closing day of a ledger account (STATEMENT-CYCLES.md), from
+// the owner's own statements. The first one applies to every statement; a
+// change is entered from the date it takes effect and kept beside the old.
+export function ClosingDayControl({ ledgerAccountId, entries, today }: { ledgerAccountId: string; entries: ClosingDayEntry[]; today: string }) {
+  const { run, pending } = useRun();
+  const [open, setOpen] = useState(false);
+  const first = entries.length === 0;
+  const [day, setDay] = useState('');
+  const [from, setFrom] = useState(first ? '' : today);
+  const save = () =>
+    run(
+      () => setClosingDay({ ledgerAccountId, closingDay: day, effectiveFrom: from }),
+      (r) => {
+        if ('ok' in r) setOpen(false);
+      },
+    );
+  return (
+    <div className="space-y-1">
+      {entries.length > 0 && (
+        <ul className="space-y-0.5 text-muted-foreground">
+          {entries.map((e) => (
+            <li key={e.effectiveFrom} className="flex items-center gap-2">
+              <span>
+                Closes on the {ordinal(e.closingDay)}
+                {e.effectiveFrom === EVERY_STATEMENT ? '' : ` from ${e.effectiveFrom}`}
+              </span>
+              <button
+                type="button"
+                className="underline underline-offset-2 disabled:opacity-50"
+                disabled={pending}
+                onClick={() => run(() => removeClosingDay(ledgerAccountId, e.effectiveFrom))}
+              >
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {!open ? (
+        <button type="button" className="text-muted-foreground underline underline-offset-2" onClick={() => setOpen(true)}>
+          {first ? 'Set the statement closing day' : 'The closing day changed'}
+        </button>
+      ) : (
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="grid gap-1">
+            <Label htmlFor={`close-${ledgerAccountId}`} className="text-xs">
+              Closes on day
+            </Label>
+            <Input
+              id={`close-${ledgerAccountId}`}
+              inputMode="numeric"
+              className="h-7 w-16"
+              placeholder="1–31"
+              value={day}
+              onChange={(e) => setDay(e.target.value)}
+            />
+          </div>
+          <div className="grid gap-1">
+            <Label htmlFor={`from-${ledgerAccountId}`} className="text-xs">
+              {first ? 'From (leave empty for every statement)' : 'For statements closing on or after'}
+            </Label>
+            <Input id={`from-${ledgerAccountId}`} type="date" className="h-7" value={from} onChange={(e) => setFrom(e.target.value)} />
+          </div>
+          <Button size="sm" className="h-7" disabled={pending || day === ''} onClick={save}>
+            Save
+          </Button>
+          <Button size="sm" variant="ghost" className="h-7" disabled={pending} onClick={() => setOpen(false)}>
+            Cancel
+          </Button>
+        </div>
+      )}
+    </div>
   );
 }

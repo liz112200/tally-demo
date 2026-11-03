@@ -19,11 +19,15 @@ export function VerifyForm({
   accountId,
   chargesLabel,
   creditsLabel,
+  card,
   sample,
 }: {
   accountId: string;
   chargesLabel: string;
   creditsLabel: string;
+  // A card's statement speaks of charges and credits; checking of withdrawals
+  // and deposits, where "credit" would name a paycheck.
+  card: boolean;
   sample?: SampleStatement;
 }) {
   const [from, setFrom] = useState('');
@@ -121,7 +125,7 @@ export function VerifyForm({
           </ul>
           <div>
             <p className="mb-1 text-muted-foreground">
-              Tick these against the statement: every credit, and the five largest charges. Each must appear with the same
+              Tick these against the statement: {card ? 'every credit, and the five largest charges' : 'every deposit, and the five largest withdrawals'}. Each must appear with the same
               amount and on the same side. Mark a row that is not on this statement (pending at its close) to leave it out.
             </p>
             <ul className="divide-y rounded-lg border">
@@ -143,7 +147,8 @@ export function VerifyForm({
           </div>
           <label className="flex items-start gap-2">
             <input type="checkbox" checked={confirmed} onChange={(e) => { setConfirmed(e.target.checked); compare({ ...statement, confirmed: e.target.checked }); }} className="mt-1" />
-            I checked every row above against the statement: same amounts, credits as credits, charges as charges.
+            I checked every row above against the statement: same amounts,{' '}
+            {card ? 'credits as credits, charges as charges' : 'deposits as deposits, withdrawals as withdrawals'}.
           </label>
           <div className="flex flex-wrap gap-2">
             <Button disabled={pending || !result.passed} onClick={() => run(() => recordStatementCheck(accountId, statement, 'pass'))}>

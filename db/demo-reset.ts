@@ -29,7 +29,7 @@ const TABLES = [
   'receipt_items', 'receipt_images', 'receipts', 'split_shares', 'splits',
   'transactions', 'imports', 'categorization_rules', 'categories', 'persons',
   'share_links', 'ledger_accounts', 'bank_category_map', 'sync_skipped_rows',
-  'bank_accounts', 'bank_connections',
+  'bank_accounts', 'bank_connections', 'ledger_closing_days',
 ];
 
 type Tx = Parameters<Parameters<ReturnType<typeof drizzle<typeof schema>>['transaction']>[0]>[0];

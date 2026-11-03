@@ -15,6 +15,8 @@ import type { ActionResult } from '@/lib/action-result';
 import { compareToStatement, type VerificationResult } from '@/lib/bank-sync/verify';
 import { isDemoMode } from '@/lib/demo-mode';
 import { parseDollars } from '@/lib/money';
+import { EVERY_STATEMENT, ordinal } from '@/lib/statement-cycles';
+import { deleteClosingDay, upsertClosingDay } from '@/db/statement-cycles';
 import { requireUser } from '@/app/_lib/session';
 import { attempt } from './attempt';
 
@@ -181,5 +183,43 @@ export async function recordStatementCheck(accountId: unknown, statement: unknow
     return which.data === 'pass'
       ? { ok: true, message: 'Verified against the statement. This account’s synced rows now count.' }
       : { ok: true, warning: 'Recorded as not matching. Sync is off for this account, and its rows stay uncounted.' };
+  });
+}
+
+// Statement closing days (STATEMENT-CYCLES.md). Set from the owner's own
+// statements; allowed in the demo, whose data resets daily.
+const closingDaySchema = z.object({
+  ledgerAccountId: uuid,
+  closingDay: z.coerce.number().int().min(1, 'A closing day is 1 to 31.').max(31, 'A closing day is 1 to 31.'),
+  // Empty: every statement (the first day set for an account).
+  effectiveFrom: z.union([isoDate, z.literal('')]),
+});
+
+export async function setClosingDay(input: unknown): Promise<ActionResult> {
+  await requireUser();
+  const parsed = closingDaySchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Invalid request.' };
+  const { ledgerAccountId, closingDay, effectiveFrom } = parsed.data;
+  return attempt('setClosingDay', async () => {
+    await upsertClosingDay(ledgerAccountId, { closingDay, effectiveFrom: effectiveFrom || EVERY_STATEMENT });
+    refresh();
+    return {
+      ok: true,
+      message: effectiveFrom
+        ? `Closes on the ${ordinal(closingDay)} for statements closing on or after ${effectiveFrom}.`
+        : `Closes on the ${ordinal(closingDay)}.`,
+    };
+  });
+}
+
+export async function removeClosingDay(ledgerAccountId: unknown, effectiveFrom: unknown): Promise<ActionResult> {
+  await requireUser();
+  const id = uuid.safeParse(ledgerAccountId);
+  const from = isoDate.safeParse(effectiveFrom);
+  if (!id.success || !from.success) return { error: 'Invalid request.' };
+  return attempt('removeClosingDay', async () => {
+    if (!(await deleteClosingDay(id.data, from.data))) return { error: 'That closing day was already removed.' };
+    refresh();
+    return { ok: true, message: 'Closing day removed.' };
   });
 }

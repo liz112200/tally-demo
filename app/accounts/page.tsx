@@ -20,7 +20,9 @@ import { AccountSyncToggle, SyncNowButton } from '@/app/_components/bank-sync-co
 import { ManageLogin } from '@/app/_components/connection-controls';
 import { boundaryReview, choicesFor, lastCsvDates, ledgerChoices, ledgerStateFor, type BoundaryRow } from '@/db/ledger';
 import { defaultCutover } from '@/lib/bank-sync/cutover';
-import { FinishReviewButton, HeldRowAnswer, ReissuedChoice, SetUpSyncButton, type LedgerOption } from '@/app/_components/ledger-controls';
+import { ClosingDayControl, FinishReviewButton, HeldRowAnswer, ReissuedChoice, SetUpSyncButton, type LedgerOption } from '@/app/_components/ledger-controls';
+import { closingDaysFor, cycleSoFar, type CycleSoFar } from '@/db/statement-cycles';
+import { cycleLine, type ClosingDayEntry } from '@/lib/statement-cycles';
 import { formatUSD, toCents } from '@/lib/money';
 import { LoginResultLine, LoginResultProvider } from '@/app/_components/login-result';
 import { requireUser } from '@/app/_lib/session';
@@ -115,6 +117,29 @@ function InfoLine({ children }: { children: React.ReactNode }) {
 
 type LedgerState = Awaited<ReturnType<typeof ledgerStateFor>> extends Map<string, infer V> ? V : never;
 
+// The current cycle, in the account's own words (cycleLine), from the bank's
+// posted rows as the statement will count them (STATEMENT-CYCLES.md).
+function CycleLine({ cycle, kind, verified, today }: { cycle: CycleSoFar | null; kind: 'card' | 'checking'; verified: boolean; today: string }) {
+  if (!cycle) return null;
+  return (
+    <div className={verified ? 'text-foreground' : 'text-muted-foreground'}>
+      {cycleLine({
+        kind,
+        start: cycle.cycle.start,
+        end: cycle.cycle.end,
+        today,
+        verified,
+        chargesCents: cycle.chargesCents,
+        creditsCents: cycle.creditsCents,
+        pendingCents: cycle.pendingCents,
+        pendingCount: cycle.pendingCount,
+        formatDay: (iso) => formatShortDay(new Date(`${iso}T00:00:00Z`), new Date()),
+        formatMoney: (n) => formatUSD(toCents(n)),
+      })}
+    </div>
+  );
+}
+
 // "CSV history to Oct 22, bank sync from Oct 23. ..." under each demo account.
 function demoContextLine(state: LedgerState | undefined, lastCsv: ReadonlyMap<string, string>): string | null {
   if (!state?.ledgerAccountId || !state.cutoverDate) return null;
@@ -135,6 +160,7 @@ function LedgerLines({
   replacesName,
   linked,
   demoContext,
+  closing,
 }: {
   accountId: string;
   state: LedgerState | undefined;
@@ -144,6 +170,9 @@ function LedgerLines({
   linked: boolean;
   // The demo's one line on what the cutover is (DEMO-SYNC.md).
   demoContext: string | null;
+  // The statement closing days set for its ledger account, and the current
+  // cycle so far (STATEMENT-CYCLES.md).
+  closing: { entries: ClosingDayEntry[]; cycle: CycleSoFar | null; today: string; kind: 'card' | 'checking' };
 }) {
   if (!state) return null;
   if (state.replacesAccountId && replacesName && linked) return <ReissuedChoice accountId={accountId} replaces={replacesName} />;
@@ -167,6 +196,8 @@ function LedgerLines({
           )}
         </div>
       ) : null}
+      <CycleLine cycle={closing.cycle} kind={closing.kind} verified={state.verifiedAt !== null} today={closing.today} />
+      {linked && <ClosingDayControl ledgerAccountId={state.ledgerAccountId} entries={closing.entries} today={closing.today} />}
       {review && linked && (
         <details open className="mt-1 rounded-lg border px-3 py-2">
           <summary className="cursor-pointer text-foreground">Boundary review: the days around {review.cutover}</summary>
@@ -259,6 +290,13 @@ export default async function AccountsPage() {
     ledgerChoices(),
     demo ? lastCsvDates() : new Map<string, string>(),
   ]);
+  // Statement cycles (STATEMENT-CYCLES.md), per ledger account in view.
+  const today = new Date().toISOString().slice(0, 10);
+  const ledgerIds = [...new Set([...ledger.values()].map((l) => l.ledgerAccountId).filter((id): id is string => id !== null))];
+  const closingDays = await closingDaysFor(ledgerIds);
+  const cycles = new Map(
+    await Promise.all(ledgerIds.map(async (id) => [id, await cycleSoFar(id, closingDays.get(id) ?? [], today)] as const)),
+  );
   const optionsFor = (accountId: string): LedgerOption[] =>
     choicesFor(choices, accountId).map((o) => ({
       id: o.id,
@@ -461,6 +499,12 @@ export default async function AccountsPage() {
                             replacesName={ledger.get(a.id)?.replacesAccountId ? nameOf(ledger.get(a.id)!.replacesAccountId!) : null}
                             linked={linked && canSync}
                             demoContext={demo ? demoContextLine(ledger.get(a.id), lastCsv) : null}
+                            closing={{
+                              entries: closingDays.get(ledger.get(a.id)?.ledgerAccountId ?? '') ?? [],
+                              cycle: cycles.get(ledger.get(a.id)?.ledgerAccountId ?? '') ?? null,
+                              today,
+                              kind: a.type === 'credit' ? 'card' : 'checking',
+                            }}
                           />
                         </div>
                         {!linked ? null : SYNCABLE.has(a.type) ? (

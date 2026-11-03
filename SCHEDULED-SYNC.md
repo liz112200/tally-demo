@@ -84,6 +84,13 @@ hours, one line per account, naming the account and saying which case it is:
 The wording comes from one pure function over (health, last error, last
 synced, now), tested case by case.
 
+**In-app and delayed, deliberately** (owner's decision, 2026-11-03). The
+only signal that the daily sync has stopped is this line, it appears 36
+hours after the last sync, and it is seen only when the owner opens
+Expenses. If the app is not opened for a week, a broken cron is silent for
+a week. That is accepted, not overlooked: no email, push or other outside
+alert is built, and none should be added without the owner asking.
+
 ## Tests
 
 - db/cron-sync.dbtest.ts: the route refuses a missing or wrong secret, a
