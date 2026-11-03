@@ -42,10 +42,10 @@ roll forward unchanged.
   data than assumed.
 - **Uncategorized rent.** A large uncategorized bucket comes from rent
   payments with no rule yet. The owner adds the rule; no code change.
-- **Demo loses Transfers on reset.** db/demo-reset.ts truncates `categories`
-  and reseeds from lib/demo/catalog.ts, which has no Transfers, so the demo
-  drops the category daily. Harmless until slice 8's synthetic provider
-  produces transfer rows; add it to the catalog then.
+- **Demo loses Transfers on reset.** Resolved in slice 8a (DEMO-SYNC.md):
+  the catalog has Transfers (not spending, not splittable) and a rule for
+  card payments and the savings transfer, since the synthetic provider now
+  syncs card payments.
 
 ## Surfaced in slice 3
 

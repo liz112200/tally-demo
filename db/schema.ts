@@ -578,9 +578,10 @@ export const shareLinks = pgTable('share_links', {
   revokedAt: timestamp('revoked_at', { withTimezone: true }),
 });
 
-// Which bank-data provider a connection belongs to (BANK-SYNC.md). The demo's
-// synthetic provider joins this enum in its own slice.
-export const bankProvider = pgEnum('bank_provider', ['plaid']);
+// Which bank-data provider a connection belongs to (BANK-SYNC.md).
+// 'synthetic' is the demo's provider (DEMO-SYNC.md); a synthetic connection
+// opens only in demo mode, and a Plaid one never does.
+export const bankProvider = pgEnum('bank_provider', ['plaid', 'synthetic']);
 
 // Whether a connection syncs (BANK-SYNC.md, slice 4). `paused` stops syncing
 // and keeps the token, reversibly; `removed` is a deliberate disconnect:

@@ -538,9 +538,11 @@ paying another at the same institution in synced data (Sandbox: Plaid Saving
    `cutover_date` and `cutover_basis`, mapping of CSV import batches and Plaid
    accounts onto them, grouping by ledger account, the boundary review list,
    then the production Plaid secret and the first real Items (below).
-8. **Synthetic provider for the demo.** The demo seed builds its bank rows
-   through `BankProvider` and the real planner, replacing the CSV path for
-   those sources.
+8. **Synthetic provider for the demo.** 8a built (DEMO-SYNC.md): Chase
+   checking and Amex synced from a synthetic provider through the real
+   cutover, planner and commit, with a held row, a statement check and a
+   bank change to a split row for visitors to see. 8b (a synthetic Link and a
+   login needing repair) is decided after 8a.
 
 ## Real accounts (slice 7)
 

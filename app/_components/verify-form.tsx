@@ -8,10 +8,24 @@ import { checkAgainstStatement, recordStatementCheck, type VerificationCheck } f
 import { formatUSD, toCents, tryParseDollars } from '@/lib/money';
 import { useAction } from './page-result';
 
+// The demo's statement (DEMO-SYNC.md), as text for the inputs, with a copy
+// of the charges carrying a transposed digit.
+export type SampleStatement = { from: string; to: string; charges: string; credits: string; chargesWithTypo: string };
+
 // The statement check (REAL-ACCOUNTS.md). Compare as often as needed; only a
 // match can be recorded as verified, and the server compares again before it
 // records anything.
-export function VerifyForm({ accountId, chargesLabel, creditsLabel }: { accountId: string; chargesLabel: string; creditsLabel: string }) {
+export function VerifyForm({
+  accountId,
+  chargesLabel,
+  creditsLabel,
+  sample,
+}: {
+  accountId: string;
+  chargesLabel: string;
+  creditsLabel: string;
+  sample?: SampleStatement;
+}) {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [charges, setCharges] = useState('');
@@ -38,9 +52,35 @@ export function VerifyForm({ accountId, chargesLabel, creditsLabel }: { accountI
     compare({ ...statement, excludedKeys: [...next] });
   };
   const result = check && 'ok' in check ? check.result : null;
+  const fill = (charges: string) => {
+    if (!sample) return;
+    const next = { ...statement, from: sample.from, to: sample.to, charges, credits: sample.credits };
+    setFrom(sample.from);
+    setTo(sample.to);
+    setCharges(charges);
+    setCredits(sample.credits);
+    compare(next);
+  };
 
   return (
     <div className="space-y-6">
+      {sample && (
+        <div className="space-y-2 rounded-lg border bg-muted/40 px-3 py-2.5 text-sm">
+          <p>
+            Demo statement, {sample.from} to {sample.to}: {chargesLabel.toLowerCase()} {sample.charges},{' '}
+            {creditsLabel.toLowerCase()} {sample.credits}. It was generated from the same bank rows, so it matches to the
+            cent; a typo does not.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" onClick={() => fill(sample.charges)}>
+              Use these figures
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => fill(sample.chargesWithTypo)}>
+              Try it with a typo ({sample.chargesWithTypo})
+            </Button>
+          </div>
+        </div>
+      )}
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="grid gap-1">
           <Label htmlFor="from">Statement from</Label>

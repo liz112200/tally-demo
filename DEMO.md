@@ -14,9 +14,15 @@ migration, no shared credential, no shared store.
 ## What differs in demo mode
 
 - A banner states that the data is synthetic and resets daily, links to the
-  source, and offers Reset. A first-visit strip points at three things to try.
+  source, and offers Reset. A first-visit strip points at four things to try:
+  syncing a bank, checking an account against its statement, splitting a
+  dinner, and simplifying balances.
 - Expenses gains "Import a sample statement", which runs the real import
   preview on a generated Discover CSV whose oldest rows are already imported.
+- /accounts shows two synthetic bank logins, Chase checking and Amex, served
+  by the synthetic provider through the real sync code (DEMO-SYNC.md): Sync
+  now, the boundary review with a held row, and the statement check work;
+  linking and managing a login do not.
 - Receipt extraction is simulated; Gemini is never called and no key is set.
 - People shows the same Simplify card as production.
 
@@ -67,3 +73,31 @@ daily cron (`/api/demo/reset`, 09:00 UTC, declared in `vercel.ts` for demo
 deployments only), from the banner, and from `npm run demo:reset`. New
 receipt images upload first, the wipe and inserts commit as one transaction,
 and the previous images are deleted afterwards.
+
+## Local demo
+
+Demo changes are checked in a browser against stores of their own, never
+tally-demo's. The guard is the same: both markers, written only by
+`demo:mark` into empty stores.
+
+1. A Blob store of its own, created empty in the Vercel dashboard and
+   connected to no project. A reset uploads receipt images, so there is no
+   way around a real store.
+2. `.env.demo-local` (gitignored) with that store's `BLOB_READ_WRITE_TOKEN` and
+   `DATABASE_URL=postgres://tally:tally@127.0.0.1:55532/tally_demo_local`.
+3. Then:
+
+   ```sh
+   docker compose -f docker-compose.demo-local.yml up -d --wait
+   DEMO_ENV=local npm run demo:mark -- 127
+   DEMO_ENV=local npm run demo:migrate
+   DEMO_ENV=local npm run demo:reset
+   ```
+
+4. Run `next dev` with `DEMO_MODE=1` in a separate worktree whose only env
+   file is a copy of `.env.demo-local`. In the main checkout, `.env.local`
+   holds the bank and Gemini credentials the guard refuses in demo mode, so
+   a demo-mode server there does not start.
+
+The demo scripts read `.env.demo` unless `DEMO_ENV=local`, and no other file
+(lib/demo/env-file.ts).

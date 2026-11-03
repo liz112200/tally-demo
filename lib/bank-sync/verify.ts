@@ -63,3 +63,19 @@ export function compareToStatement(input: {
     passed: chargesMatch && creditsMatch && input.confirmed && counted.length > 0,
   };
 }
+
+// A statement figure as typed with two adjacent digits of the dollars
+// swapped, the typo a person makes copying a total; the cents' last digit
+// moves instead when no two adjacent dollar digits differ. The demo offers it
+// so a visitor can watch the check refuse (DEMO-SYNC.md).
+export function withTypo(text: string): string {
+  const chars = [...text];
+  const digit = (c: string) => c >= '0' && c <= '9';
+  for (let i = chars.indexOf('.') - 1; i > 0; i--) {
+    if (digit(chars[i]) && digit(chars[i - 1]) && chars[i] !== chars[i - 1]) {
+      [chars[i - 1], chars[i]] = [chars[i], chars[i - 1]];
+      return chars.join('');
+    }
+  }
+  return text.replace(/\d$/, (d) => String((Number(d) + 1) % 10));
+}

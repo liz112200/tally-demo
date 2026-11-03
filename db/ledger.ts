@@ -67,6 +67,18 @@ export async function ledgerChoices(): Promise<LedgerChoice[]> {
   }));
 }
 
+// The last CSV row of each ledger account with any, undone imports included,
+// whether or not an account syncs into it (ledgerChoices lists only the free
+// ones).
+export async function lastCsvDates(): Promise<Map<string, string>> {
+  const rows = (await db.execute(sql`
+    select i.ledger_account_id as id, max(t.date)::text as last
+    from transactions t join imports i on i.id = t.import_id
+    where i.ledger_account_id is not null
+    group by i.ledger_account_id`)) as unknown as { id: string; last: string }[];
+  return new Map(rows.map((r) => [r.id, r.last]));
+}
+
 // What one account may choose: the free ledger accounts and its own.
 export function choicesFor(choices: readonly LedgerChoice[], accountId: string): LedgerChoice[] {
   return choices.filter((c) => c.usedByAccountId === null || c.usedByAccountId === accountId);

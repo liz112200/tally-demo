@@ -55,6 +55,7 @@ export const ENV_VARS: Record<string, EnvUse & { why: string }> = {
   },
   AUTH_ORIGIN: { optional: true, why: 'the relying party under next dev' },
   DRIZZLE_ENV_FILE: { optional: true, why: 'which env file drizzle-kit migrates' },
+  DEMO_ENV: { optional: true, why: 'demo scripts: "local" reads .env.demo-local instead of .env.demo (lib/demo/env-file.ts)' },
   NEXT_PUBLIC_OWNER_NAME: { optional: true, why: "db/seed.ts: the owner's name in a fresh database" },
   NODE_ENV: { platform: true, why: 'set by Next.js' },
   VERCEL_ENV: { platform: true, why: 'set by Vercel' },

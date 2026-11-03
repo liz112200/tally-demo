@@ -116,7 +116,7 @@ export async function syncAccounts(input: {
             `${account.label}: ${describeCounts(outcome.counts)}.` +
               // A new login's first 30 days come first; the rest arrives on a
               // later sync, so totals for older periods are not final yet.
-              (fetched.readiness === 'initial' ? ' Plaid has sent only the last 30 days so far; sync again later for the rest.' : ''),
+              (fetched.readiness === 'initial' ? ' The bank has sent only the last 30 days so far; sync again later for the rest.' : ''),
           );
           break;
         case 'stopped':

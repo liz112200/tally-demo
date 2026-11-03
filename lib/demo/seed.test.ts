@@ -4,6 +4,8 @@ import { computeBidirectionalBalances, type DebtShare } from '../balances';
 import { buildSimplifyView } from '../simplify-view';
 import { detectParser } from '../parsers/detect';
 import { toCents } from '../money';
+import { compareToStatement } from '../bank-sync/verify';
+import { dedupHash } from '../parsers/dedup';
 
 // Balances and the simplification view exactly as /people derives them.
 function derive(seed: DemoSeed) {
@@ -74,7 +76,7 @@ describe('buildDemoSeed', () => {
   });
 
   it('never collides on the dedup index', () => {
-    const live = seed.transactions.filter((t) => !t.dedupExempt).map((t) => t.dedupHash);
+    const live = seed.transactions.filter((t) => t.dedupHash !== null && !t.dedupExempt).map((t) => t.dedupHash);
     expect(new Set(live).size).toBe(live.length);
   });
 
@@ -147,8 +149,101 @@ describe('buildDemoSeed', () => {
       expect(byName('Casey'), day).toBe(0);
       expect(new Set(s.splits.map((x) => x.method)).size, day).toBe(4);
       expect(s.sampleStatement.overlapCount, day).toBeGreaterThanOrEqual(2);
+      // The bank demonstrations hold on every day: one Amex row held, the
+      // split flight synced.
+      expect(s.syncSkippedRows.filter((r) => r.reason === 'possible_duplicate'), day).toHaveLength(1);
+      const flight = s.transactions.find((t) => t.source === 'plaid' && s.splits.some((x) => x.transactionId === t.id));
+      expect(flight, day).toBeDefined();
     }
     // About 12 s alone; 33 s and 82 s in full parallel runs on 2026-10-28
     // (the second while Docker was starting), both timeouts under 30 s.
   }, 120_000);
+});
+
+describe('the linked banks', () => {
+  const seed = buildDemoSeed('2026-10-09');
+  const linked = seed.bankAccounts.map((account) => {
+    const ledger = seed.ledgerAccounts.find((l) => l.id === account.ledgerAccountId)!;
+    const feed = seed.bankItems.flatMap((i) => i.accounts).find((a) => a.providerAccountId === account.providerAccountId)!.feed;
+    return {
+      account,
+      ledger,
+      feed,
+      synced: seed.transactions.filter((t) => t.bankAccountId === account.id),
+      aside: seed.syncSkippedRows.filter((r) => r.bankAccountId === account.id),
+      csv: seed.transactions.filter((t) => t.source === ledger.csvSource),
+    };
+  });
+  const amex = linked.find((l) => l.ledger.csvSource === 'amex')!;
+  const chase = linked.find((l) => l.ledger.csvSource === 'chase')!;
+
+  it('links Chase checking and Amex; Discover stays CSV-only', () => {
+    expect(linked.map((l) => l.ledger.csvSource).sort()).toEqual(['amex', 'chase']);
+    expect(seed.ledgerAccounts.find((l) => l.csvSource === 'discover')!.cutoverDate).toBeNull();
+    expect(seed.imports.every((i) => i.ledgerAccountId === seed.ledgerAccounts.find((l) => l.csvSource === i.source)!.id)).toBe(true);
+  });
+
+  it('puts every bank row in one place: set aside before the cutover, synced from it', () => {
+    for (const { feed, synced, aside, csv, ledger } of linked) {
+      const history = feed.seeded.added.map((t) => t.providerTransactionId);
+      const placed = [...synced.map((t) => t.providerTransactionId), ...aside.map((r) => r.providerTransactionId)];
+      expect(placed.sort()).toEqual([...history].sort());
+      expect(synced.every((t) => t.date >= ledger.cutoverDate!)).toBe(true);
+      expect(csv.every((t) => t.date < ledger.cutoverDate!)).toBe(true);
+      expect(synced.every((t) => t.dedupHash === null && t.source === 'plaid' && t.providerTransactionId !== null)).toBe(true);
+    }
+  });
+
+  it('holds the Amex purchase that arrived after the cutover with no authorized date, and nothing on Chase', () => {
+    const held = amex.aside.filter((r) => r.reason === 'possible_duplicate');
+    expect(held).toHaveLength(1);
+    expect(held[0].date >= amex.ledger.cutoverDate!).toBe(true);
+    const twin = amex.csv.find((t) => t.amountCents === held[0].amountCents && t.date < amex.ledger.cutoverDate!);
+    expect(twin).toBeDefined();
+    expect(chase.aside.filter((r) => r.reason === 'possible_duplicate')).toEqual([]);
+    expect(amex.account.boundaryReviewedAt).toBeNull();
+    expect(chase.account.boundaryReviewedAt).not.toBeNull();
+  });
+
+  it('carries a CSV row the owner raised, beside the bank row at its original amount', () => {
+    const raised = amex.csv.find((t) => t.note !== null)!;
+    const bank = amex.aside.find((r) => r.descriptionRaw === raised.descriptionRaw)!;
+    expect(raised.amountCents - bank.amountCents).toBe(38_000);
+    expect(raised.dedupHash).toBe(
+      dedupHash({ source: 'amex', accountLabel: null, date: raised.date, amountCents: bank.amountCents, descriptionRaw: raised.descriptionRaw }),
+    );
+  });
+
+  it('verifies Amex against a statement its rows match, and leaves Chase checking for the visitor', () => {
+    for (const { account, feed } of linked) {
+      const statement = seed.bankStatements[account.providerAccountId];
+      const rows = feed.seeded.added.map((t) => ({ key: t.providerTransactionId, postedDate: t.date, amountCents: t.amountCents, description: t.descriptionRaw }));
+      expect(compareToStatement({ rows, statement, excludedKeys: new Set(), confirmed: true }).passed).toBe(true);
+    }
+    expect(amex.account.verifiedAt).not.toBeNull();
+    expect(chase.account.verifiedAt).toBeNull();
+  });
+
+  it('splits a synced Amex flight, which the fourth press changes', () => {
+    const flight = amex.synced.find((t) => seed.splits.some((x) => x.transactionId === t.id))!;
+    expect(flight).toBeDefined();
+    const presses = amex.feed.presses;
+    expect(presses).toHaveLength(4);
+    const [first, second, third, fourth] = presses;
+    const pending = first.added.find((t) => t.pending)!;
+    expect(second.added[0]).toMatchObject({ pending: false, pendingTransactionId: pending.providerTransactionId });
+    expect(second.added[0].amountCents).toBeGreaterThan(pending.amountCents);
+    expect(third.added[0].amountCents).toBeLessThan(0);
+    expect(fourth.modified).toEqual([expect.objectContaining({ providerTransactionId: flight.providerTransactionId, amountCents: flight.amountCents + 35_000 })]);
+    expect(chase.feed.presses).toHaveLength(1);
+  });
+
+  it('dates every synced row and every press on or before today', () => {
+    const today = seed.today;
+    for (const { feed } of linked) {
+      for (const t of [...feed.seeded.added, ...feed.presses.flatMap((p) => [...p.added, ...p.modified])]) {
+        expect(t.date <= today && (t.authorizedDate ?? t.date) <= today).toBe(true);
+      }
+    }
+  });
 });

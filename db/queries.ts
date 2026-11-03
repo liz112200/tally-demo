@@ -39,9 +39,9 @@ import { categorize, ruleOutcome, type CategoryRule } from '@/lib/categorize';
 import { allocateFifo } from '@/lib/allocations';
 import { planNetting, type Alloc } from '@/lib/netting';
 import { formatUSD, toCents } from '@/lib/money';
-import { planSync, referencedPendingIds, type StoredRow, type SyncCounts } from '@/lib/bank-sync/plan';
-import { BOUNDARY_DAYS, MATCH_DAYS, addDays, splitAtCutover, type Cutover } from '@/lib/bank-sync/cutover';
-import type { ProviderTransaction, RemovedTransaction } from '@/lib/bank-sync/provider';
+import { planSync, referencedPendingIds, syncedRowValues, type StoredRow, type SyncCounts } from '@/lib/bank-sync/plan';
+import { BOUNDARY_DAYS, MATCH_DAYS, addDays, setAsideValues, splitAtCutover, type Cutover } from '@/lib/bank-sync/cutover';
+import type { BankProviderName, ProviderTransaction, RemovedTransaction } from '@/lib/bank-sync/provider';
 import type { InsightRow } from '@/lib/insights';
 
 type TransactionSource = (typeof transactions.source.enumValues)[number];
@@ -1726,7 +1726,7 @@ export async function getImports(): Promise<ImportRow[]> {
     })
     .from(imports)
     .where(isNull(imports.deletedAt))
-    .orderBy(desc(imports.importedAt));
+    .orderBy(desc(imports.importedAt), asc(imports.id));
   return rows.map((row) => ({ ...row, backfilled: row.filename === null }));
 }
 
@@ -1967,7 +1967,7 @@ export async function getDeletedImports(): Promise<DeletedImportRow[]> {
     })
     .from(imports)
     .where(isNotNull(imports.deletedAt))
-    .orderBy(desc(imports.deletedAt));
+    .orderBy(desc(imports.deletedAt), asc(imports.id));
   return rows.map((row) => ({
     ...row,
     deletedAt: row.deletedAt as Date,
@@ -2140,7 +2140,7 @@ export async function getBankConnections(): Promise<BankConnectionRow[]> {
       healthCheckedAt: bankConnections.healthCheckedAt,
     })
     .from(bankConnections)
-    .orderBy(asc(bankConnections.createdAt));
+    .orderBy(asc(bankConnections.createdAt), asc(bankConnections.institutionName), asc(bankConnections.id));
   if (connections.length === 0) return [];
 
   const accounts = await db
@@ -2164,7 +2164,7 @@ export async function getBankConnections(): Promise<BankConnectionRow[]> {
     })
     .from(bankAccounts)
     .where(inArray(bankAccounts.connectionId, connections.map((c) => c.id)))
-    .orderBy(asc(bankAccounts.type), asc(bankAccounts.name));
+    .orderBy(asc(bankAccounts.type), asc(bankAccounts.name), asc(bankAccounts.id));
 
   return connections.map((c) => ({
     ...c,
@@ -2223,7 +2223,7 @@ export async function getLinkedLogins(): Promise<
       itemErrorCode: bankConnections.itemErrorCode,
     })
     .from(bankConnections)
-    .orderBy(asc(bankConnections.createdAt));
+    .orderBy(asc(bankConnections.createdAt), asc(bankConnections.institutionName), asc(bankConnections.id));
 }
 
 // A connection's stored health and status, without its token.
@@ -2247,16 +2247,17 @@ export async function getConnectionHealth(connectionId: string): Promise<{
 // connection's token is erased, so it reads as not found.
 export async function getSealedAccessToken(
   connectionId: string,
-): Promise<{ providerItemId: string; accessTokenSealed: string } | null> {
+): Promise<{ provider: BankProviderName; providerItemId: string; accessTokenSealed: string } | null> {
   const [row] = await db
     .select({
+      provider: bankConnections.provider,
       providerItemId: bankConnections.providerItemId,
       accessTokenSealed: bankConnections.accessTokenSealed,
     })
     .from(bankConnections)
     .where(eq(bankConnections.id, connectionId));
   if (!row || row.accessTokenSealed === null) return null;
-  return { providerItemId: row.providerItemId, accessTokenSealed: row.accessTokenSealed };
+  return { provider: row.provider, providerItemId: row.providerItemId, accessTokenSealed: row.accessTokenSealed };
 }
 
 // Store the institution and accounts the provider reported, in one
@@ -2386,6 +2387,7 @@ export async function setAccountSyncEnabled(
 
 export type SyncTarget = {
   connectionId: string;
+  provider: BankProviderName;
   providerItemId: string;
   accessTokenSealed: string;
   // A paused connection is returned so the caller can say so; it is not
@@ -2401,6 +2403,7 @@ export type SyncTarget = {
 export async function getSyncTarget(connectionId: string): Promise<SyncTarget | null> {
   const [connection] = await db
     .select({
+      provider: bankConnections.provider,
       providerItemId: bankConnections.providerItemId,
       accessTokenSealed: bankConnections.accessTokenSealed,
       status: bankConnections.status,
@@ -2420,9 +2423,10 @@ export async function getSyncTarget(connectionId: string): Promise<SyncTarget | 
     })
     .from(bankAccounts)
     .where(and(eq(bankAccounts.connectionId, connectionId), eq(bankAccounts.syncEnabled, true)))
-    .orderBy(asc(bankAccounts.name));
+    .orderBy(asc(bankAccounts.name), asc(bankAccounts.id));
   return {
     connectionId,
+    provider: connection.provider,
     providerItemId: connection.providerItemId,
     accessTokenSealed,
     status,
@@ -2677,34 +2681,13 @@ export async function commitAccountSync(input: {
     for (let i = 0; i < plan.inserts.length; i += SYNC_INSERT_CHUNK) {
       await tx
         .insert(transactions)
-        .values(
-          plan.inserts.slice(i, i + SYNC_INSERT_CHUNK).map((p) => ({
-            date: p.date,
-            amountCents: p.amountCents,
-            descriptionRaw: p.descriptionRaw,
-            merchantNormalized: p.merchantNormalized,
-            categoryId: p.categoryId,
-            categorySource: p.categorySource,
-            pending: p.pending,
-            source: 'plaid' as const,
-            bankAccountId: input.accountId,
-            providerTransactionId: p.providerTransactionId,
-            providerRaw: p.providerRaw,
-          })),
-        );
+        .values(plan.inserts.slice(i, i + SYNC_INSERT_CHUNK).map((p) => syncedRowValues(p, input.accountId)));
     }
 
     // Rows set aside: recorded, never inserted. A row already set aside keeps
     // its reason and the owner's answer; its fields follow the bank's.
     for (const { row: t, reason } of split.setAside) {
-      const values = {
-        date: t.authorizedDate ?? t.date,
-        postedDate: t.date,
-        amountCents: t.amountCents,
-        descriptionRaw: t.descriptionRaw,
-        pending: t.pending,
-        providerRaw: t.raw,
-      };
+      const values = setAsideValues(t);
       await tx
         .insert(syncSkippedRows)
         .values({ bankAccountId: input.accountId, providerTransactionId: t.providerTransactionId, reason, ...values })

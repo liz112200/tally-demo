@@ -6,6 +6,8 @@ import { usePathname } from 'next/navigation';
 import { FlaskConical, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { resetDemoNow } from '@/app/_actions/demo';
+import { setOrientationDismissed } from '@/lib/demo/orientation';
+import { useOrientationDismissed } from '@/app/_lib/use-orientation';
 
 // Shown only on the public demo deployment (the layout gates it on
 // DEMO_MODE). Says what this is, how long changes last, and where the source
@@ -14,6 +16,7 @@ export function DemoBanner({ sourceUrl }: { sourceUrl: string }) {
   const pathname = usePathname();
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
+  const orientationDismissed = useOrientationDismissed();
   // Share snapshots are read by someone outside the app; no chrome there.
   if (pathname.startsWith('/s/')) return null;
 
@@ -22,6 +25,8 @@ export function DemoBanner({ sourceUrl }: { sourceUrl: string }) {
     startTransition(async () => {
       const result = await resetDemoNow();
       setMessage('error' in result ? result.error : 'Demo data restored.');
+      // A fresh start includes the tour.
+      if (!('error' in result)) setOrientationDismissed(false);
     });
   }
 
@@ -42,6 +47,11 @@ export function DemoBanner({ sourceUrl }: { sourceUrl: string }) {
           </Link>
         </p>
         <div className="ml-auto flex items-center gap-2">
+          {orientationDismissed && (
+            <Button variant="ghost" size="xs" onClick={() => setOrientationDismissed(false)}>
+              Things to try
+            </Button>
+          )}
           {message && (
             <span className="text-xs text-muted-foreground" role="status">
               {message}

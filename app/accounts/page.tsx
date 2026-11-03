@@ -18,7 +18,7 @@ import {
 import { LinkBankButton, ReconnectButton, RetryAccountsButton } from '@/app/_components/link-bank-button';
 import { AccountSyncToggle, SyncNowButton } from '@/app/_components/bank-sync-controls';
 import { ManageLogin } from '@/app/_components/connection-controls';
-import { boundaryReview, choicesFor, ledgerChoices, ledgerStateFor, type BoundaryRow } from '@/db/ledger';
+import { boundaryReview, choicesFor, lastCsvDates, ledgerChoices, ledgerStateFor, type BoundaryRow } from '@/db/ledger';
 import { defaultCutover } from '@/lib/bank-sync/cutover';
 import { FinishReviewButton, HeldRowAnswer, ReissuedChoice, SetUpSyncButton, type LedgerOption } from '@/app/_components/ledger-controls';
 import { formatUSD, toCents } from '@/lib/money';
@@ -115,6 +115,15 @@ function InfoLine({ children }: { children: React.ReactNode }) {
 
 type LedgerState = Awaited<ReturnType<typeof ledgerStateFor>> extends Map<string, infer V> ? V : never;
 
+// "CSV history to Oct 22, bank sync from Oct 23. ..." under each demo account.
+function demoContextLine(state: LedgerState | undefined, lastCsv: ReadonlyMap<string, string>): string | null {
+  if (!state?.ledgerAccountId || !state.cutoverDate) return null;
+  const last = lastCsv.get(state.ledgerAccountId);
+  if (!last) return null;
+  const day = (iso: string) => formatShortDay(new Date(`${iso}T00:00:00Z`), new Date());
+  return `CSV history to ${day(last)}, bank sync from ${day(state.cutoverDate)}. Rows that could be either are held for you.`;
+}
+
 // What slice 7 adds under an account (REAL-ACCOUNTS.md): where it syncs into
 // and from when, whether its rows count yet, a re-issued account's question,
 // and the one-time boundary review.
@@ -125,6 +134,7 @@ function LedgerLines({
   review,
   replacesName,
   linked,
+  demoContext,
 }: {
   accountId: string;
   state: LedgerState | undefined;
@@ -132,12 +142,15 @@ function LedgerLines({
   review: { cutover: string; rows: BoundaryRow[] } | null;
   replacesName: string | null;
   linked: boolean;
+  // The demo's one line on what the cutover is (DEMO-SYNC.md).
+  demoContext: string | null;
 }) {
   if (!state) return null;
   if (state.replacesAccountId && replacesName && linked) return <ReissuedChoice accountId={accountId} replaces={replacesName} />;
   if (!state.ledgerAccountId) return null;
   return (
     <div className="space-y-1 text-xs">
+      {demoContext && <InfoLine>{demoContext}</InfoLine>}
       <div className="text-muted-foreground">
         Into {state.ledgerName}
         {state.cutoverDate ? <> · from {state.cutoverDate}; earlier bank rows are never added</> : <> · full history</>}
@@ -208,16 +221,10 @@ function LedgerLines({
 
 export default async function AccountsPage() {
   await requireUser();
-  if (isDemoMode()) {
-    return (
-      <main className="mx-auto max-w-4xl px-6 py-8">
-        <h1 className="text-xl font-semibold tracking-tight">Accounts</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Bank linking is not available in the demo.
-        </p>
-      </main>
-    );
-  }
+  // The demo shows its synthetic logins (DEMO-SYNC.md): Sync now, the
+  // boundary review and the statement check work; linking, reconnecting and
+  // managing a login do not, since there is no real bank behind them.
+  const demo = isDemoMode();
 
   const connections = await getBankConnections();
   const live = connections.filter((c) => c.status !== 'removed');
@@ -228,6 +235,7 @@ export default async function AccountsPage() {
   const configured = Boolean(
     process.env.PLAID_ENV && process.env.PLAID_CLIENT_ID && process.env.PLAID_SECRET,
   );
+  const canSync = configured || demo;
   const left = sandbox ? null : itemsLeft(connections);
   const twins = twinAccounts(
     connections.map((c) => ({
@@ -246,7 +254,11 @@ export default async function AccountsPage() {
   // Slice 7 (REAL-ACCOUNTS.md): each account's ledger account, cutover,
   // verification and boundary review.
   const allAccounts = connections.flatMap((c) => c.accounts);
-  const [ledger, choices] = await Promise.all([ledgerStateFor(allAccounts.map((a) => a.id)), ledgerChoices()]);
+  const [ledger, choices, lastCsv] = await Promise.all([
+    ledgerStateFor(allAccounts.map((a) => a.id)),
+    ledgerChoices(),
+    demo ? lastCsvDates() : new Map<string, string>(),
+  ]);
   const optionsFor = (accountId: string): LedgerOption[] =>
     choicesFor(choices, accountId).map((o) => ({
       id: o.id,
@@ -290,12 +302,16 @@ export default async function AccountsPage() {
                 }`}
           </p>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            {sandbox
-              ? 'Sandbox: Items are free here.'
-              : `Items used: ${itemsUsed(connections)} of ${ITEM_BUDGET} on Plaid's Trial, removed logins included. Plaid's dashboard is the authority.`}
+            {demo
+              ? 'Demo banks: synthetic logins, synced through the same code as a real bank.'
+              : sandbox
+                ? 'Sandbox: Items are free here.'
+                : `Items used: ${itemsUsed(connections)} of ${ITEM_BUDGET} on Plaid's Trial, removed logins included. Plaid's dashboard is the authority.`}
           </p>
         </div>
-        {configured ? (
+        {demo ? (
+          <p className="text-xs text-muted-foreground">Linking a real bank is not available in the demo.</p>
+        ) : configured ? (
           <LinkBankButton
             sandboxOverride={duplicateOverrideAllowed(process.env.PLAID_ENV)}
             linkedInstitutions={loginsByInstitution(live, (d) => formatShortDay(d, now)).map(institutionLine)}
@@ -349,7 +365,7 @@ export default async function AccountsPage() {
                       </InfoLine>
                     )}
                   </div>
-                  {configured && c.status === 'active' && c.accounts.length > 0 && kind !== 'gone' && (
+                  {canSync && c.status === 'active' && c.accounts.length > 0 && kind !== 'gone' && (
                     <SyncNowButton connectionId={c.id} disabled={!c.accounts.some((a) => a.syncEnabled)} />
                   )}
                 </div>
@@ -433,7 +449,8 @@ export default async function AccountsPage() {
                             hasRows={a.rowCount > 0}
                             review={reviews.get(a.id) ?? null}
                             replacesName={ledger.get(a.id)?.replacesAccountId ? nameOf(ledger.get(a.id)!.replacesAccountId!) : null}
-                            linked={linked && configured}
+                            linked={linked && canSync}
+                            demoContext={demo ? demoContextLine(ledger.get(a.id), lastCsv) : null}
                           />
                         </div>
                         {!linked ? null : SYNCABLE.has(a.type) ? (

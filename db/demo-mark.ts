@@ -3,8 +3,8 @@
 //
 //   npm run demo:mark -- <neon-endpoint-id>
 //
-// Reads .env.demo only — never .env.local, which holds the owner's real
-// credentials. The endpoint id argument must match DATABASE_URL's host, as a
+// Reads .env.demo, or .env.demo-local with DEMO_ENV=local (lib/demo/env-file.ts) —
+// never .env.local, which holds the owner's real credentials. The endpoint id argument must match DATABASE_URL's host, as a
 // typed confirmation of which database is being marked. Refuses a database
 // whose tables hold any rows and a Blob store holding any object other than
 // the marker: production can never be marked, by accident or otherwise.
@@ -13,13 +13,15 @@ import postgres from 'postgres';
 import { list, put } from '@vercel/blob';
 import { databaseEndpointId } from '../lib/deploy-guard';
 import { DEMO_BLOB_MARKER, DEMO_DB_COMMENT } from './demo-guard';
+import { demoEnvFile } from '../lib/demo/env-file';
 
-config({ path: '.env.demo' });
+const envFile = demoEnvFile();
+config({ path: envFile, quiet: true });
 
 async function main() {
   const url = process.env.DATABASE_URL;
   const token = process.env.BLOB_READ_WRITE_TOKEN;
-  if (!url || !token) throw new Error('.env.demo must set DATABASE_URL and BLOB_READ_WRITE_TOKEN');
+  if (!url || !token) throw new Error(`${envFile} must set DATABASE_URL and BLOB_READ_WRITE_TOKEN`);
 
   const expected = process.argv[2];
   const actual = databaseEndpointId(url);

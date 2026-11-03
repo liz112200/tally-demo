@@ -25,6 +25,7 @@ import {
   MANUAL_ENTRIES,
   MERCHANTS,
   NON_SPLITTABLE,
+  NOT_SPENDING,
   RESTAURANT_ITEMS,
   type DemoSource,
   type Merchant,
@@ -41,6 +42,10 @@ import { planNetting } from '../netting';
 import { computeBidirectionalBalances } from '../balances';
 import { defaultImportName } from '../import-groups';
 import { CENTS_TO_MINOR, toCents } from '../money';
+import { BOUNDARY_DAYS, MATCH_DAYS, addDays, defaultCutover, setAsideValues, splitAtCutover } from '../bank-sync/cutover';
+import { planSync, syncedRowValues } from '../bank-sync/plan';
+import type { ProviderTransaction } from '../bank-sync/provider';
+import { syntheticCursor, syntheticToken, type SyntheticDelivery, type SyntheticItem } from '../bank-sync/synthetic/provider';
 
 export const DEMO_SEED = 20261009;
 
@@ -61,7 +66,7 @@ export type DemoSeed = {
   today: string;
   ownerId: string;
   persons: { id: string; name: string; isOwner: boolean; createdAt: Date }[];
-  categories: { id: string; name: string; isSplittable: boolean; createdAt: Date }[];
+  categories: { id: string; name: string; isSplittable: boolean; countsAsSpending: boolean; createdAt: Date }[];
   rules: {
     id: string;
     matchPattern: string;
@@ -77,20 +82,28 @@ export type DemoSeed = {
     displayName: string;
     importedAt: Date;
     rowCount: number;
+    ledgerAccountId: string | null;
   }[];
+  // CSV and manual rows carry a dedup hash; synced rows carry the bank's id
+  // instead (DEMO-SYNC.md), written by the same mapping a sync uses.
   transactions: {
     id: string;
     date: string;
     amountCents: number;
     descriptionRaw: string;
     categoryId: string | null;
-    categorySource: 'manual' | 'rule' | null;
-    source: DemoSource | 'manual';
+    categorySource: 'manual' | 'rule' | 'bank' | null;
+    source: DemoSource | 'manual' | 'plaid';
     importId: string | null;
     accountLabel: null;
-    dedupHash: string;
+    dedupHash: string | null;
     dedupExempt: boolean;
     merchantNormalized: string;
+    note: string | null;
+    bankAccountId: string | null;
+    providerTransactionId: string | null;
+    providerRaw: unknown;
+    pending: boolean;
     createdAt: Date;
   }[];
   splits: {
@@ -155,6 +168,58 @@ export type DemoSeed = {
   }[];
   // The statement files the seeded imports were parsed from, by import id.
   statements: Record<string, string>;
+  // Linked banks (DEMO-SYNC.md): one ledger account per CSV source, two
+  // synthetic logins (Chase checking, Amex) synced through the real cutover
+  // and planner, and what the synthetic provider serves from here on.
+  ledgerAccounts: {
+    id: string;
+    displayName: string;
+    csvSource: DemoSource;
+    csvAccountLabel: null;
+    cutoverBasis: 'posted' | 'transaction';
+    cutoverDate: string | null;
+    cutoverConfirmedAt: Date | null;
+    createdAt: Date;
+  }[];
+  bankCategoryMap: { plaidCategory: string; categoryId: string; createdAt: Date }[];
+  bankConnections: {
+    id: string;
+    provider: 'synthetic';
+    providerItemId: string;
+    institutionId: string;
+    institutionName: string;
+    accessTokenSealed: string;
+    status: 'active';
+    healthCheckedAt: Date;
+    createdAt: Date;
+  }[];
+  bankAccounts: {
+    id: string;
+    connectionId: string;
+    providerAccountId: string;
+    name: string;
+    mask: string;
+    type: string;
+    subtype: string;
+    syncEnabled: true;
+    syncCursor: string;
+    lastSyncedAt: Date;
+    ledgerAccountId: string;
+    verifiedAt: Date | null;
+    verification: Record<string, unknown> | null;
+    boundaryReviewedAt: Date | null;
+    createdAt: Date;
+  }[];
+  syncSkippedRows: (ReturnType<typeof setAsideValues> & {
+    bankAccountId: string;
+    providerTransactionId: string;
+    reason: 'before_cutover' | 'possible_duplicate';
+    createdAt: Date;
+  })[];
+  bankItems: SyntheticItem[];
+  // Each linked account's last statement before its cutover, by provider
+  // account id: what the verify page offers to fill in.
+  bankStatements: Record<string, { from: string; to: string; chargesCents: number; creditsCents: number }>;
   // A newer Discover statement for visitors to import. Its oldest rows overlap
   // the last seeded statement, so a first import shows duplicates and a second
   // shows nothing new.
@@ -205,6 +270,11 @@ const WEEKDAY_WEIGHT = [20, 66, 43, 28, 26, 29, 47]; // Sun..Sat
 const MEAN_WEEKDAY_WEIGHT = WEEKDAY_WEIGHT.reduce((a, b) => a + b, 0) / 7;
 
 const TRIP_DAY = 48;
+// The scripted car hire's CSV row, raised by the owner after import to fold
+// in what Jordan owed for gas, then split by amount: half the hire each, the
+// gas on Jordan's share.
+const RAISED_BY_CENTS = 3_800;
+const RAISED_NOTE = 'Raised by $38.00 to fold in the gas Jordan owed me.';
 const MONTHLY = new Set(['spotify', 'netflix', 'youtube', 'apple', 'comed', 'xfinity', 'statefarm', 'rent', 'interest']);
 const FIXED_DAY: Record<string, number> = { rent: 1, interest: 28 };
 
@@ -238,6 +308,9 @@ function drawCents(rng: Rng, m: Merchant): number {
 
 type RawRow = {
   id: string;
+  // A row placed on purpose for the linked-bank demonstrations
+  // (DEMO-SYNC.md, Showing the hard part); never split at random.
+  scripted?: 'held' | 'raised' | 'split';
   source: DemoSource | 'manual';
   daysAgo: number;
   date: string;
@@ -270,6 +343,7 @@ export function buildDemoSeed(today: string, seed: number = DEMO_SEED): DemoSeed
     id: ids.uuid(),
     name,
     isSplittable: !(NON_SPLITTABLE as readonly string[]).includes(name),
+    countsAsSpending: !(NOT_SPENDING as readonly string[]).includes(name),
     createdAt: new Date(stamp(today, 120, 8).getTime() + i * 1000),
   }));
   const categoryId = Object.fromEntries(categories.map((c) => [c.name, c.id]));
@@ -317,6 +391,28 @@ export function buildDemoSeed(today: string, seed: number = DEMO_SEED): DemoSeed
         bankCategory: m.bankCategory ?? '',
         chaseType: m.chaseType ?? '',
         manualCategory: m.manualCategory ?? null,
+      });
+    }
+  }
+  // Scripted Amex rows (DEMO-SYNC.md, Showing the hard part). Amex is the
+  // rarely used card, so these are placed rather than drawn: a purchase on
+  // the last statement day that the bank sends days later with no
+  // authorized date (the cutover holds it), a car hire whose CSV row the
+  // owner raised (the boundary review states the difference), and a flight
+  // after the cutover, split with Jordan, whose amount the bank later
+  // changes.
+  {
+    const scripted = root.fork('scripted');
+    const merchant = (key: string) => MERCHANTS.find((m) => m.key === key)!;
+    for (const [kind, key, daysAgo] of [
+      ['held', 'amex-wholefoods', Math.min(...PERIOD_ENDS)],
+      ['raised', 'hertz', Math.min(...PERIOD_ENDS) + 3],
+      ['split', 'delta', 5],
+    ] as const) {
+      const m = merchant(key);
+      addRow({
+        source: 'amex', daysAgo, cents: drawCents(scripted, m), description: m.describe(scripted),
+        merchant: m, bankCategory: '', chaseType: '', manualCategory: null, scripted: kind,
       });
     }
   }
@@ -425,7 +521,7 @@ export function buildDemoSeed(today: string, seed: number = DEMO_SEED): DemoSeed
   let itemSplits = 0;
   let percentSplits = 0;
   const candidates = rows
-    .filter((r) => inLedger(r) && r.source !== 'manual' && r.cents > 0 && r.merchant?.split)
+    .filter((r) => inLedger(r) && r.source !== 'manual' && r.cents > 0 && r.merchant?.split && !r.scripted)
     .filter((r) => {
       const c = category.get(r.id)!;
       return !c.id || categories.find((x) => x.id === c.id)!.isSplittable;
@@ -506,6 +602,44 @@ export function buildDemoSeed(today: string, seed: number = DEMO_SEED): DemoSeed
         row.date,
       );
     }
+  }
+
+  // The scripted flight, synced after the cutover, split equally with
+  // Jordan. Its transaction id is its row id, as the synced insert below.
+  {
+    const flight = rows.find((r) => r.scripted === 'split')!;
+    const participantIds = personOrder.filter((id) => id === ownerId || id === personId.jordan);
+    const split: Split = {
+      id: ids.uuid(), transactionId: flight.id, payerPersonId: ownerId, date: null, description: null,
+      method: 'equal', taxCents: 0, tipCents: 0, createdAt: stamp(today, flight.daysAgo - 2, 20),
+    };
+    splits.push(split);
+    addShares(
+      split,
+      computeShares(toCents(flight.cents * CENTS_TO_MINOR), toCents(0), toCents(0), 'equal', participantIds.map((personId) => ({ personId }))),
+      flight.date,
+    );
+  }
+
+  // The raised car hire, split by amount on its raised total.
+  {
+    const hire = rows.find((r) => r.scripted === 'raised')!;
+    const participantIds = personOrder.filter((id) => id === ownerId || id === personId.jordan);
+    const half = Math.floor(hire.cents / 2);
+    const theirs = (hire.cents - half + RAISED_BY_CENTS) * CENTS_TO_MINOR;
+    const amount = (hire.cents + RAISED_BY_CENTS) * CENTS_TO_MINOR;
+    const inputs = participantIds.map((id) => (id === ownerId ? amount - theirs : theirs));
+    const split: Split = {
+      id: ids.uuid(), transactionId: hire.id, payerPersonId: ownerId, date: null, description: null,
+      method: 'amount', taxCents: 0, tipCents: 0, createdAt: new Date(createdAt(hire).getTime() + 26 * 3_600_000),
+    };
+    splits.push(split);
+    addShares(
+      split,
+      computeShares(toCents(amount), toCents(0), toCents(0), 'amount', participantIds.map((personId) => ({ personId })), inputs)
+        .map((sh, i) => ({ ...sh, inputAmountCents: inputs[i] })),
+      hire.date,
+    );
   }
 
   // 4. Expenses other people paid (external splits): the owner owes a share.
@@ -663,6 +797,20 @@ export function buildDemoSeed(today: string, seed: number = DEMO_SEED): DemoSeed
     discover: (end) => `Discover-Statement-${end.replace(/-/g, '')}.csv`,
     amex: () => 'activity.csv',
   };
+  // One ledger account per CSV source; Chase checking and Amex are linked
+  // below, Discover stays CSV-only so the sample statement keeps importing.
+  const ledgerAccounts: DemoSeed['ledgerAccounts'] = (['chase', 'discover', 'amex'] as const).map((source, i) => ({
+    id: ids.uuid(),
+    displayName: { chase: 'Chase checking', discover: 'Discover', amex: 'Amex' }[source],
+    csvSource: source,
+    csvAccountLabel: null,
+    cutoverBasis: source === 'chase' ? ('posted' as const) : ('transaction' as const),
+    cutoverDate: null,
+    cutoverConfirmedAt: null,
+    createdAt: new Date(stamp(today, 119, 11).getTime() + i * 1000),
+  }));
+  const ledgerOf = (source: DemoSource) => ledgerAccounts.find((l) => l.csvSource === source)!;
+
   const imports: DemoSeed['imports'] = [];
   const statements: Record<string, string> = {};
   const transactions: DemoSeed['transactions'] = [];
@@ -673,10 +821,13 @@ export function buildDemoSeed(today: string, seed: number = DEMO_SEED): DemoSeed
     const exempt = seenHash.has(hash);
     seenHash.add(hash);
     const c = category.get(r.id)!;
+    // The raised car hire: edited after import, so its hash is the imported
+    // amount's, as an inline edit leaves it.
+    const raised = r.scripted === 'raised';
     transactions.push({
       id: r.id,
       date: r.date,
-      amountCents,
+      amountCents: raised ? amountCents + RAISED_BY_CENTS * CENTS_TO_MINOR : amountCents,
       descriptionRaw: r.description,
       categoryId: c.id,
       categorySource: c.id ? c.source : null,
@@ -686,6 +837,11 @@ export function buildDemoSeed(today: string, seed: number = DEMO_SEED): DemoSeed
       dedupHash: hash,
       dedupExempt: exempt,
       merchantNormalized: normalizeMerchant(r.description),
+      note: raised ? RAISED_NOTE : null,
+      bankAccountId: null,
+      providerTransactionId: null,
+      providerRaw: null,
+      pending: false,
       createdAt: new Date(createdAt(r).getTime() + offsetMs),
     });
   };
@@ -702,6 +858,7 @@ export function buildDemoSeed(today: string, seed: number = DEMO_SEED): DemoSeed
         displayName: defaultImportName(source, batch[0].date, batch[batch.length - 1].date),
         importedAt: importedAt(period),
         rowCount: batch.length,
+        ledgerAccountId: ledgerOf(source).id,
       };
       imports.push(imp);
       const csv = renderStatement(source, batch);
@@ -719,6 +876,15 @@ export function buildDemoSeed(today: string, seed: number = DEMO_SEED): DemoSeed
   const sampleCsv = renderStatement('discover', sampleRows);
   parseBack(sampleCsv, 'discover', sampleRows);
 
+  // 9. Linked banks (DEMO-SYNC.md). Chase checking and Amex sync after their
+  // cutover, the day after their last CSV row. Each account's synthetic feed
+  // is every row of its source as the bank reports it; the seed applies it
+  // through the real cutover split and planner and writes what a sync
+  // writes, then the feed holds one delivery per Sync now press.
+  const bank = buildLinkedBanks({
+    today, rows, ids, categories, engineRules, categoryId, ledgerAccounts, transactions,
+  });
+
   return {
     today,
     ownerId,
@@ -735,6 +901,13 @@ export function buildDemoSeed(today: string, seed: number = DEMO_SEED): DemoSeed
     settlements,
     settlementAllocations: allocations,
     statements,
+    ledgerAccounts,
+    bankCategoryMap: bank.bankCategoryMap,
+    bankConnections: bank.bankConnections,
+    bankAccounts: bank.bankAccounts,
+    syncSkippedRows: bank.syncSkippedRows,
+    bankItems: bank.bankItems,
+    bankStatements: bank.bankStatements,
     sampleStatement: {
       filename: `Discover-Statement-${today.replace(/-/g, '')}.csv`,
       csv: sampleCsv,
@@ -742,6 +915,275 @@ export function buildDemoSeed(today: string, seed: number = DEMO_SEED): DemoSeed
       overlapCount: sampleRows.filter((r) => r.daysAgo >= lastEnd).length,
     },
   };
+}
+
+// ---- Linked banks ----
+
+// The bank's own category for a row (Plaid's personal finance category,
+// primary level), for the rows no rule matches.
+const BANK_CATEGORY_MAP: [string, string][] = [['FOOD_AND_DRINK', 'Dining'], ['TRAVEL', 'Travel']];
+function bankCategoryOf(m: Merchant | null): string | null {
+  const kind = m?.split?.kind;
+  return kind === 'dining' || kind === 'groceries' ? 'FOOD_AND_DRINK' : kind === 'travel' ? 'TRAVEL' : null;
+}
+
+const LINKED = [
+  {
+    source: 'chase' as const, itemId: 'demo-item-chase', institutionId: 'demo_ins_chase', institutionName: 'Chase (demo)',
+    providerAccountId: 'demo-acct-chase-checking', name: 'Checking', mask: '4417', type: 'depository', subtype: 'checking',
+  },
+  {
+    source: 'amex' as const, itemId: 'demo-item-amex', institutionId: 'demo_ins_amex', institutionName: 'American Express (demo)',
+    providerAccountId: 'demo-acct-amex-card', name: 'Card', mask: '2093', type: 'credit', subtype: 'credit card',
+  },
+];
+
+function buildLinkedBanks(input: {
+  today: string;
+  rows: readonly RawRow[];
+  ids: Rng;
+  categories: DemoSeed['categories'];
+  engineRules: CategoryRule[];
+  categoryId: Record<string, string>;
+  ledgerAccounts: DemoSeed['ledgerAccounts'];
+  // Every CSV and manual row; synced rows are appended.
+  transactions: DemoSeed['transactions'];
+}) {
+  const { today, ids, transactions } = input;
+  const bankCategoryMap = BANK_CATEGORY_MAP.map(([plaidCategory, name], i) => ({
+    plaidCategory,
+    categoryId: input.categoryId[name],
+    createdAt: new Date(stamp(today, 119, 12).getTime() + i * 1000),
+  }));
+  const bankCategories = new Map(bankCategoryMap.map((m) => [m.plaidCategory, m.categoryId]));
+  const nonSplittable = new Set(input.categories.filter((c) => !c.isSplittable).map((c) => c.id));
+  const syncedAt = stamp(today, 1, 23);
+
+  const bankConnections: DemoSeed['bankConnections'] = [];
+  const bankAccounts: DemoSeed['bankAccounts'] = [];
+  const syncSkippedRows: DemoSeed['syncSkippedRows'] = [];
+  const bankItems: SyntheticItem[] = [];
+  const bankStatements: DemoSeed['bankStatements'] = {};
+
+  for (const linked of LINKED) {
+    const ledger = input.ledgerAccounts.find((l) => l.csvSource === linked.source)!;
+    const basis = ledger.cutoverBasis;
+    const csv = transactions.filter((t) => t.source === linked.source);
+    const cutover = defaultCutover(csv.reduce((max, t) => (t.date > max ? t.date : max), ''))!;
+    ledger.cutoverDate = cutover;
+    // Linked the evening before the cutover, Chase first: the cards list by
+    // link date, and two logins linked at the same instant had no order
+    // (2026-11-02: Amex jumped above Chase after a sync).
+    ledger.cutoverConfirmedAt = new Date(
+      stamp(today, Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${cutover}T00:00:00Z`)) / 86_400_000) + 1, 20).getTime() +
+        LINKED.indexOf(linked) * 15 * 60_000,
+    );
+
+    // As the bank reports a row: Chase checking dates by posting (its CSV
+    // too); Amex sends the purchase date and posts a day later. The held
+    // purchase arrives two days after its CSV date with no authorized date,
+    // as Capital One sends every row.
+    // An Amex purchase made yesterday or today posts the same day: the seed
+    // syncs at the end of yesterday and nothing posts after it.
+    const providerOf = (r: BankRow, pending = false): ProviderTransaction => {
+      const held = r.scripted === 'held';
+      const lag = held ? 2 : linked.source === 'amex' && r.daysAgo >= 2 ? 1 : 0;
+      const posted = dayToDate(today, r.daysAgo - lag);
+      const authorized = held ? null : dayToDate(today, r.daysAgo);
+      const providerTransactionId = `demo-txn-${r.id}`;
+      const bankCategory = r.bankCategory;
+      return {
+        providerTransactionId,
+        providerAccountId: linked.providerAccountId,
+        amountCents: r.cents * CENTS_TO_MINOR,
+        isoCurrencyCode: 'USD',
+        unofficialCurrencyCode: null,
+        date: posted,
+        authorizedDate: authorized,
+        descriptionRaw: r.description,
+        pending,
+        pendingTransactionId: null,
+        bankCategory,
+        raw: {
+          synthetic: true,
+          transaction_id: providerTransactionId,
+          account_id: linked.providerAccountId,
+          date: posted,
+          authorized_date: authorized,
+          amount: dollars(r.cents),
+          name: r.description,
+          pending,
+          personal_finance_category: bankCategory ? { primary: bankCategory } : null,
+        },
+      };
+    };
+    const history = input.rows
+      .filter((r) => r.source === linked.source)
+      .map((r) => providerOf({ ...r, bankCategory: bankCategoryOf(r.merchant) }));
+    const seeded: SyntheticDelivery = { added: history, modified: [], removed: [] };
+
+    // The cutover split and the planner, as commitAccountSync runs them, over
+    // the CSV rows it would read.
+    const pairedFrom = addDays(cutover, -3 * MATCH_DAYS);
+    const windowEnd = addDays(cutover, BOUNDARY_DAYS + MATCH_DAYS);
+    const csvRows = csv
+      .filter((t) => t.date >= pairedFrom && t.date < windowEnd)
+      .map((t) => ({ date: t.date, amountCents: t.amountCents, description: t.descriptionRaw }));
+    const split = splitAtCutover({
+      cutover: { date: cutover, basis },
+      added: seeded.added,
+      modified: [],
+      removed: [],
+      setAsideIds: new Set(),
+      setAsideRows: [],
+      csvRows,
+    });
+    const plan = planSync({
+      providerAccountId: linked.providerAccountId,
+      added: split.added,
+      modified: [],
+      removed: [],
+      stored: new Map(),
+      storedElsewhere: new Set(),
+      rules: input.engineRules,
+      nonSplittableCategoryIds: nonSplittable,
+      bankCategories,
+      dateBasis: basis,
+    });
+    if (plan.kind === 'stop') throw new Error(`Seed sync stopped: ${plan.reason}`);
+
+    const connectionId = ids.uuid();
+    const accountId = ids.uuid();
+    const rowIdOf = (providerTransactionId: string) => providerTransactionId.slice('demo-txn-'.length);
+    for (const p of plan.inserts) {
+      transactions.push({
+        ...syncedRowValues(p, accountId),
+        id: rowIdOf(p.providerTransactionId),
+        importId: null,
+        accountLabel: null,
+        dedupHash: null,
+        dedupExempt: false,
+        note: null,
+        createdAt: syncedAt,
+      });
+    }
+    for (const { row, reason } of split.setAside) {
+      syncSkippedRows.push({
+        bankAccountId: accountId,
+        providerTransactionId: row.providerTransactionId,
+        reason,
+        ...setAsideValues(row),
+        createdAt: syncedAt,
+      });
+    }
+
+    // The last statement before the cutover, by posted date, as the bank's
+    // rows give it: Amex is seeded verified against it, Chase checking is
+    // left for the visitor.
+    const from = addDays(cutover, -30);
+    const to = addDays(cutover, -1);
+    const inPeriod = history.filter((t) => !t.pending && t.date >= from && t.date <= to);
+    const statement = {
+      from,
+      to,
+      chargesCents: inPeriod.filter((t) => t.amountCents > 0).reduce((n, t) => n + t.amountCents, 0),
+      creditsCents: -inPeriod.filter((t) => t.amountCents < 0).reduce((n, t) => n + t.amountCents, 0),
+    };
+    bankStatements[linked.providerAccountId] = statement;
+    const verified = linked.source === 'amex';
+
+    bankConnections.push({
+      id: connectionId,
+      provider: 'synthetic',
+      providerItemId: linked.itemId,
+      institutionId: linked.institutionId,
+      institutionName: linked.institutionName,
+      accessTokenSealed: syntheticToken(linked.itemId),
+      status: 'active',
+      healthCheckedAt: syncedAt,
+      createdAt: ledger.cutoverConfirmedAt!,
+    });
+    bankAccounts.push({
+      id: accountId,
+      connectionId,
+      providerAccountId: linked.providerAccountId,
+      name: linked.name,
+      mask: linked.mask,
+      type: linked.type,
+      subtype: linked.subtype,
+      syncEnabled: true,
+      syncCursor: syntheticCursor(today, 0),
+      lastSyncedAt: syncedAt,
+      ledgerAccountId: ledger.id,
+      verifiedAt: verified ? new Date(ledger.cutoverConfirmedAt!.getTime() + 3_600_000) : null,
+      verification: verified
+        ? {
+            statement,
+            fetchedChargesCents: statement.chargesCents,
+            fetchedCreditsCents: statement.creditsCents,
+            excluded: [],
+            outcome: 'pass',
+          }
+        : null,
+      // Amex's review stays open for the visitor to answer the held row.
+      boundaryReviewedAt: verified ? null : syncedAt,
+      createdAt: ledger.cutoverConfirmedAt!,
+    });
+
+    bankItems.push({
+      itemId: linked.itemId,
+      institutionId: linked.institutionId,
+      institutionName: linked.institutionName,
+      accounts: [
+        {
+          providerAccountId: linked.providerAccountId,
+          persistentAccountId: null,
+          name: linked.name,
+          officialName: null,
+          mask: linked.mask,
+          type: linked.type,
+          subtype: linked.subtype,
+          feed: { seeded, presses: pressesFor(linked.source, today, providerOf, input.rows.find((r) => r.scripted === 'split')!) },
+        },
+      ],
+    });
+  }
+  return { bankCategoryMap, bankConnections, bankAccounts, syncSkippedRows, bankItems, bankStatements };
+}
+
+// What each Sync now press brings, all dated today (DEMO-SYNC.md, decision
+// C): on Amex, a purchase and a pending dinner; the dinner posting with the
+// tip; a refund; then the bank changing the amount of the split flight.
+// Chase checking brings one purchase. After these, nothing.
+type BankRow = { id: string; daysAgo: number; cents: number; description: string; bankCategory: string | null; scripted?: RawRow['scripted'] };
+
+function pressesFor(
+  source: 'chase' | 'amex',
+  today: string,
+  providerOf: (r: BankRow, pending?: boolean) => ProviderTransaction,
+  flight: RawRow,
+): SyntheticDelivery[] {
+  const row = (id: string, cents: number, description: string, bankCategory: string | null): BankRow => ({
+    id: `${today}-${id}`, daysAgo: 0, cents, description, bankCategory,
+  });
+  const none = { modified: [], removed: [] };
+  if (source === 'chase') {
+    const card = `${today.slice(5, 7)}/${today.slice(8, 10)}`;
+    return [{ added: [providerOf(row('coffee', 645, `DUNKIN #348811 RIVERTON IL                ${card}`, 'FOOD_AND_DRINK'))], ...none }];
+  }
+  // The dinner: no rule names the bistro, so the bank's category files it.
+  const bistro = 'NORTH BRANCH BISTRO  RIVERTON            IL';
+  const pending = providerOf(row('dinner', 6_420, bistro, 'FOOD_AND_DRINK'), true);
+  const posted = { ...providerOf(row('dinner-posted', 7_704, bistro, 'FOOD_AND_DRINK')), pendingTransactionId: pending.providerTransactionId };
+  const groceries = 'WHOLEFDS RVT 10441  RIVERTON            IL';
+  // The airline re-prices the split flight (a seat change).
+  const changed = providerOf({ ...flight, cents: flight.cents + 3_500, bankCategory: bankCategoryOf(flight.merchant) });
+  return [
+    { added: [providerOf(row('groceries', 3_187, groceries, 'FOOD_AND_DRINK')), pending], ...none },
+    { added: [posted], ...none },
+    { added: [providerOf(row('refund', -1_299, groceries, 'FOOD_AND_DRINK'))], ...none },
+    { added: [], modified: [changed], removed: [] },
+  ];
 }
 
 function distributePercents(n: number): number[] {

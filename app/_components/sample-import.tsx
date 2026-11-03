@@ -15,7 +15,8 @@ import { ImportForm } from '@/app/_components/import-form';
 
 // Demo only: one click fetches the bundled sample statement and opens the real
 // import flow on it (preview -> confirm), so a visitor needs no CSV of their
-// own. Also opened by the orientation strip's ?demo=sample-import link.
+// own. Also opened by a ?demo=sample-import link, which the orientation strip
+// carried until bank sync took its place (2026-11-02); kept so such links work.
 export function SampleImportButton() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -40,8 +41,8 @@ export function SampleImportButton() {
     }
   }
 
-  // Arriving from the orientation strip: open once, then drop the param so a
-  // reload does not reopen it.
+  // Arriving from a ?demo=sample-import link: open once, then drop the param so
+  // a reload does not reopen it.
   const fromStrip = searchParams.get('demo') === 'sample-import';
   useEffect(() => {
     if (!fromStrip) return;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compareToStatement, type FetchedRow } from './verify';
+import { compareToStatement, withTypo, type FetchedRow } from './verify';
 
 const r = (key: string, postedDate: string, amountCents: number): FetchedRow => ({ key, postedDate, amountCents, description: key });
 const rows = [
@@ -39,5 +39,15 @@ describe('compareToStatement', () => {
 
   it('verifies nothing from an empty period', () => {
     expect(compareToStatement({ rows: [], statement: { ...statement, chargesCents: 0, creditsCents: 0 }, excludedKeys: new Set(), confirmed: true }).passed).toBe(false);
+  });
+});
+
+describe('withTypo', () => {
+  it('swaps two adjacent dollar digits, never a comma, else moves the last cent', () => {
+    expect(withTypo('4,715.18')).toBe('4,751.18');
+    expect(withTypo('4,111.18')).toBe('4,111.19');
+    expect(withTypo('1,211.00')).toBe('1,121.00');
+    expect(withTypo('5.00')).toBe('5.01');
+    expect(withTypo('0.09')).toBe('0.00');
   });
 });

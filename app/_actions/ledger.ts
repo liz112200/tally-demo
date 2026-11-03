@@ -81,7 +81,6 @@ export async function declineReissued(accountId: unknown): Promise<ActionResult>
 
 export async function answerHeldRow(accountId: unknown, providerTransactionId: unknown, answer: unknown): Promise<ActionResult> {
   await requireUser();
-  if (isDemoMode()) return { error: NOT_IN_DEMO };
   const id = uuid.safeParse(accountId);
   const txn = z.string().min(1).max(200).safeParse(providerTransactionId);
   const which = z.enum(['same', 'released']).safeParse(answer);
@@ -96,7 +95,6 @@ export async function answerHeldRow(accountId: unknown, providerTransactionId: u
 
 export async function finishBoundaryReview(accountId: unknown): Promise<ActionResult> {
   await requireUser();
-  if (isDemoMode()) return { error: NOT_IN_DEMO };
   const id = uuid.safeParse(accountId);
   if (!id.success) return { error: 'Invalid request.' };
   return attempt('finishBoundaryReview', async () => {
@@ -129,7 +127,6 @@ function statementOf(input: z.infer<typeof statementSchema>) {
 // Compare without recording: what the page shows as the owner fills it in.
 export async function checkAgainstStatement(accountId: unknown, statement: unknown): Promise<VerificationCheck> {
   await requireUser();
-  if (isDemoMode()) return { error: NOT_IN_DEMO };
   const id = uuid.safeParse(accountId);
   const parsed = statementSchema.safeParse(statement);
   if (!id.success || !parsed.success) return { error: 'Enter the statement period and both totals.' };
@@ -158,7 +155,6 @@ export async function checkAgainstStatement(accountId: unknown, statement: unkno
 // uncounted until the sign mapping is fixed and the check passes.
 export async function recordStatementCheck(accountId: unknown, statement: unknown, outcome: unknown): Promise<ActionResult> {
   await requireUser();
-  if (isDemoMode()) return { error: NOT_IN_DEMO };
   const id = uuid.safeParse(accountId);
   const parsed = statementSchema.safeParse(statement);
   const which = z.enum(['pass', 'fail']).safeParse(outcome);

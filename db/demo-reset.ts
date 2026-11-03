@@ -19,7 +19,8 @@ import postgres from 'postgres';
 import { del, list, put } from '@vercel/blob';
 import * as schema from './schema';
 import { DEMO_BLOB_MARKER, DEMO_DB_COMMENT, DEMO_DB_COMMENT_QUERY, demoStoreProblems } from './demo-guard';
-import { buildDemoSeed } from '../lib/demo/seed';
+import { TEST_MARKER } from './test/target';
+import { buildDemoSeed, type DemoSeed } from '../lib/demo/seed';
 
 // Every app table, wiped together. share_links included: demo visitors'
 // published snapshots go with everything else.
@@ -27,8 +28,61 @@ const TABLES = [
   'settlement_allocations', 'settlements', 'receipt_item_assignments',
   'receipt_items', 'receipt_images', 'receipts', 'split_shares', 'splits',
   'transactions', 'imports', 'categorization_rules', 'categories', 'persons',
-  'share_links', 'ledger_accounts', 'bank_category_map',
+  'share_links', 'ledger_accounts', 'bank_category_map', 'sync_skipped_rows',
+  'bank_accounts', 'bank_connections',
 ];
+
+type Tx = Parameters<Parameters<ReturnType<typeof drizzle<typeof schema>>['transaction']>[0]>[0];
+
+// Wipe every app table, inside the caller's transaction, after reading the
+// database's marker: only the demo's or the test suite's.
+export async function wipeDemoTables(tx: Tx): Promise<void> {
+  const [marker] = (await tx.execute(sql.raw(DEMO_DB_COMMENT_QUERY))) as unknown as { value: string | null }[];
+  if (marker?.value !== DEMO_DB_COMMENT && marker?.value !== TEST_MARKER) {
+    throw new Error('Refusing to wipe: the database carries neither the demo nor the test marker');
+  }
+  await tx.execute(sql.raw(`TRUNCATE ${TABLES.join(', ')} RESTART IDENTITY CASCADE`));
+}
+
+// Wipe every app table and write the seed, inside the caller's transaction.
+// Destructive, so it reads the database's marker itself first: only the
+// demo's database, or the test suite's (db/**/*.dbtest.ts writes the seed to
+// check the demo's bank sync against the real commit path). Production
+// carries neither and can never acquire one (db/demo-mark.ts, db/test/
+// global-setup.ts).
+export async function writeDemoSeed(tx: Tx, seed: DemoSeed, receiptUrls: ReadonlyMap<string, string>): Promise<void> {
+  await wipeDemoTables(tx);
+
+  const insert = async <T extends Record<string, unknown>>(table: Parameters<typeof tx.insert>[0], rows: T[]) => {
+    for (let i = 0; i < rows.length; i += 500) {
+      if (rows.length > 0) await tx.insert(table).values(rows.slice(i, i + 500) as never);
+    }
+  };
+  await insert(schema.persons, seed.persons);
+  await insert(schema.categories, seed.categories);
+  await insert(schema.categorizationRules, seed.rules);
+  await insert(schema.bankCategoryMap, seed.bankCategoryMap);
+  await insert(schema.ledgerAccounts, seed.ledgerAccounts);
+  await insert(schema.bankConnections, seed.bankConnections);
+  await insert(schema.bankAccounts, seed.bankAccounts);
+  await insert(schema.imports, seed.imports);
+  await insert(schema.transactions, seed.transactions);
+  await insert(schema.syncSkippedRows, seed.syncSkippedRows);
+  await insert(schema.splits, seed.splits);
+  await insert(schema.splitShares, seed.splitShares);
+  await insert(
+    schema.receipts,
+    seed.receipts.map(({ image: _image, ...r }) => ({ ...r, blobUrl: receiptUrls.get(r.id)!, rawLlmResponse: null })),
+  );
+  await insert(
+    schema.receiptImages,
+    seed.receipts.map((r) => ({ receiptId: r.id, blobUrl: receiptUrls.get(r.id)!, position: 0, createdAt: r.createdAt })),
+  );
+  await insert(schema.receiptItems, seed.receiptItems);
+  await insert(schema.receiptItemAssignments, seed.receiptItemAssignments);
+  await insert(schema.settlements, seed.settlements);
+  await insert(schema.settlementAllocations, seed.settlementAllocations);
+}
 
 export async function resetDemo(env: {
   DATABASE_URL?: string;
@@ -65,33 +119,7 @@ export async function resetDemo(env: {
         value: string | null;
       }[];
       if (marker?.value !== DEMO_DB_COMMENT) throw new Error('Refusing to reset: database marker vanished');
-
-      await tx.execute(sql.raw(`TRUNCATE ${TABLES.join(', ')} RESTART IDENTITY CASCADE`));
-
-      const insert = async <T extends Record<string, unknown>>(table: Parameters<typeof tx.insert>[0], rows: T[]) => {
-        for (let i = 0; i < rows.length; i += 500) {
-          if (rows.length > 0) await tx.insert(table).values(rows.slice(i, i + 500) as never);
-        }
-      };
-      await insert(schema.persons, seed.persons);
-      await insert(schema.categories, seed.categories);
-      await insert(schema.categorizationRules, seed.rules);
-      await insert(schema.imports, seed.imports);
-      await insert(schema.transactions, seed.transactions);
-      await insert(schema.splits, seed.splits);
-      await insert(schema.splitShares, seed.splitShares);
-      await insert(
-        schema.receipts,
-        seed.receipts.map(({ image: _image, ...r }) => ({ ...r, blobUrl: urls.get(r.id)!, rawLlmResponse: null })),
-      );
-      await insert(
-        schema.receiptImages,
-        seed.receipts.map((r) => ({ receiptId: r.id, blobUrl: urls.get(r.id)!, position: 0, createdAt: r.createdAt })),
-      );
-      await insert(schema.receiptItems, seed.receiptItems);
-      await insert(schema.receiptItemAssignments, seed.receiptItemAssignments);
-      await insert(schema.settlements, seed.settlements);
-      await insert(schema.settlementAllocations, seed.settlementAllocations);
+      await writeDemoSeed(tx, seed, urls);
     });
   } catch (err) {
     // The new images never got rows; clear them so a failed reset leaks

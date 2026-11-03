@@ -7,6 +7,7 @@ import { LogOut } from 'lucide-react';
 import { signOut } from '@/app/_actions/auth';
 import { cn } from '@/lib/utils';
 import { ThemeToggle } from '@/app/_components/theme-toggle';
+import { navFor } from '@/lib/nav';
 
 // Wordmark glyph: four tally strokes and the diagonal fifth, in brass.
 function TallyMark() {
@@ -25,18 +26,6 @@ function TallyMark() {
     </svg>
   );
 }
-
-const NAV = [
-  { href: '/', label: 'Expenses' },
-  { href: '/insights', label: 'Insights' },
-  { href: '/people', label: 'People' },
-  { href: '/rules', label: 'Rules' },
-  { href: '/accounts', label: 'Accounts' },
-] as const;
-
-// Bank linking has no demo implementation until the synthetic provider
-// lands (BANK-SYNC.md, slice 8).
-const DEMO_HIDDEN = new Set<string>(['/accounts']);
 
 // `demo` comes from the server-rendered layout rather than useIsDemo, which is
 // false until mount: links hidden in the demo must be absent from the first
@@ -59,7 +48,7 @@ export function SiteHeader({ demo }: { demo: boolean }) {
           </span>
         </Link>
         <nav className="flex items-center gap-1 text-sm">
-          {NAV.filter(({ href }) => !(demo && DEMO_HIDDEN.has(href))).map(({ href, label }) => (
+          {navFor(demo).map(({ href, label }) => (
             <Link
               key={href}
               href={href}

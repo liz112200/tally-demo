@@ -2,15 +2,17 @@
 //
 // Never use `npm run db:migrate` for the demo: drizzle.config.ts reads
 // .env.local, which holds the owner's production database. This reads
-// .env.demo only and refuses unless the database carries the demo marker
-// (db/demo-mark.ts runs first, on the fresh database).
+// .env.demo, or .env.demo-local with DEMO_ENV=local (lib/demo/env-file.ts), and
+// refuses unless the database carries the demo marker (db/demo-mark.ts runs
+// first, on the fresh database).
 import { config } from 'dotenv';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import postgres from 'postgres';
 import { demoStoreProblems } from './demo-guard';
+import { demoEnvFile } from '../lib/demo/env-file';
 
-config({ path: '.env.demo', quiet: true });
+config({ path: demoEnvFile(), quiet: true });
 
 async function main() {
   const problems = await demoStoreProblems({

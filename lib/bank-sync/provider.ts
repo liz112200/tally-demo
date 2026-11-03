@@ -1,13 +1,14 @@
 // The bank-data provider as the rest of the app sees it (BANK-SYNC.md). Plaid
-// is one implementation; the demo's synthetic provider will be the second, so
-// nothing outside an implementation may depend on Plaid's wire format.
+// is one implementation; the demo's synthetic provider (lib/bank-sync/
+// synthetic/, DEMO-SYNC.md) is the second, so nothing outside an
+// implementation may depend on Plaid's wire format.
 //
 // Methods arrive with the slice that needs them: slice 1 links an Item and
 // lists its accounts; slice 2 adds transaction sync; slice 4 adds the Item's
 // health, update mode and removal.
 import type { AccessToken } from './access-token';
 
-export const BANK_PROVIDERS = ['plaid'] as const;
+export const BANK_PROVIDERS = ['plaid', 'synthetic'] as const;
 export type BankProviderName = (typeof BANK_PROVIDERS)[number];
 
 export type LinkToken = {

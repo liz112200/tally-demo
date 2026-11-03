@@ -366,6 +366,25 @@ export function planSync(input: {
   return { kind: 'apply', inserts, updates, counts };
 }
 
+// The columns a planned insert writes. Shared by the commit (db/queries.ts
+// commitAccountSync) and the demo seed, so the seed's synced rows are the
+// ones a sync writes.
+export function syncedRowValues(p: PlannedInsert, bankAccountId: string) {
+  return {
+    date: p.date,
+    amountCents: p.amountCents,
+    descriptionRaw: p.descriptionRaw,
+    merchantNormalized: p.merchantNormalized,
+    categoryId: p.categoryId,
+    categorySource: p.categorySource,
+    pending: p.pending,
+    source: 'plaid' as const,
+    bankAccountId,
+    providerTransactionId: p.providerTransactionId,
+    providerRaw: p.providerRaw,
+  };
+}
+
 // Every pending id the fetch's posted rows point at: the commit must read
 // those rows too.
 export function referencedPendingIds(added: readonly ProviderTransaction[]): string[] {

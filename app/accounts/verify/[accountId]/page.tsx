@@ -4,7 +4,10 @@ import { db } from '@/db/index';
 import { bankAccounts, bankConnections } from '@/db/schema';
 import { requireUser } from '@/app/_lib/session';
 import { isDemoMode } from '@/lib/demo-mode';
-import { VerifyForm } from '@/app/_components/verify-form';
+import { VerifyForm, type SampleStatement } from '@/app/_components/verify-form';
+import { currentDemoSeed } from '@/db/demo-bank';
+import { formatCents, toCents } from '@/lib/money';
+import { withTypo } from '@/lib/bank-sync/verify';
 
 export const metadata = { title: 'Verify an account · tally' };
 export const dynamic = 'force-dynamic';
@@ -13,7 +16,6 @@ export const dynamic = 'force-dynamic';
 // the account's synced rows count nowhere.
 export default async function VerifyAccountPage({ params }: { params: Promise<{ accountId: string }> }) {
   await requireUser();
-  if (isDemoMode()) notFound();
   const { accountId } = await params;
   if (!/^[0-9a-f-]{36}$/.test(accountId)) notFound();
   const [account] = await db
@@ -22,6 +24,7 @@ export default async function VerifyAccountPage({ params }: { params: Promise<{ 
       mask: bankAccounts.mask,
       type: bankAccounts.type,
       verifiedAt: bankAccounts.verifiedAt,
+      providerAccountId: bankAccounts.providerAccountId,
       institution: bankConnections.institutionName,
     })
     .from(bankAccounts)
@@ -30,6 +33,17 @@ export default async function VerifyAccountPage({ params }: { params: Promise<{ 
   if (!account) notFound();
   const label = `${account.institution ?? ''} ${account.name}${account.mask ? ` ••${account.mask}` : ''}`.trim();
   const card = account.type === 'credit';
+  // The demo has no paper statement; it offers the one its seed generated
+  // from the same bank rows (DEMO-SYNC.md).
+  let sample: SampleStatement | undefined;
+  if (isDemoMode()) {
+    const statement = (await currentDemoSeed())?.bankStatements[account.providerAccountId];
+    if (statement) {
+      const charges = formatCents(toCents(statement.chargesCents));
+      const credits = formatCents(toCents(statement.creditsCents));
+      sample = { from: statement.from, to: statement.to, charges, credits, chargesWithTypo: withTypo(charges) };
+    }
+  }
   return (
     <main className="mx-auto max-w-3xl px-6 py-8">
       <h1 className="text-xl font-semibold tracking-tight">Check {label} against a statement</h1>
@@ -43,6 +57,7 @@ export default async function VerifyAccountPage({ params }: { params: Promise<{ 
         accountId={accountId}
         chargesLabel={card ? 'Purchases + fees + interest' : 'Withdrawals'}
         creditsLabel={card ? 'Payments + credits' : 'Deposits'}
+        sample={sample}
       />
     </main>
   );

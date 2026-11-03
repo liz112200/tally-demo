@@ -179,6 +179,19 @@ export function splitAtCutover(input: {
   return out;
 }
 
+// The columns of a row set aside (sync_skipped_rows), shared by the commit
+// and the demo seed like syncedRowValues (plan.ts).
+export function setAsideValues(t: ProviderTransaction) {
+  return {
+    date: t.authorizedDate ?? t.date,
+    postedDate: t.date,
+    amountCents: t.amountCents,
+    descriptionRaw: t.descriptionRaw,
+    pending: t.pending,
+    providerRaw: t.raw,
+  };
+}
+
 // The default cutover: the day after the ledger account's last CSV row,
 // counting rows in undone imports (a later Restore must not bring back a CSV
 // row past the cutover). Null when it has no CSV rows.

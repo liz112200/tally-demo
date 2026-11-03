@@ -1,10 +1,12 @@
-// npm run demo:reset — rebuild the demo's data by hand. Reads .env.demo only
-// (never .env.local, which holds the owner's real credentials); the reset
-// itself refuses any store without the demo markers.
+// npm run demo:reset — rebuild the demo's data by hand. Reads .env.demo, or
+// .env.demo-local with DEMO_ENV=local (lib/demo/env-file.ts); never .env.local,
+// which holds the owner's real credentials. The reset itself refuses any
+// store without the demo markers.
 import { config } from 'dotenv';
 import { resetDemo } from './demo-reset';
+import { demoEnvFile } from '../lib/demo/env-file';
 
-config({ path: '.env.demo', quiet: true });
+config({ path: demoEnvFile(), quiet: true });
 
 resetDemo({
   DATABASE_URL: process.env.DATABASE_URL,

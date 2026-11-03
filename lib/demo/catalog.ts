@@ -49,9 +49,14 @@ export const CATEGORY_NAMES = [
   'Other',
   'Income',
   'Rent',
+  'Transfers',
 ] as const;
 
-export const NON_SPLITTABLE = ['Income', 'Rent'] as const;
+export const NON_SPLITTABLE = ['Income', 'Rent', 'Transfers'] as const;
+// Money moving between the owner's own accounts (card payments, savings):
+// left out of every spending total, as in the app (CLAUDE.md). The demo had
+// no Transfers until its bank sync brought card payments in (PHASE11.md).
+export const NOT_SPENDING = ['Transfers'] as const;
 
 // The categorization rules a visitor finds pre-seeded. The first seven are
 // the app's own seed rules; the rest cover the demo merchants.
@@ -80,6 +85,16 @@ export const DEMO_RULES: {
   { matchPattern: 'STATE FARM', matchType: 'substring', category: 'Insurance', priority: 100 },
   { matchPattern: 'COMED|XFINITY', matchType: 'regex', category: 'Utilities', priority: 100 },
   { matchPattern: 'AMC ', matchType: 'substring', category: 'Entertainment', priority: 100 },
+  // Rent and payroll, which the owner categorized by hand on the CSV rows;
+  // without rules the synced rows arrived uncategorized (DEMO-SYNC.md).
+  { matchPattern: 'OAKDALE PROPERTY', matchType: 'substring', category: 'Rent', priority: 100 },
+  { matchPattern: 'PAYROLL', matchType: 'substring', category: 'Income', priority: 100 },
+  {
+    matchPattern: 'E-PAYMENT|EPAYMENT|PAYMENT - THANK YOU|ONLINE TRANSFER TO SAV',
+    matchType: 'regex',
+    category: 'Transfers',
+    priority: 10,
+  },
 ];
 
 const TOWNS = ['RIVERTON IL', 'OAKDALE IL', 'LAKEVIEW IL', 'BRIDGEPORT IL'] as const;

@@ -31,6 +31,12 @@ Discover date bases were declared the same because the transaction-basis
 branch had not changed, while Capital One sends no authorized date and the
 branch always fell back to the posting date (2026-10-29).
 
+A check has to show that it looked. A test outside the directories a runner
+covers does not fail, it never runs (lib/test-locations.test.ts now fails on
+one); a denylist only knew the strings someone listed; the transaction scan
+first passed while reading none. An enumerating check asserts a minimum of
+what it found, and a new test is confirmed by the suite's count rising.
+
 ## Invariants
 
 These are decided. Do not reintroduce the alternatives.
@@ -441,14 +447,20 @@ These are decided. Do not reintroduce the alternatives.
   may not `ALTER DATABASE ... SET` a custom parameter.
 - Demo data is synthetic and deterministic: `lib/demo/seed.ts` builds the
   ledger for a (seed, day) through the real parsers, normalizer, rules, dedup
-  hash, split engine, FIFO allocator, and netting planner, so it can only
-  contain what the app itself would produce. Dates are relative to the reset
-  day. The reset (`db/demo-reset.ts`) uploads new receipt images, truncates
+  hash, split engine, FIFO allocator, netting planner, cutover split and sync
+  planner, so it can only contain what the app itself would produce. Dates
+  are relative to the reset day. Chase checking and Amex are linked to the
+  synthetic bank provider (DEMO-SYNC.md), whose Sync now runs the real commit
+  path; Discover stays CSV-only. A synthetic connection opens only in demo
+  mode and a Plaid one never does there (lib/bank-sync/select-provider.ts),
+  so the demo still holds no bank credential. The reset (`db/demo-reset.ts`) uploads new receipt images, truncates
   and rewrites every table in one transaction after rechecking the database
   marker, then deletes the previous images. It runs daily from Vercel Cron
   (declared in `vercel.ts` only for demo deployments; the route 404s
   elsewhere), from the banner's Reset button, and from `npm run demo:reset`.
-  Demo scripts read `.env.demo` only; `npm run db:migrate` must never be used
+  Demo scripts read `.env.demo`, or `.env.demo-local` (a local database and
+  a Blob store of its own, DEMO.md) with `DEMO_ENV=local`, and no other file;
+  `npm run db:migrate` must never be used
   for the demo, because `drizzle.config.ts` reads `.env.local`.
 - In demo mode receipt extraction is simulated (`lib/demo/canned-receipt.ts`):
   any image yields a sample dinner receipt sized to the transaction, so the

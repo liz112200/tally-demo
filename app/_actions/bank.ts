@@ -23,9 +23,11 @@ import { updateResultMessage, type UpdateOutcome } from '@/lib/bank-sync/update-
 import { duplicateOverrideAllowed, duplicateRefusal, findLinkedLogin } from '@/lib/bank-sync/link-guard';
 import { openToken, parseTokenKey, sealToken } from '@/lib/token-crypto';
 import { AccessToken } from '@/lib/bank-sync/access-token';
-import type { BankProvider } from '@/lib/bank-sync/provider';
+import type { BankProvider, BankProviderName } from '@/lib/bank-sync/provider';
 import { plaidConfigFromEnv } from '@/lib/bank-sync/plaid/client';
 import { createPlaidProvider } from '@/lib/bank-sync/plaid/provider';
+import { chooseProvider, openStoredToken } from '@/lib/bank-sync/select-provider';
+import { demoBankProvider } from '@/db/demo-bank';
 import { requireUser } from '@/app/_lib/session';
 
 export type LinkTokenState = { linkToken: string } | { error: string };
@@ -43,11 +45,26 @@ export type SyncResultState = { ok: true; lines: string[]; complete: boolean } |
 // room left for the commits.
 const SYNC_FETCH_BUDGET_MS = 240_000;
 
-// Built per call from the environment. The deployment guard (db/index.ts)
-// has already refused any Plaid environment that does not match the
-// database by the time a query module is loaded.
-function bankProvider(): BankProvider {
-  return createPlaidProvider(plaidConfigFromEnv(process.env));
+// Built per call from the environment: Plaid, or in the demo the synthetic
+// provider and never Plaid (lib/bank-sync/select-provider.ts). The deployment
+// guard (db/index.ts) has already refused any Plaid environment that does
+// not match the database, and any bank credential on the demo, by the time a
+// query module is loaded.
+async function bankProvider(): Promise<BankProvider> {
+  const demo = isDemoMode();
+  const synthetic = demo ? await demoBankProvider() : null;
+  return chooseProvider(demo, {
+    plaid: () => createPlaidProvider(plaidConfigFromEnv(process.env)),
+    synthetic: () => synthetic!,
+  });
+}
+
+// A stored connection's token: unsealed for Plaid, its own fixed value for a
+// synthetic login, each only where it belongs.
+function openStored(row: { provider: BankProviderName; providerItemId: string; accessTokenSealed: string }): AccessToken {
+  return openStoredToken(isDemoMode(), row, () =>
+    openToken(row.accessTokenSealed, parseTokenKey(process.env.BANK_TOKEN_KEY), row.providerItemId),
+  );
 }
 
 // Shown and logged the same way as a sync failure (lib/bank-sync/errors.ts).
@@ -63,11 +80,7 @@ async function openConnection(
 ): Promise<{ accessToken: AccessToken; providerItemId: string } | null> {
   const row = await getSealedAccessToken(connectionId);
   if (!row) return null;
-  const key = parseTokenKey(process.env.BANK_TOKEN_KEY);
-  return {
-    accessToken: new AccessToken(openToken(row.accessTokenSealed, key, row.providerItemId)),
-    providerItemId: row.providerItemId,
-  };
+  return { accessToken: openStored(row), providerItemId: row.providerItemId };
 }
 
 // Fetch the connection's accounts from the provider and store them. Shared by
@@ -78,7 +91,7 @@ async function loadAccounts(
 ): Promise<{ institutionName: string | null; accounts: number; added: number; unshared: number; reshared: number; reissued: number }> {
   const opened = await openConnection(connectionId);
   if (!opened) throw new Error('Connection not found.');
-  const result = await bankProvider().getAccounts(opened.accessToken);
+  const result = await (await bankProvider()).getAccounts(opened.accessToken);
   if (result.itemId !== opened.providerItemId) {
     throw new Error('The provider returned accounts for a different Item.');
   }
@@ -102,7 +115,7 @@ export async function createLinkToken(): Promise<LinkTokenState> {
     const owner = (await getPersons()).find((p) => p.isOwner);
     if (!owner) return { error: 'Owner person missing.' };
     // The owner's person id: stable, and not personal information.
-    const { linkToken } = await bankProvider().createLinkToken({ clientUserId: owner.id });
+    const { linkToken } = await (await bankProvider()).createLinkToken({ clientUserId: owner.id });
     return { linkToken };
   } catch (err) {
     logError('createLinkToken', err);
@@ -160,7 +173,7 @@ export async function completeLink(
   let connectionId: string;
   try {
     const key = parseTokenKey(process.env.BANK_TOKEN_KEY);
-    const { itemId, accessToken } = await bankProvider().exchangePublicToken(parsed.data);
+    const { itemId, accessToken } = await (await bankProvider()).exchangePublicToken(parsed.data);
     // One of the two places the plaintext is revealed: to seal it.
     const sealed = sealToken(accessToken.reveal(), key, itemId);
     ({ id: connectionId } = await insertBankConnection({
@@ -229,7 +242,7 @@ export async function createUpdateLinkToken(
     if (!opened) return { error: 'Connection not found.' };
     const owner = (await getPersons()).find((p) => p.isOwner);
     if (!owner) return { error: 'Owner person missing.' };
-    const { linkToken } = await bankProvider().createUpdateLinkToken(opened.accessToken, {
+    const { linkToken } = await (await bankProvider()).createUpdateLinkToken(opened.accessToken, {
       clientUserId: owner.id,
       accountSelection: selection.data,
     });
@@ -263,7 +276,7 @@ export async function completeUpdate(connectionId: unknown, accountSelection: un
       connectionId: id.data,
       providerItemId: opened.providerItemId,
       accessToken: opened.accessToken,
-      provider: bankProvider(),
+      provider: await bankProvider(),
     });
   } catch (err) {
     logError('completeUpdate: health', err);
@@ -302,7 +315,6 @@ export async function completeUpdate(connectionId: unknown, accountSelection: un
 // can be enabled; the database refuses anything else (CHECK constraint).
 export async function setAccountSync(accountId: unknown, enabled: unknown): Promise<LinkResultState> {
   await requireUser();
-  if (isDemoMode()) return { error: 'Bank linking is not available in the demo.' };
   const id = z.string().uuid().safeParse(accountId);
   const on = z.boolean().safeParse(enabled);
   if (!id.success || !on.success) return { error: 'Invalid request.' };
@@ -333,7 +345,6 @@ export async function setAccountSync(accountId: unknown, enabled: unknown): Prom
 // work; this checks the request, opens the token and refreshes the pages).
 export async function syncConnection(connectionId: unknown): Promise<SyncResultState> {
   await requireUser();
-  if (isDemoMode()) return { error: 'Bank linking is not available in the demo.' };
   const parsed = z.string().uuid().safeParse(connectionId);
   if (!parsed.success) return { error: 'Invalid connection.' };
   const result = await runConnectionSync(parsed.data, Date.now() + SYNC_FETCH_BUDGET_MS);
@@ -361,8 +372,7 @@ async function runConnectionSync(
 
   let accessToken: AccessToken;
   try {
-    const key = parseTokenKey(process.env.BANK_TOKEN_KEY);
-    accessToken = new AccessToken(openToken(target.accessTokenSealed, key, target.providerItemId));
+    accessToken = openStored(target);
   } catch (err) {
     logError('syncConnection: token', err);
     return { error: describeError(err) };
@@ -375,7 +385,7 @@ async function runConnectionSync(
     priority: r.priority,
     createdAt: r.createdAt,
   }));
-  return syncAccounts({ target, accessToken, provider: bankProvider(), rules, deadline });
+  return syncAccounts({ target, accessToken, provider: await bankProvider(), rules, deadline });
 }
 
 // "Check": read the login's health from Plaid now. Nothing syncs.
@@ -391,7 +401,7 @@ export async function checkConnection(connectionId: unknown): Promise<LinkResult
       connectionId: id.data,
       providerItemId: opened.providerItemId,
       accessToken: opened.accessToken,
-      provider: bankProvider(),
+      provider: await bankProvider(),
     });
     revalidatePath('/accounts');
     revalidatePath('/');
@@ -446,7 +456,7 @@ export async function removeLogin(connectionId: unknown, typedName: unknown): Pr
     }
     const opened = await openConnection(id.data);
     if (!opened) return { error: 'Connection not found.' };
-    const result = await removeConnection({ connectionId: id.data, accessToken: opened.accessToken, provider: bankProvider() });
+    const result = await removeConnection({ connectionId: id.data, accessToken: opened.accessToken, provider: await bankProvider() });
     if ('error' in result) return { error: result.providerDone ? result.error : `${result.error} Nothing was removed.` };
     pendingDeleted = result.pendingDeleted;
   } catch (err) {

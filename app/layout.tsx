@@ -4,7 +4,7 @@ import { Geist, Geist_Mono } from 'next/font/google';
 import { cn } from '@/lib/utils';
 import { SiteHeader } from '@/app/_components/site-header';
 import { DemoBanner } from '@/app/_components/demo-banner';
-import { DemoOrientation } from '@/app/_components/demo-orientation';
+import { DemoOrientationStrip } from '@/app/_components/demo-orientation-server';
 import { DEMO_SOURCE_URL, isDemoMode } from '@/lib/demo-mode';
 
 const geist = Geist({ subsets: ['latin'], variable: '--font-sans' });
@@ -40,7 +40,7 @@ export default function RootLayout({
       <body className="min-h-dvh" suppressHydrationWarning>
         {isDemoMode() && <DemoBanner sourceUrl={DEMO_SOURCE_URL} />}
         <SiteHeader demo={isDemoMode()} />
-        {isDemoMode() && <DemoOrientation />}
+        {isDemoMode() && <DemoOrientationStrip />}
         {children}
       </body>
     </html>

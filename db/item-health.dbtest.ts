@@ -204,7 +204,7 @@ describe('health during a sync', () => {
     const acc = await account();
     const provider = fakeProvider(acc, { syncTransactions: async () => ({ ...fetchOf([ptxn(acc)]), readiness: 'initial' }) });
     const { lines } = await runSync(acc, provider);
-    expect(lines).toEqual(['Test Card ••0000: 1 new. Plaid has sent only the last 30 days so far; sync again later for the rest.']);
+    expect(lines).toEqual(['Test Card ••0000: 1 new. The bank has sent only the last 30 days so far; sync again later for the rest.']);
   });
 
   it('an Item error the classifier does not know stays with its account, and the next account still syncs', async () => {
