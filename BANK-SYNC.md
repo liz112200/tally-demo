@@ -526,8 +526,10 @@ paying another at the same institution in synced data (Sandbox: Plaid Saving
    a warning when two connections hold the same account (same institution,
    name and mask): that is the same login linked twice, the budget mistake,
    and it should be visible rather than look like two accounts.
-5. **Scheduled sync.** Daily cron over all connections, each isolated so one
-   broken Item does not stop the others.
+5. **Scheduled sync.** Built 2026-11-03 (SCHEDULED-SYNC.md): a daily cron at
+   10:00 UTC over every active login, each isolated so one broken Item does
+   not stop the others, beside Sync now; Expenses names an account that has
+   not synced for 36 hours and says whether it needs the owner.
 6. **Authentication.** Built (AUTH.md): passkeys, the session checked by
    every page and action, Vercel protection kept on All Deployments as a
    second layer, owner only, no RLS (still deferred). The cron path is
@@ -800,8 +802,8 @@ Before slice 1:
 
 Before slice 5:
 
-8. Production `CRON_SECRET`:
-   `openssl rand -base64 32 | vercel env add CRON_SECRET production`.
+8. Production `CRON_SECRET`: done 2026-11-03, by the owner, Sensitive, its
+   own value (not the demo's), with a copy outside Vercel.
 
 Before slice 7 (never earlier, never locally):
 

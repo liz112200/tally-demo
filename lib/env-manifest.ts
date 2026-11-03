@@ -46,8 +46,8 @@ export const ENV_VARS: Record<string, EnvUse & { why: string }> = {
     why: 'OAuth institutions; Plaid is sent a redirect URI only when this is set, whatever the dashboard allows',
   },
   // Required wherever a cron is declared (vercel.ts): the demo's daily reset
-  // today; the app too once slice 5 schedules production syncs.
-  CRON_SECRET: { required: ['demo'], why: "authorizes Vercel Cron's requests" },
+  // and the app's daily sync.
+  CRON_SECRET: { required: ['app', 'demo'], why: "authorizes Vercel Cron's requests" },
   DEMO_MODE: { required: ['demo'], why: 'the demo runs as a synthetic user with synthetic data' },
   VERCEL_PROJECT_PRODUCTION_URL: {
     required: ['app'],

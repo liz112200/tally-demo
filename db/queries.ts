@@ -2397,6 +2397,23 @@ export type SyncTarget = {
   accounts: { id: string; providerAccountId: string; syncCursor: string | null; label: string }[];
 };
 
+// The logins the daily sync runs (SCHEDULED-SYNC.md): active, with at least
+// one account set to sync, in the order /accounts lists them. Paused and
+// removed logins are left out, as Sync now refuses them.
+export async function getScheduledLogins(): Promise<{ connectionId: string; label: string }[]> {
+  const rows = await db
+    .select({ id: bankConnections.id, institution: bankConnections.institutionName })
+    .from(bankConnections)
+    .where(
+      and(
+        eq(bankConnections.status, 'active'),
+        sql`exists (select 1 from ${bankAccounts} where ${bankAccounts.connectionId} = ${bankConnections.id} and ${bankAccounts.syncEnabled})`,
+      ),
+    )
+    .orderBy(asc(bankConnections.createdAt), asc(bankConnections.institutionName), asc(bankConnections.id));
+  return rows.map((r) => ({ connectionId: r.id, label: r.institution ?? 'Unknown institution' }));
+}
+
 // What a sync of one connection needs: its sealed token and its enabled
 // accounts with their cursors. Null when the connection does not exist or
 // was removed (its token is erased).
@@ -2834,6 +2851,10 @@ export type LinkedAccountGroupRow = {
   // Slice 7: the ledger account it syncs into, and whether its rows count.
   ledgerName: string | null;
   verifiedAt: Date | null;
+  // For the stale-sync line (lib/bank-sync/staleness.ts).
+  syncEnabled: boolean;
+  lastSyncError: string | null;
+  consentExpiresAt: Date | null;
 };
 
 // Accounts that appear in Expenses as Linked groups: every account holding
@@ -2851,6 +2872,9 @@ export async function getLinkedAccountGroups(): Promise<LinkedAccountGroupRow[]>
       itemErrorCode: bankConnections.itemErrorCode,
       ledgerName: ledgerAccounts.displayName,
       verifiedAt: bankAccounts.verifiedAt,
+      syncEnabled: bankAccounts.syncEnabled,
+      lastSyncError: bankAccounts.lastSyncError,
+      consentExpiresAt: bankConnections.consentExpiresAt,
     })
     .from(bankAccounts)
     .innerJoin(bankConnections, eq(bankConnections.id, bankAccounts.connectionId))
@@ -2861,7 +2885,7 @@ export async function getLinkedAccountGroups(): Promise<LinkedAccountGroupRow[]>
         sql`exists (select 1 from ${transactions} where ${transactions.bankAccountId} = ${bankAccounts.id})`,
       ),
     )
-    .orderBy(asc(bankConnections.institutionName), asc(bankAccounts.name));
+    .orderBy(asc(bankConnections.institutionName), asc(bankAccounts.name), asc(bankAccounts.id));
 }
 
 

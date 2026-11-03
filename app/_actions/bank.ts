@@ -4,11 +4,9 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import {
   getPersons,
-  getRules,
   getConnectionHealth,
   getLinkedLogins,
   getSealedAccessToken,
-  getSyncTarget,
   insertBankConnection,
   setConnectionPaused,
   saveConnectionAccounts,
@@ -16,18 +14,14 @@ import {
 } from '@/db/queries';
 import { isDemoMode } from '@/lib/demo-mode';
 import { postgresCode } from '@/lib/postgres-error';
-import { refreshItemHealth, removeConnection, syncAccounts, type SyncReport } from '@/db/bank-sync';
+import { refreshItemHealth, removeConnection } from '@/db/bank-sync';
 import { describeSyncError, syncErrorLogLine } from '@/lib/bank-sync/errors';
 import { healthClause, healthSentence, isGone } from '@/lib/bank-sync/item-health';
 import { updateResultMessage, type UpdateOutcome } from '@/lib/bank-sync/update-result';
 import { duplicateOverrideAllowed, duplicateRefusal, findLinkedLogin } from '@/lib/bank-sync/link-guard';
-import { openToken, parseTokenKey, sealToken } from '@/lib/token-crypto';
+import { parseTokenKey, sealToken } from '@/lib/token-crypto';
 import { AccessToken } from '@/lib/bank-sync/access-token';
-import type { BankProvider, BankProviderName } from '@/lib/bank-sync/provider';
-import { plaidConfigFromEnv } from '@/lib/bank-sync/plaid/client';
-import { createPlaidProvider } from '@/lib/bank-sync/plaid/provider';
-import { chooseProvider, openStoredToken } from '@/lib/bank-sync/select-provider';
-import { demoBankProvider } from '@/db/demo-bank';
+import { bankProvider, openStored, runConnectionSync } from '@/app/_lib/bank-run';
 import { requireUser } from '@/app/_lib/session';
 
 export type LinkTokenState = { linkToken: string } | { error: string };
@@ -44,28 +38,6 @@ export type SyncResultState = { ok: true; lines: string[]; complete: boolean } |
 // 300 s function limit (Hobby's maximum; app/accounts/page.tsx sets it) with
 // room left for the commits.
 const SYNC_FETCH_BUDGET_MS = 240_000;
-
-// Built per call from the environment: Plaid, or in the demo the synthetic
-// provider and never Plaid (lib/bank-sync/select-provider.ts). The deployment
-// guard (db/index.ts) has already refused any Plaid environment that does
-// not match the database, and any bank credential on the demo, by the time a
-// query module is loaded.
-async function bankProvider(): Promise<BankProvider> {
-  const demo = isDemoMode();
-  const synthetic = demo ? await demoBankProvider() : null;
-  return chooseProvider(demo, {
-    plaid: () => createPlaidProvider(plaidConfigFromEnv(process.env)),
-    synthetic: () => synthetic!,
-  });
-}
-
-// A stored connection's token: unsealed for Plaid, its own fixed value for a
-// synthetic login, each only where it belongs.
-function openStored(row: { provider: BankProviderName; providerItemId: string; accessTokenSealed: string }): AccessToken {
-  return openStoredToken(isDemoMode(), row, () =>
-    openToken(row.accessTokenSealed, parseTokenKey(process.env.BANK_TOKEN_KEY), row.providerItemId),
-  );
-}
 
 // Shown and logged the same way as a sync failure (lib/bank-sync/errors.ts).
 const describeError = describeSyncError;
@@ -357,35 +329,6 @@ export async function syncConnection(connectionId: unknown): Promise<SyncResultS
   revalidatePath('/accounts');
   revalidatePath('/');
   return { ok: true, lines: result.lines, complete: result.complete };
-}
-
-// Sync every enabled account of a login, for Sync now and for the sync a
-// successful Reconnect finishes with.
-async function runConnectionSync(
-  connectionId: string,
-  deadline: number,
-): Promise<SyncReport | { error: string } | { notRun: 'paused' | 'no_accounts' }> {
-  const target = await getSyncTarget(connectionId);
-  if (!target) return { error: 'Connection not found.' };
-  if (target.status === 'paused') return { notRun: 'paused' };
-  if (target.accounts.length === 0) return { notRun: 'no_accounts' };
-
-  let accessToken: AccessToken;
-  try {
-    accessToken = openStored(target);
-  } catch (err) {
-    logError('syncConnection: token', err);
-    return { error: describeError(err) };
-  }
-
-  const rules = (await getRules()).map((r) => ({
-    categoryId: r.categoryId,
-    matchPattern: r.matchPattern,
-    matchType: r.matchType,
-    priority: r.priority,
-    createdAt: r.createdAt,
-  }));
-  return syncAccounts({ target, accessToken, provider: await bankProvider(), rules, deadline });
 }
 
 // "Check": read the login's health from Plaid now. Nothing syncs.

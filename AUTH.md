@@ -95,12 +95,15 @@ passkeys in different managers, and neither offers the other's.
 
 ## Cron
 
-The cron route (slice 5, deferred) is exempt from the session and requires
+The cron routes are exempt from the session and require
 `Authorization: Bearer ${CRON_SECRET}`, compared in constant time; Vercel
 Cron sends exactly that header. Vercel's own cron calls pass deployment
 protection (tested 2026-10-19, BANK-SYNC.md). This slice adds the
 exemption and a test that the route refuses a request without the secret
-and accepts one with it, so slice 5 only adds the route's body.
+and accepts one with it; slice 5 added the daily sync's route
+(app/api/cron/sync, SCHEDULED-SYNC.md), and the demo's reset route uses the
+same check (`isCronRequest`) since 2026-11-03, when it was found comparing
+with `!==`.
 
 ## Demo and dev
 
@@ -187,5 +190,5 @@ owner".
   (AUTH_BOOTSTRAP_TOKEN now, the production Plaid secret from slice 7), the
   same objection that kept Neon keys out of tests. When built, it is a local
   pre-deploy script the owner runs with a token on their own machine.
-- The cron route itself is slice 5; this slice adds its exemption and the
-  `CRON_SECRET` check (`isCronRequest`), tested as a function.
+- The cron route itself came in slice 5 (SCHEDULED-SYNC.md); this slice
+  added its exemption and the `CRON_SECRET` check (`isCronRequest`).

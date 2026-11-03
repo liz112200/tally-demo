@@ -1,6 +1,6 @@
 import 'server-only';
 // One sync of a connection's enabled accounts: the loop behind "Sync now"
-// (app/_actions/bank.ts) and, from slice 5, the cron. It starts by reading
+// (app/_actions/bank.ts) and the daily sync (app/api/cron/sync). It starts by reading
 // the Item's health; a login that needs the owner is not fetched at all.
 // Per account: fetch all its changes with no transaction open, then commit
 // rows and cursor together under the connection's lock (commitAccountSync).

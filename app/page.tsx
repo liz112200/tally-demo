@@ -17,6 +17,8 @@ import { TransactionTable } from '@/app/_components/transaction-table';
 import { ExpensesToolbar } from '@/app/_components/expense-dialogs';
 import { isDemoMode } from '@/lib/demo-mode';
 import { notSyncingReason } from '@/lib/bank-sync/accounts-view';
+import { staleLines } from '@/lib/bank-sync/staleness';
+import { AlertTriangle, Info } from 'lucide-react';
 import type { SplitSummary } from '@/app/_components/split-editor';
 import { requireUser } from '@/app/_lib/session';
 
@@ -56,6 +58,24 @@ export default async function Home() {
       notSyncingReason(a, a) ??
       (a.verifiedAt === null ? { text: 'awaiting verification; rows not counted', needsOwner: true } : null),
   }));
+  // Accounts that have gone quiet (SCHEDULED-SYNC.md), named with why. Not in
+  // the demo, whose data resets daily and has no scheduled sync.
+  const stale = isDemoMode()
+    ? []
+    : staleLines(
+        linkedAccounts.map((a) => ({
+          label: a.ledgerName ?? (a.mask ? `${a.name} ••${a.mask}` : a.name),
+          institution: a.institutionName ?? 'The bank',
+          connectionStatus: a.status,
+          itemErrorCode: a.itemErrorCode,
+          consentExpiresAt: a.consentExpiresAt,
+          syncEnabled: a.syncEnabled,
+          unshared: a.unsharedAt !== null,
+          lastSyncedAt: a.lastSyncedAt,
+          lastSyncError: a.lastSyncError,
+        })),
+        new Date(),
+      );
   // The grouping lib works in plain strings; format the upload timestamp
   // to its calendar date here rather than shipping Dates to the client.
   const importGroups = imports.map(({ importedAt, ...imp }) => ({
@@ -140,6 +160,33 @@ export default async function Home() {
         </div>
         <ExpensesToolbar categories={categoryList} demo={isDemoMode()} />
       </div>
+      {stale.length > 0 && (
+        <ul className="mb-4 space-y-1.5 text-xs">
+          {stale.map((line, i) => (
+            <li
+              key={i}
+              role="status"
+              className={
+                line.kind === 'transient'
+                  ? 'flex items-start gap-1.5 rounded-lg border px-3 py-2 text-muted-foreground'
+                  : 'flex items-start gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-amber-900 dark:text-amber-200'
+              }
+            >
+              {line.kind === 'transient' ? (
+                <Info aria-hidden className="mt-px size-3.5 shrink-0" />
+              ) : (
+                <AlertTriangle aria-hidden className="mt-px size-3.5 shrink-0" />
+              )}
+              <span>
+                {line.text}{' '}
+                <a href="/accounts" className="underline underline-offset-2">
+                  Accounts
+                </a>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
       {/* useTableState reads useSearchParams, which needs a Suspense
           boundary to prerender; params resolve client-side on hydration. */}
       <Suspense>

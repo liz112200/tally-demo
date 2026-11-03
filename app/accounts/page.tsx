@@ -308,6 +308,16 @@ export default async function AccountsPage() {
                 ? 'Sandbox: Items are free here.'
                 : `Items used: ${itemsUsed(connections)} of ${ITEM_BUDGET} on Plaid's Trial, removed logins included. Plaid's dashboard is the authority.`}
           </p>
+          {!demo && configured && (
+            // What Sync now can bring (SCHEDULED-SYNC.md): /transactions/sync
+            // reads what Plaid has stored; Plaid checks each bank on its own
+            // schedule, so "no changes" soon after a sync is normal.
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Every login syncs daily around 10:00 UTC, and Sync now syncs it at once. Both bring what Plaid has found
+              since the last sync; Plaid checks each bank one to four times a day, so a second sync soon after usually
+              says &ldquo;no changes&rdquo;. That is normal.
+            </p>
+          )}
         </div>
         {demo ? (
           <p className="text-xs text-muted-foreground">Linking a real bank is not available in the demo.</p>

@@ -7,6 +7,7 @@ import { wipeDemoTables, writeDemoSeed } from './demo-reset';
 import { boundaryReview, lastCsvDates } from './ledger';
 import { buildDemoSeed, type DemoSeed } from '@/lib/demo/seed';
 import { syncConnection } from '@/app/_actions/bank';
+import { runScheduledSync } from '@/app/_lib/scheduled-sync';
 import { answerHeldRow, checkAgainstStatement, recordStatementCheck } from '@/app/_actions/ledger';
 import { formatCents, toCents } from '@/lib/money';
 
@@ -113,6 +114,20 @@ describe('the demo bank', () => {
     }
     expect(rows.find((r) => r.description.includes('OAKDALE PROPERTY'))?.category).toBe('Rent');
     expect(rows.find((r) => r.description.includes('PAYROLL'))?.category).toBe('Income');
+  });
+
+  it('the daily sync runs every active login through the same sync, and skips a paused one', async () => {
+    // The route is a 404 on the demo; its runner is the same code, and the
+    // synthetic bank drives it end to end here (SCHEDULED-SYNC.md).
+    await reseed();
+    const first = await runScheduledSync(Date.now() + 60_000);
+    expect(first.map((o) => [o.label, o.result, o.lines])).toEqual([
+      ['Chase (demo)', 'synced', ['Checking ••4417: 1 new.']],
+      ['American Express (demo)', 'synced', ['Card ••2093: 2 new (1 pending).']],
+    ]);
+    await db.update(bankConnections).set({ status: 'paused' }).where(eq(bankConnections.id, login('Chase').id));
+    const second = await runScheduledSync(Date.now() + 60_000);
+    expect(second.map((o) => [o.label, o.result, o.lines])).toEqual([['American Express (demo)', 'synced', ['Card ••2093: 1 posted.']]]);
   });
 
   it('applies one of two presses made at once; the other finds it done', async () => {

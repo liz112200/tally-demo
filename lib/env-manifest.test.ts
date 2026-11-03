@@ -66,6 +66,7 @@ describe('missingEnvironment', () => {
     PLAID_SECRET: 's',
     PLAID_ENV: 'production',
     PLAID_REDIRECT_URI: 'https://example.vercel.app/accounts/oauth',
+    CRON_SECRET: 'c',
   };
   const demo = {
     VERCEL_ENV: 'production',
@@ -87,6 +88,8 @@ describe('missingEnvironment', () => {
     ]);
     expect(missingEnvironment({ ...app, AUTH_BOOTSTRAP_TOKEN: ' ' })).toHaveLength(1);
     expect(missingEnvironment({ ...demo, CRON_SECRET: undefined })).toEqual(["CRON_SECRET is not set (authorizes Vercel Cron's requests)."]);
+    // The app's daily sync (SCHEDULED-SYNC.md) needs it too.
+    expect(missingEnvironment({ ...app, CRON_SECRET: undefined })).toEqual(["CRON_SECRET is not set (authorizes Vercel Cron's requests)."]);
   });
 
   it('accepts either Blob variable on the app, and requires one', () => {
