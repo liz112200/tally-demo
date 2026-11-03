@@ -225,6 +225,13 @@
       "when": 1793720044706,
       "tag": "0031_ledger_closing_days",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1793731458899,
+      "tag": "0032_ledger_statements",
+      "breakpoints": true
     }
   ]
 }

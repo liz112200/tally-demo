@@ -376,6 +376,35 @@ export const ledgerClosingDays = pgTable(
   ],
 );
 
+// A statement of a ledger account as the bank issued it (STATEMENT-CYCLES.md):
+// its closing date, and when known its period's first day and the next
+// closing date it printed. Added by a passing statement check and by the
+// owner from their statements (one, or a pasted list of closing dates, whose
+// starts follow from the closing before). The truth for every cycle it
+// covers; only the current cycle's end is ever projected, from these.
+// `starts_new_cycle` marks the first statement after the issuer changed the
+// closing day, so earlier closings stop counting toward the projection.
+export const ledgerStatements = pgTable(
+  'ledger_statements',
+  {
+    ledgerAccountId: uuid('ledger_account_id')
+      .notNull()
+      .references(() => ledgerAccounts.id, { onDelete: 'cascade' }),
+    closingDate: date('closing_date', { mode: 'string' }).notNull(),
+    periodStart: date('period_start', { mode: 'string' }),
+    nextClosingDate: date('next_closing_date', { mode: 'string' }),
+    startsNewCycle: boolean('starts_new_cycle').notNull().default(false),
+    source: text('source').$type<'verification' | 'owner'>().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ledgerAccountId, table.closingDate] }),
+    check('ledger_statements_source', sql`${table.source} in ('verification', 'owner')`),
+    check('ledger_statements_period', sql`${table.periodStart} is null or ${table.periodStart} <= ${table.closingDate}`),
+    check('ledger_statements_next', sql`${table.nextClosingDate} is null or ${table.nextClosingDate} > ${table.closingDate}`),
+  ],
+);
+
 // One row per CSV upload batch. filename is the original upload name; NULL
 // identifies the synthetic "Backfilled <source>" imports created by
 // migration 0008 for pre-phase-7 rows (real uploads always carry a name).

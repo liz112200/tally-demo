@@ -1,7 +1,7 @@
 import 'server-only';
 import { and, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import { db } from './index';
-import { bankAccounts, bankConnections, imports, ledgerAccounts, syncSkippedRows, transactions } from './schema';
+import { bankAccounts, bankConnections, imports, ledgerAccounts, ledgerStatements, syncSkippedRows, transactions } from './schema';
 import { getRules, lockConnection, SYNCABLE_ACCOUNT_TYPES, type Tx } from './queries';
 import { BOUNDARY_DAYS, MATCH_DAYS, addDays, cutoverProblem, defaultCutover, pairWithCsv } from '@/lib/bank-sync/cutover';
 import { categorize } from '@/lib/categorize';
@@ -474,21 +474,64 @@ export async function verificationRows(accountId: string, from: string, to: stri
   ].sort((a, b) => a.postedDate.localeCompare(b.postedDate));
 }
 
+// A passing check also records its statement period (STATEMENT-CYCLES.md), so
+// every check adds to the account's history rather than replacing it.
 export async function recordVerification(
   accountId: string,
-  outcome: { passed: boolean; record: Record<string, unknown> },
+  outcome: { passed: boolean; record: Record<string, unknown>; period?: { from: string; to: string } },
 ): Promise<boolean> {
-  const updated = await db
-    .update(bankAccounts)
-    .set(
-      outcome.passed
-        ? { verifiedAt: sql`now()`, verification: outcome.record }
-        : { verifiedAt: null, verification: outcome.record, syncEnabled: false },
-    )
-    .where(eq(bankAccounts.id, accountId))
-    .returning({ id: bankAccounts.id });
-  return updated.length > 0;
+  return db.transaction(async (tx) => {
+    const updated = await tx
+      .update(bankAccounts)
+      .set(
+        outcome.passed
+          ? { verifiedAt: sql`now()`, verification: outcome.record }
+          : { verifiedAt: null, verification: outcome.record, syncEnabled: false },
+      )
+      .where(eq(bankAccounts.id, accountId))
+      .returning({ id: bankAccounts.id, ledgerAccountId: bankAccounts.ledgerAccountId });
+    const [account] = updated;
+    if (account && outcome.passed && outcome.period && account.ledgerAccountId) {
+      await recordStatements(account.ledgerAccountId, [{ closingDate: outcome.period.to, periodStart: outcome.period.from }], 'verification', tx);
+    }
+    return updated.length > 0;
+  });
 }
+
+// Record statements. A closing already recorded keeps what it knew and gains
+// what it did not: a period start or a printed next closing is never cleared
+// by a later entry that lacks it (a pasted list carries only closing dates),
+// a change-of-cycle mark is never cleared, and the first source stays.
+export async function recordStatements(
+  ledgerAccountId: string,
+  statements: { closingDate: string; periodStart?: string | null; nextClosingDate?: string | null; startsNewCycle?: boolean }[],
+  source: 'verification' | 'owner',
+  conn: Tx | typeof db = db,
+): Promise<void> {
+  if (statements.length === 0) return;
+  await conn
+    .insert(ledgerStatements)
+    .values(
+      statements.map((s) => ({
+        ledgerAccountId,
+        closingDate: s.closingDate,
+        periodStart: s.periodStart ?? null,
+        nextClosingDate: s.nextClosingDate ?? null,
+        startsNewCycle: s.startsNewCycle ?? false,
+        source,
+      })),
+    )
+    .onConflictDoUpdate({
+      target: [ledgerStatements.ledgerAccountId, ledgerStatements.closingDate],
+      set: {
+        periodStart: sql`coalesce(excluded.period_start, ${ledgerStatements.periodStart})`,
+        nextClosingDate: sql`coalesce(excluded.next_closing_date, ${ledgerStatements.nextClosingDate})`,
+        startsNewCycle: sql`${ledgerStatements.startsNewCycle} or excluded.starts_new_cycle`,
+      },
+    });
+}
+
+
 
 // Accounts of a login with what /accounts shows for slice 7.
 export async function ledgerStateFor(accountIds: string[]) {

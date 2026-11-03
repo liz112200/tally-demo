@@ -29,7 +29,7 @@ const TABLES = [
   'receipt_items', 'receipt_images', 'receipts', 'split_shares', 'splits',
   'transactions', 'imports', 'categorization_rules', 'categories', 'persons',
   'share_links', 'ledger_accounts', 'bank_category_map', 'sync_skipped_rows',
-  'bank_accounts', 'bank_connections', 'ledger_closing_days',
+  'bank_accounts', 'bank_connections', 'ledger_statements',
 ];
 
 type Tx = Parameters<Parameters<ReturnType<typeof drizzle<typeof schema>>['transaction']>[0]>[0];
@@ -63,6 +63,7 @@ export async function writeDemoSeed(tx: Tx, seed: DemoSeed, receiptUrls: Readonl
   await insert(schema.categorizationRules, seed.rules);
   await insert(schema.bankCategoryMap, seed.bankCategoryMap);
   await insert(schema.ledgerAccounts, seed.ledgerAccounts);
+  await insert(schema.ledgerStatements, seed.ledgerStatements);
   await insert(schema.bankConnections, seed.bankConnections);
   await insert(schema.bankAccounts, seed.bankAccounts);
   await insert(schema.imports, seed.imports);

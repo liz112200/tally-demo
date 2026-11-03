@@ -222,6 +222,11 @@ describe('the linked banks', () => {
     }
     expect(amex.account.verifiedAt).not.toBeNull();
     expect(chase.account.verifiedAt).toBeNull();
+    // A passed statement check records its statement, as the app does.
+    const amexStatement = seed.bankStatements[amex.account.providerAccountId];
+    expect(seed.ledgerStatements).toEqual([
+      expect.objectContaining({ ledgerAccountId: amex.ledger.id, closingDate: amexStatement.to, periodStart: amexStatement.from, source: 'verification' }),
+    ]);
   });
 
   it('splits a synced Amex flight, which the fourth press changes', () => {

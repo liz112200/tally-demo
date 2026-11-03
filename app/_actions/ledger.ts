@@ -6,6 +6,7 @@ import {
   adoptReissuedAccount,
   dismissBoundaryReview,
   mapAccountToLedger,
+  recordStatements,
   recordVerification,
   rejectReissuedAccount,
   resolveHeldRow,
@@ -15,8 +16,8 @@ import type { ActionResult } from '@/lib/action-result';
 import { compareToStatement, type VerificationResult } from '@/lib/bank-sync/verify';
 import { isDemoMode } from '@/lib/demo-mode';
 import { parseDollars } from '@/lib/money';
-import { EVERY_STATEMENT, ordinal } from '@/lib/statement-cycles';
-import { deleteClosingDay, upsertClosingDay } from '@/db/statement-cycles';
+import { parseClosingDates } from '@/lib/statement-cycles';
+import { deleteStatement } from '@/db/statement-cycles';
 import { requireUser } from '@/app/_lib/session';
 import { attempt } from './attempt';
 
@@ -178,7 +179,7 @@ export async function recordStatementCheck(accountId: unknown, statement: unknow
       excluded: compared.excluded.map((r) => ({ postedDate: r.postedDate, amountCents: r.amountCents, description: r.description })),
       outcome: which.data,
     };
-    if (!(await recordVerification(id.data, { passed: which.data === 'pass', record }))) return { error: 'Account not found.' };
+    if (!(await recordVerification(id.data, { passed: which.data === 'pass', record, period: { from: s.from, to: s.to } }))) return { error: 'Account not found.' };
     refresh();
     return which.data === 'pass'
       ? { ok: true, message: 'Verified against the statement. This account’s synced rows now count.' }
@@ -186,40 +187,64 @@ export async function recordStatementCheck(accountId: unknown, statement: unknow
   });
 }
 
-// Statement closing days (STATEMENT-CYCLES.md). Set from the owner's own
-// statements; allowed in the demo, whose data resets daily.
-const closingDaySchema = z.object({
-  ledgerAccountId: uuid,
-  closingDay: z.coerce.number().int().min(1, 'A closing day is 1 to 31.').max(31, 'A closing day is 1 to 31.'),
-  // Empty: every statement (the first day set for an account).
-  effectiveFrom: z.union([isoDate, z.literal('')]),
-});
+// Statements as the bank issued them (STATEMENT-CYCLES.md), recorded from the
+// owner's own: one with its dates, or a pasted list of closing dates. Allowed
+// in the demo, whose data resets daily.
+const recordedStatementSchema = z
+  .object({
+    ledgerAccountId: uuid,
+    closingDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Enter the closing date.'),
+    periodStart: z.union([isoDate, z.literal('')]),
+    nextClosingDate: z.union([isoDate, z.literal('')]),
+    startsNewCycle: z.boolean(),
+  })
+  .refine((s) => !s.periodStart || s.periodStart <= s.closingDate, { message: 'The period starts after it closes.' })
+  .refine((s) => !s.nextClosingDate || s.nextClosingDate > s.closingDate, { message: 'The next closing date must come after this one.' });
 
-export async function setClosingDay(input: unknown): Promise<ActionResult> {
+const today = () => new Date().toISOString().slice(0, 10);
+
+export async function recordStatement(input: unknown): Promise<ActionResult> {
   await requireUser();
-  const parsed = closingDaySchema.safeParse(input);
+  const parsed = recordedStatementSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Invalid request.' };
-  const { ledgerAccountId, closingDay, effectiveFrom } = parsed.data;
-  return attempt('setClosingDay', async () => {
-    await upsertClosingDay(ledgerAccountId, { closingDay, effectiveFrom: effectiveFrom || EVERY_STATEMENT });
+  const s = parsed.data;
+  if (s.closingDate > today()) return { error: 'That closing date is still to come; record a statement once it has closed.' };
+  return attempt('recordStatement', async () => {
+    await recordStatements(
+      s.ledgerAccountId,
+      [{ closingDate: s.closingDate, periodStart: s.periodStart || null, nextClosingDate: s.nextClosingDate || null, startsNewCycle: s.startsNewCycle }],
+      'owner',
+    );
     refresh();
-    return {
-      ok: true,
-      message: effectiveFrom
-        ? `Closes on the ${ordinal(closingDay)} for statements closing on or after ${effectiveFrom}.`
-        : `Closes on the ${ordinal(closingDay)}.`,
-    };
+    return { ok: true, message: `Statement closing ${s.closingDate} recorded.` };
   });
 }
 
-export async function removeClosingDay(ledgerAccountId: unknown, effectiveFrom: unknown): Promise<ActionResult> {
+// A list pasted from the bank's own list of closing dates. Read again here,
+// never trusted from the browser; anything unreadable refuses the whole list.
+export async function recordClosingDates(ledgerAccountId: unknown, text: unknown): Promise<ActionResult> {
   await requireUser();
   const id = uuid.safeParse(ledgerAccountId);
-  const from = isoDate.safeParse(effectiveFrom);
-  if (!id.success || !from.success) return { error: 'Invalid request.' };
-  return attempt('removeClosingDay', async () => {
-    if (!(await deleteClosingDay(id.data, from.data))) return { error: 'That closing day was already removed.' };
+  const body = z.string().max(5000).safeParse(text);
+  if (!id.success || !body.success) return { error: 'Invalid request.' };
+  const { dates, unread } = parseClosingDates(body.data, today());
+  if (unread.length > 0) return { error: `Nothing recorded: could not read ${unread.map((u) => `“${u}”`).join(', ')}.` };
+  if (dates.length === 0) return { error: 'No closing dates found.' };
+  return attempt('recordClosingDates', async () => {
+    await recordStatements(id.data, dates.map((closingDate) => ({ closingDate })), 'owner');
     refresh();
-    return { ok: true, message: 'Closing day removed.' };
+    return { ok: true, message: `Recorded ${dates.length} closing date${dates.length === 1 ? '' : 's'}, ${dates[0]} to ${dates[dates.length - 1]}.` };
+  });
+}
+
+export async function removeStatement(ledgerAccountId: unknown, closingDate: unknown): Promise<ActionResult> {
+  await requireUser();
+  const id = uuid.safeParse(ledgerAccountId);
+  const date = isoDate.safeParse(closingDate);
+  if (!id.success || !date.success) return { error: 'Invalid request.' };
+  return attempt('removeStatement', async () => {
+    if (!(await deleteStatement(id.data, date.data))) return { error: 'That statement was already removed.' };
+    refresh();
+    return { ok: true, message: `Statement closing ${date.data} removed.` };
   });
 }

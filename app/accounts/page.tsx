@@ -20,9 +20,9 @@ import { AccountSyncToggle, SyncNowButton } from '@/app/_components/bank-sync-co
 import { ManageLogin } from '@/app/_components/connection-controls';
 import { boundaryReview, choicesFor, lastCsvDates, ledgerChoices, ledgerStateFor, type BoundaryRow } from '@/db/ledger';
 import { defaultCutover } from '@/lib/bank-sync/cutover';
-import { ClosingDayControl, FinishReviewButton, HeldRowAnswer, ReissuedChoice, SetUpSyncButton, type LedgerOption } from '@/app/_components/ledger-controls';
-import { closingDaysFor, cycleSoFar, type CycleSoFar } from '@/db/statement-cycles';
-import { cycleLine, type ClosingDayEntry } from '@/lib/statement-cycles';
+import { FinishReviewButton, HeldRowAnswer, ReissuedChoice, SetUpSyncButton, StatementsControl, type LedgerOption } from '@/app/_components/ledger-controls';
+import { cycleSoFar, statementsFor, type CycleSoFar, type RecordedStatement } from '@/db/statement-cycles';
+import { cycleLine } from '@/lib/statement-cycles';
 import { formatUSD, toCents } from '@/lib/money';
 import { LoginResultLine, LoginResultProvider } from '@/app/_components/login-result';
 import { requireUser } from '@/app/_lib/session';
@@ -125,8 +125,7 @@ function CycleLine({ cycle, kind, verified, today }: { cycle: CycleSoFar | null;
     <div className={verified ? 'text-foreground' : 'text-muted-foreground'}>
       {cycleLine({
         kind,
-        start: cycle.cycle.start,
-        end: cycle.cycle.end,
+        cycle: cycle.cycle,
         today,
         verified,
         chargesCents: cycle.chargesCents,
@@ -170,9 +169,9 @@ function LedgerLines({
   linked: boolean;
   // The demo's one line on what the cutover is (DEMO-SYNC.md).
   demoContext: string | null;
-  // The statement closing days set for its ledger account, and the current
-  // cycle so far (STATEMENT-CYCLES.md).
-  closing: { entries: ClosingDayEntry[]; cycle: CycleSoFar | null; today: string; kind: 'card' | 'checking' };
+  // The statements recorded for its ledger account, and the current cycle so
+  // far (STATEMENT-CYCLES.md).
+  closing: { statements: RecordedStatement[]; cycle: CycleSoFar | null; today: string; kind: 'card' | 'checking' };
 }) {
   if (!state) return null;
   if (state.replacesAccountId && replacesName && linked) return <ReissuedChoice accountId={accountId} replaces={replacesName} />;
@@ -197,7 +196,7 @@ function LedgerLines({
         </div>
       ) : null}
       <CycleLine cycle={closing.cycle} kind={closing.kind} verified={state.verifiedAt !== null} today={closing.today} />
-      {linked && <ClosingDayControl ledgerAccountId={state.ledgerAccountId} entries={closing.entries} today={closing.today} />}
+      {linked && <StatementsControl ledgerAccountId={state.ledgerAccountId} statements={closing.statements} today={closing.today} />}
       {review && linked && (
         <details open className="mt-1 rounded-lg border px-3 py-2">
           <summary className="cursor-pointer text-foreground">Boundary review: the days around {review.cutover}</summary>
@@ -293,9 +292,9 @@ export default async function AccountsPage() {
   // Statement cycles (STATEMENT-CYCLES.md), per ledger account in view.
   const today = new Date().toISOString().slice(0, 10);
   const ledgerIds = [...new Set([...ledger.values()].map((l) => l.ledgerAccountId).filter((id): id is string => id !== null))];
-  const closingDays = await closingDaysFor(ledgerIds);
+  const statements = await statementsFor(ledgerIds);
   const cycles = new Map(
-    await Promise.all(ledgerIds.map(async (id) => [id, await cycleSoFar(id, closingDays.get(id) ?? [], today)] as const)),
+    await Promise.all(ledgerIds.map(async (id) => [id, await cycleSoFar(id, statements.get(id) ?? [], today)] as const)),
   );
   const optionsFor = (accountId: string): LedgerOption[] =>
     choicesFor(choices, accountId).map((o) => ({
@@ -500,7 +499,7 @@ export default async function AccountsPage() {
                             linked={linked && canSync}
                             demoContext={demo ? demoContextLine(ledger.get(a.id), lastCsv) : null}
                             closing={{
-                              entries: closingDays.get(ledger.get(a.id)?.ledgerAccountId ?? '') ?? [],
+                              statements: statements.get(ledger.get(a.id)?.ledgerAccountId ?? '') ?? [],
                               cycle: cycles.get(ledger.get(a.id)?.ledgerAccountId ?? '') ?? null,
                               today,
                               kind: a.type === 'credit' ? 'card' : 'checking',

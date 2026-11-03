@@ -1,47 +1,44 @@
 import 'server-only';
 import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 import { db } from './index';
-import { bankAccounts, ledgerClosingDays, transactions } from './schema';
+import { bankAccounts, ledgerStatements, transactions } from './schema';
 import { verificationRows } from './ledger';
-import { cycleContaining, type ClosingDayEntry, type Cycle } from '@/lib/statement-cycles';
+import { currentCycle, type CurrentCycle, type StatementRecord } from '@/lib/statement-cycles';
 
-// The closing days the owner set (STATEMENT-CYCLES.md), per ledger account,
+export type RecordedStatement = StatementRecord & { source: 'verification' | 'owner' };
+
+// The statements recorded for each ledger account (STATEMENT-CYCLES.md),
 // oldest first.
-export async function closingDaysFor(ledgerAccountIds: string[]): Promise<Map<string, ClosingDayEntry[]>> {
-  const out = new Map<string, ClosingDayEntry[]>();
+export async function statementsFor(ledgerAccountIds: string[]): Promise<Map<string, RecordedStatement[]>> {
+  const out = new Map<string, RecordedStatement[]>();
   if (ledgerAccountIds.length === 0) return out;
   const rows = await db
-    .select({ ledgerAccountId: ledgerClosingDays.ledgerAccountId, effectiveFrom: ledgerClosingDays.effectiveFrom, closingDay: ledgerClosingDays.closingDay })
-    .from(ledgerClosingDays)
-    .where(inArray(ledgerClosingDays.ledgerAccountId, ledgerAccountIds))
-    .orderBy(asc(ledgerClosingDays.effectiveFrom));
-  for (const r of rows) out.set(r.ledgerAccountId, [...(out.get(r.ledgerAccountId) ?? []), { effectiveFrom: r.effectiveFrom, closingDay: r.closingDay }]);
+    .select({
+      ledgerAccountId: ledgerStatements.ledgerAccountId,
+      closingDate: ledgerStatements.closingDate,
+      periodStart: ledgerStatements.periodStart,
+      nextClosingDate: ledgerStatements.nextClosingDate,
+      startsNewCycle: ledgerStatements.startsNewCycle,
+      source: ledgerStatements.source,
+    })
+    .from(ledgerStatements)
+    .where(inArray(ledgerStatements.ledgerAccountId, ledgerAccountIds))
+    .orderBy(asc(ledgerStatements.closingDate));
+  for (const { ledgerAccountId, ...s } of rows) out.set(ledgerAccountId, [...(out.get(ledgerAccountId) ?? []), s]);
   return out;
 }
 
-// Set a closing day from a date. The same date again corrects that entry; a
-// later date is a change of cycle, kept beside the earlier one.
-export async function upsertClosingDay(ledgerAccountId: string, entry: ClosingDayEntry): Promise<void> {
-  await db
-    .insert(ledgerClosingDays)
-    .values({ ledgerAccountId, ...entry })
-    .onConflictDoUpdate({
-      target: [ledgerClosingDays.ledgerAccountId, ledgerClosingDays.effectiveFrom],
-      set: { closingDay: entry.closingDay },
-    });
-}
-
-// Remove one entry (a mistake). False when it was already gone.
-export async function deleteClosingDay(ledgerAccountId: string, effectiveFrom: string): Promise<boolean> {
+// Remove one recorded statement (a mistake). False when already gone.
+export async function deleteStatement(ledgerAccountId: string, closingDate: string): Promise<boolean> {
   const removed = await db
-    .delete(ledgerClosingDays)
-    .where(and(eq(ledgerClosingDays.ledgerAccountId, ledgerAccountId), eq(ledgerClosingDays.effectiveFrom, effectiveFrom)))
-    .returning({ day: ledgerClosingDays.closingDay });
+    .delete(ledgerStatements)
+    .where(and(eq(ledgerStatements.ledgerAccountId, ledgerAccountId), eq(ledgerStatements.closingDate, closingDate)))
+    .returning({ closingDate: ledgerStatements.closingDate });
   return removed.length > 0;
 }
 
 export type CycleSoFar = {
-  cycle: Cycle;
+  cycle: CurrentCycle;
   // As the statement counts them: the bank's posted rows by posting date.
   chargesCents: number;
   creditsCents: number;
@@ -51,27 +48,23 @@ export type CycleSoFar = {
 };
 
 // The current cycle of a ledger account and what its bank has reported in it
-// so far, through every bank account syncing into it. Null without a closing
-// day. The bank's rows only: the same set statement verification compares
-// (verificationRows), so no CSV row and no purchase-date caveat is involved.
-export async function cycleSoFar(ledgerAccountId: string, entries: ClosingDayEntry[], today: string): Promise<CycleSoFar | null> {
-  const cycle = cycleContaining(entries, today);
+// so far, through every bank account syncing into it. Null with no statement
+// recorded. The bank's rows only: the same set statement verification
+// compares (verificationRows), so no CSV row and no purchase-date caveat is
+// involved.
+export async function cycleSoFar(ledgerAccountId: string, statements: StatementRecord[], today: string): Promise<CycleSoFar | null> {
+  const cycle = currentCycle(statements, today);
   if (!cycle) return null;
   const accounts = await db.select({ id: bankAccounts.id }).from(bankAccounts).where(eq(bankAccounts.ledgerAccountId, ledgerAccountId));
-  const rows = (await Promise.all(accounts.map((a) => verificationRows(a.id, cycle.start, cycle.end)))).flat();
+  const from = cycle.start ?? '1970-01-01';
+  const rows = (await Promise.all(accounts.map((a) => verificationRows(a.id, from, cycle.end.to)))).flat();
   const pending =
     accounts.length === 0
       ? []
       : await db
           .select({ amountCents: transactions.amountCents })
           .from(transactions)
-          .where(
-            and(
-              inArray(transactions.bankAccountId, accounts.map((a) => a.id)),
-              eq(transactions.pending, true),
-              isNull(transactions.deletedAt),
-            ),
-          );
+          .where(and(inArray(transactions.bankAccountId, accounts.map((a) => a.id)), eq(transactions.pending, true), isNull(transactions.deletedAt)));
   return {
     cycle,
     chargesCents: rows.filter((r) => r.amountCents > 0).reduce((n, r) => n + r.amountCents, 0),

@@ -18,11 +18,12 @@ import {
   answerHeldRow,
   declineReissued,
   finishBoundaryReview,
-  removeClosingDay,
-  setClosingDay,
+  recordClosingDates,
+  recordStatement,
+  removeStatement,
   setUpAccountSync,
 } from '@/app/_actions/ledger';
-import { EVERY_STATEMENT, ordinal, type ClosingDayEntry } from '@/lib/statement-cycles';
+import { parseClosingDates, type StatementRecord } from '@/lib/statement-cycles';
 import type { ActionResult } from '@/lib/action-result';
 import { resultMessage } from './action-message';
 import { useLoginResult } from './login-result';
@@ -223,75 +224,151 @@ export function FinishReviewButton({ accountId }: { accountId: string }) {
   );
 }
 
-// The statement closing day of a ledger account (STATEMENT-CYCLES.md), from
-// the owner's own statements. The first one applies to every statement; a
-// change is entered from the date it takes effect and kept beside the old.
-export function ClosingDayControl({ ledgerAccountId, entries, today }: { ledgerAccountId: string; entries: ClosingDayEntry[]; today: string }) {
+// The statements recorded for a ledger account (STATEMENT-CYCLES.md), and the
+// two ways to add one: a single statement with its printed dates, or a list of
+// closing dates pasted from the bank, read back before anything is saved.
+export function StatementsControl({
+  ledgerAccountId,
+  statements,
+  today,
+}: {
+  ledgerAccountId: string;
+  statements: (StatementRecord & { source: 'verification' | 'owner' })[];
+  today: string;
+}) {
   const { run, pending } = useRun();
-  const [open, setOpen] = useState(false);
-  const first = entries.length === 0;
-  const [day, setDay] = useState('');
-  const [from, setFrom] = useState(first ? '' : today);
-  const save = () =>
-    run(
-      () => setClosingDay({ ledgerAccountId, closingDay: day, effectiveFrom: from }),
-      (r) => {
-        if ('ok' in r) setOpen(false);
-      },
-    );
+  const [mode, setMode] = useState<'closed' | 'one' | 'list'>('closed');
+  const [closing, setClosing] = useState('');
+  const [start, setStart] = useState('');
+  const [next, setNext] = useState('');
+  const [changed, setChanged] = useState(false);
+  const [text, setText] = useState('');
+  const read = text.trim() === '' ? null : parseClosingDates(text, today);
+  const done = (r: ActionResult) => {
+    if ('ok' in r) {
+      setMode('closed');
+      setClosing('');
+      setStart('');
+      setNext('');
+      setChanged(false);
+      setText('');
+    }
+  };
+  const newest = [...statements].reverse();
   return (
     <div className="space-y-1">
-      {entries.length > 0 && (
-        <ul className="space-y-0.5 text-muted-foreground">
-          {entries.map((e) => (
-            <li key={e.effectiveFrom} className="flex items-center gap-2">
-              <span>
-                Closes on the {ordinal(e.closingDay)}
-                {e.effectiveFrom === EVERY_STATEMENT ? '' : ` from ${e.effectiveFrom}`}
-              </span>
-              <button
-                type="button"
-                className="underline underline-offset-2 disabled:opacity-50"
-                disabled={pending}
-                onClick={() => run(() => removeClosingDay(ledgerAccountId, e.effectiveFrom))}
-              >
-                Remove
-              </button>
-            </li>
-          ))}
-        </ul>
+      {statements.length > 0 && (
+        <details>
+          <summary className="cursor-pointer text-muted-foreground">
+            {statements.length} statement{statements.length === 1 ? '' : 's'} recorded
+          </summary>
+          <ul className="mt-1 space-y-0.5 text-muted-foreground">
+            {newest.map((st) => (
+              <li key={st.closingDate} className="flex flex-wrap items-center gap-x-2">
+                <span className="font-mono">
+                  {st.periodStart ? `${st.periodStart} – ` : ''}
+                  {st.closingDate}
+                </span>
+                {st.nextClosingDate && <span>next {st.nextClosingDate}</span>}
+                {st.startsNewCycle && <span>new closing day from here</span>}
+                <span>{st.source === 'verification' ? 'from a statement check' : ''}</span>
+                <button
+                  type="button"
+                  className="underline underline-offset-2 disabled:opacity-50"
+                  disabled={pending}
+                  onClick={() => run(() => removeStatement(ledgerAccountId, st.closingDate))}
+                >
+                  Remove
+                </button>
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
-      {!open ? (
-        <button type="button" className="text-muted-foreground underline underline-offset-2" onClick={() => setOpen(true)}>
-          {first ? 'Set the statement closing day' : 'The closing day changed'}
-        </button>
-      ) : (
-        <div className="flex flex-wrap items-end gap-2">
-          <div className="grid gap-1">
-            <Label htmlFor={`close-${ledgerAccountId}`} className="text-xs">
-              Closes on day
-            </Label>
-            <Input
-              id={`close-${ledgerAccountId}`}
-              inputMode="numeric"
-              className="h-7 w-16"
-              placeholder="1–31"
-              value={day}
-              onChange={(e) => setDay(e.target.value)}
-            />
+      {mode === 'closed' && (
+        <div className="flex gap-3 text-muted-foreground">
+          <button type="button" className="underline underline-offset-2" onClick={() => setMode('one')}>
+            Record a statement
+          </button>
+          <button type="button" className="underline underline-offset-2" onClick={() => setMode('list')}>
+            Paste closing dates
+          </button>
+        </div>
+      )}
+      {mode === 'one' && (
+        <div className="space-y-2 rounded-lg border px-3 py-2">
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="grid gap-1">
+              <Label htmlFor={`closing-${ledgerAccountId}`} className="text-xs">
+                Closing date
+              </Label>
+              <Input id={`closing-${ledgerAccountId}`} type="date" className="h-7" value={closing} max={today} onChange={(e) => setClosing(e.target.value)} />
+            </div>
+            <div className="grid gap-1">
+              <Label htmlFor={`start-${ledgerAccountId}`} className="text-xs">
+                Period from (optional)
+              </Label>
+              <Input id={`start-${ledgerAccountId}`} type="date" className="h-7" value={start} onChange={(e) => setStart(e.target.value)} />
+            </div>
+            <div className="grid gap-1">
+              <Label htmlFor={`next-${ledgerAccountId}`} className="text-xs">
+                Next closing date, if printed
+              </Label>
+              <Input id={`next-${ledgerAccountId}`} type="date" className="h-7" value={next} onChange={(e) => setNext(e.target.value)} />
+            </div>
           </div>
-          <div className="grid gap-1">
-            <Label htmlFor={`from-${ledgerAccountId}`} className="text-xs">
-              {first ? 'From (leave empty for every statement)' : 'For statements closing on or after'}
-            </Label>
-            <Input id={`from-${ledgerAccountId}`} type="date" className="h-7" value={from} onChange={(e) => setFrom(e.target.value)} />
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={changed} onChange={(e) => setChanged(e.target.checked)} />
+            The closing day changed with this statement (earlier ones stop counting toward the next date)
+          </label>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              className="h-7"
+              disabled={pending || closing === ''}
+              onClick={() =>
+                run(() => recordStatement({ ledgerAccountId, closingDate: closing, periodStart: start, nextClosingDate: next, startsNewCycle: changed }), done)
+              }
+            >
+              Record
+            </Button>
+            <Button size="sm" variant="ghost" className="h-7" disabled={pending} onClick={() => setMode('closed')}>
+              Cancel
+            </Button>
           </div>
-          <Button size="sm" className="h-7" disabled={pending || day === ''} onClick={save}>
-            Save
-          </Button>
-          <Button size="sm" variant="ghost" className="h-7" disabled={pending} onClick={() => setOpen(false)}>
-            Cancel
-          </Button>
+        </div>
+      )}
+      {mode === 'list' && (
+        <div className="space-y-2 rounded-lg border px-3 py-2">
+          <Label htmlFor={`list-${ledgerAccountId}`} className="text-xs">
+            Closing dates, as the bank lists them (a date without a year is its latest one)
+          </Label>
+          <textarea
+            id={`list-${ledgerAccountId}`}
+            className="h-20 w-full rounded-md border bg-transparent px-2 py-1 font-mono text-xs"
+            placeholder="Oct 6, Sep 7, Aug 6"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+          />
+          {read && (
+            <p className={read.unread.length > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-muted-foreground'}>
+              {read.dates.length > 0 ? `Reads as ${read.dates.length} date${read.dates.length === 1 ? '' : 's'}: ${read.dates.join(', ')}.` : 'No dates read.'}
+              {read.unread.length > 0 && ` Could not read: ${read.unread.join(', ')}.`}
+            </p>
+          )}
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              className="h-7"
+              disabled={pending || !read || read.dates.length === 0 || read.unread.length > 0}
+              onClick={() => run(() => recordClosingDates(ledgerAccountId, text), done)}
+            >
+              Record {read?.dates.length ?? 0} date{read?.dates.length === 1 ? '' : 's'}
+            </Button>
+            <Button size="sm" variant="ghost" className="h-7" disabled={pending} onClick={() => setMode('closed')}>
+              Cancel
+            </Button>
+          </div>
         </div>
       )}
     </div>

@@ -182,6 +182,17 @@ export type DemoSeed = {
     createdAt: Date;
   }[];
   bankCategoryMap: { plaidCategory: string; categoryId: string; createdAt: Date }[];
+  // Statements recorded per ledger account (STATEMENT-CYCLES.md): the one each
+  // passed statement check adds, as the app records it.
+  ledgerStatements: {
+    ledgerAccountId: string;
+    closingDate: string;
+    periodStart: string | null;
+    nextClosingDate: string | null;
+    startsNewCycle: boolean;
+    source: 'verification' | 'owner';
+    createdAt: Date;
+  }[];
   bankConnections: {
     id: string;
     provider: 'synthetic';
@@ -905,6 +916,7 @@ export function buildDemoSeed(today: string, seed: number = DEMO_SEED): DemoSeed
     bankCategoryMap: bank.bankCategoryMap,
     bankConnections: bank.bankConnections,
     bankAccounts: bank.bankAccounts,
+    ledgerStatements: bank.ledgerStatements,
     syncSkippedRows: bank.syncSkippedRows,
     bankItems: bank.bankItems,
     bankStatements: bank.bankStatements,
@@ -962,6 +974,7 @@ function buildLinkedBanks(input: {
   const bankConnections: DemoSeed['bankConnections'] = [];
   const bankAccounts: DemoSeed['bankAccounts'] = [];
   const syncSkippedRows: DemoSeed['syncSkippedRows'] = [];
+  const ledgerStatements: DemoSeed['ledgerStatements'] = [];
   const bankItems: SyntheticItem[] = [];
   const bankStatements: DemoSeed['bankStatements'] = {};
 
@@ -1092,6 +1105,17 @@ function buildLinkedBanks(input: {
     bankStatements[linked.providerAccountId] = statement;
     const verified = linked.source === 'amex';
 
+    if (verified) {
+      ledgerStatements.push({
+        ledgerAccountId: ledger.id,
+        closingDate: statement.to,
+        periodStart: statement.from,
+        nextClosingDate: null,
+        startsNewCycle: false,
+        source: 'verification',
+        createdAt: new Date(ledger.cutoverConfirmedAt!.getTime() + 3_600_000),
+      });
+    }
     bankConnections.push({
       id: connectionId,
       provider: 'synthetic',
@@ -1148,7 +1172,7 @@ function buildLinkedBanks(input: {
       ],
     });
   }
-  return { bankCategoryMap, bankConnections, bankAccounts, syncSkippedRows, bankItems, bankStatements };
+  return { bankCategoryMap, bankConnections, bankAccounts, syncSkippedRows, ledgerStatements, bankItems, bankStatements };
 }
 
 // What each Sync now press brings, all dated today (DEMO-SYNC.md, decision
