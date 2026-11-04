@@ -142,7 +142,8 @@ export function cycleLine(input: {
   verified: boolean;
   chargesCents: number;
   creditsCents: number;
-  pendingCents: number;
+  pendingOutCents: number;
+  pendingInCents: number;
   pendingCount: number;
   formatDay: (iso: string) => string;
   formatMoney: (minor: number) => string;
@@ -167,7 +168,12 @@ export function cycleLine(input: {
   const head = `${kind === 'card' ? 'This cycle' : 'This statement period'}, ${start} – ${close}`;
   if (!input.verified) return `${head}. No total until this account is verified.${missing}`;
   const [out, back] = kind === 'card' ? ['charges', 'payments and credits'] : ['withdrawals', 'deposits'];
-  const pending = input.pendingCount > 0 ? `; ${usd(input.pendingCents)} pending (${input.pendingCount}), counted once posted` : '';
+  // Pending money out and in apart, never netted into one signed figure.
+  const sides = [
+    input.pendingOutCents > 0 ? `${usd(input.pendingOutCents)} in ${out}` : null,
+    input.pendingInCents > 0 ? `${usd(input.pendingInCents)} in ${back}` : null,
+  ].filter(Boolean);
+  const pending = input.pendingCount > 0 ? `; pending (${input.pendingCount}), counted once posted: ${sides.join(', ')}` : '';
   return `${head}. So far: ${usd(input.chargesCents)} in ${out}, ${usd(input.creditsCents)} in ${back}${pending}.${missing}`;
 }
 

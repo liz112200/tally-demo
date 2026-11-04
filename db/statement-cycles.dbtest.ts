@@ -83,7 +83,8 @@ describe('the cycle so far', () => {
       cycle: { start: '2026-10-07', startExact: true, end: { from: '2026-11-06', to: '2026-11-06' }, endFrom: 'projected' },
       chargesCents: 52_000,
       creditsCents: 15_000,
-      pendingCents: 7_500,
+      pendingOutCents: 7_500,
+      pendingInCents: 0,
       pendingCount: 1,
     });
     expect(await cycleSoFar(acc.ledgerAccountId, [], '2026-11-03')).toBeNull();

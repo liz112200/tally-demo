@@ -44,7 +44,7 @@ export function compareToStatement(input: {
   const excluded = inPeriod.filter((r) => input.excludedKeys.has(r.key));
   const counted = inPeriod.filter((r) => !input.excludedKeys.has(r.key));
   const fetchedChargesCents = counted.filter((r) => r.amountCents > 0).reduce((n, r) => n + r.amountCents, 0);
-  const fetchedCreditsCents = -counted.filter((r) => r.amountCents < 0).reduce((n, r) => n + r.amountCents, 0);
+  const fetchedCreditsCents = counted.filter((r) => r.amountCents < 0).reduce((n, r) => n - r.amountCents, 0);
   const negatives = counted.filter((r) => r.amountCents < 0);
   const largest = counted
     .filter((r) => r.amountCents > 0)

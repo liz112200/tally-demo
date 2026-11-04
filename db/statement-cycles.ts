@@ -42,8 +42,11 @@ export type CycleSoFar = {
   // As the statement counts them: the bank's posted rows by posting date.
   chargesCents: number;
   creditsCents: number;
-  // Not on the statement until they post.
-  pendingCents: number;
+  // Not on the statement until they post. Each side apart: a pending
+  // withdrawal and a pending deposit netted into one figure hid both
+  // (2026-11-03: $19.99 out and $338.00 in read as "-$318.01 pending").
+  pendingOutCents: number;
+  pendingInCents: number;
   pendingCount: number;
 };
 
@@ -68,8 +71,9 @@ export async function cycleSoFar(ledgerAccountId: string, statements: StatementR
   return {
     cycle,
     chargesCents: rows.filter((r) => r.amountCents > 0).reduce((n, r) => n + r.amountCents, 0),
-    creditsCents: -rows.filter((r) => r.amountCents < 0).reduce((n, r) => n + r.amountCents, 0),
-    pendingCents: pending.reduce((n, r) => n + r.amountCents, 0),
+    creditsCents: rows.filter((r) => r.amountCents < 0).reduce((n, r) => n - r.amountCents, 0),
+    pendingOutCents: pending.filter((r) => r.amountCents > 0).reduce((n, r) => n + r.amountCents, 0),
+    pendingInCents: pending.filter((r) => r.amountCents < 0).reduce((n, r) => n - r.amountCents, 0),
     pendingCount: pending.length,
   };
 }

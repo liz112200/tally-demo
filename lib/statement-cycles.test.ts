@@ -72,7 +72,8 @@ describe('cycleLine', () => {
     verified: true,
     chargesCents: 52_000,
     creditsCents: 15_000,
-    pendingCents: 0,
+    pendingOutCents: 0,
+    pendingInCents: 0,
     pendingCount: 0,
     formatDay: (iso: string) => iso.slice(5),
     formatMoney: (n: number) => `$${n / 1000}`,
@@ -102,10 +103,14 @@ describe('cycleLine', () => {
     const printed = currentCycle([st('2026-10-06', { nextClosingDate: '2026-11-05' })], '2026-10-20')!;
     expect(cycleLine({ ...base, kind: 'card', cycle: printed })).toContain('closes 11-05, in 16 days, as the last statement printed');
     const few = currentCycle([st('2026-10-06')], '2026-10-20')!;
-    expect(cycleLine({ ...base, kind: 'card', cycle: few, pendingCents: 7_500, pendingCount: 1 })).toBe(
+    expect(cycleLine({ ...base, kind: 'card', cycle: few, pendingOutCents: 7_500, pendingCount: 1 })).toBe(
       'This cycle, 10-07 – expected to close around 11-06, in 17 days: from 1 statement. So far: $52 in charges, $15 in payments and credits; ' +
-        '$7.5 pending (1), counted once posted.',
+        'pending (1), counted once posted: $7.5 in charges.',
     );
+    // A pending withdrawal and a pending deposit stay apart, never one signed net.
+    const both = cycleLine({ ...base, kind: 'checking', cycle: few, pendingOutCents: 19_990, pendingInCents: 338_000, pendingCount: 2 });
+    expect(both).toContain('pending (2), counted once posted: $19.99 in withdrawals, $338 in deposits.');
+    expect(both).not.toMatch(/-\$/);
     expect(cycleLine({ ...base, kind: 'checking', cycle: few, verified: false })).toMatch(/\. No total until this account is verified\.$/);
   });
 });

@@ -66,7 +66,9 @@ them (`cycleLine`, lib/statement-cycles.ts):
   counts them (`verificationRows`): synced rows and the rows set aside at
   the cutover, owner-deleted synced rows included (they are still on the
   statement), bank-removed and released rows not. Pending rows apart, since
-  a statement counts a row once it posts. An account not yet verified shows
+  a statement counts a row once it posts, and each side of them apart again:
+  a pending withdrawal and a pending deposit netted into one figure hid both
+  (2026-11-03: $19.99 out and $338.00 in read as "-$318.01 pending"). An account not yet verified shows
   no total: its signs are not confirmed.
 - **Words**: charges, and payments and credits, on a card; withdrawals and
   deposits on checking, never "credits", which would name a paycheck. The
@@ -89,10 +91,21 @@ database, never in the repository.
 
 ## Open, for the period view
 
-If an account picker lists ledger accounts while the source tabs still say
-"Amex", the same word means two things on one screen: rows from the Amex
-CSV, and everything in the Amex ledger account. Neither control is
-confusing alone; together they are. When the period view comes back, decide
-between the picker (smaller, leaves that conflict) and replacing the source
-tabs with ledger-account tabs (bigger, and also closes PHASE11's "one
-Expenses group per ledger account"). Not decided by default.
+Ask the owner again on or after 2026-11-10, after a week of living with the
+cycle line, whether the period view is still wanted. If it is, these three
+are decided with the owner, not by default:
+
+- **Tabs or picker.** If an account picker lists ledger accounts while the
+  source tabs still say "Amex", the same word means two things on one
+  screen: rows from the Amex CSV, and everything in the Amex ledger account.
+  Neither control is confusing alone; together they are. The choice is
+  between the picker (smaller, leaves that conflict) and replacing the
+  source tabs with ledger-account tabs (bigger, and also closes PHASE11's
+  "one Expenses group per ledger account"). Answer the conflict; do not
+  assume the picker is additive.
+- **The purchase-date caveat in the UI**, beside every period that reaches
+  back before a cutover (above).
+- **Rows with no statement stay visible**: manual entries, CSV rows before a
+  cutover, rows of an unverified account, pending rows. Each has its place
+  (above and in the earlier proposal); none may drop out of a period view
+  unremarked.

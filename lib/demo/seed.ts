@@ -1100,7 +1100,7 @@ function buildLinkedBanks(input: {
       from,
       to,
       chargesCents: inPeriod.filter((t) => t.amountCents > 0).reduce((n, t) => n + t.amountCents, 0),
-      creditsCents: -inPeriod.filter((t) => t.amountCents < 0).reduce((n, t) => n + t.amountCents, 0),
+      creditsCents: inPeriod.filter((t) => t.amountCents < 0).reduce((n, t) => n - t.amountCents, 0),
     };
     bankStatements[linked.providerAccountId] = statement;
     const verified = linked.source === 'amex';

@@ -356,26 +356,6 @@ export const ledgerAccounts = pgTable(
   ],
 );
 
-// The day a ledger account's statement closes, as the owner set it from their
-// own statements (STATEMENT-CYCLES.md), from `effective_from` on. A change of
-// cycle is a new row, never an edit of the old one, so past cycles keep the
-// day they had. A day past a month's end closes on its last day.
-export const ledgerClosingDays = pgTable(
-  'ledger_closing_days',
-  {
-    ledgerAccountId: uuid('ledger_account_id')
-      .notNull()
-      .references(() => ledgerAccounts.id, { onDelete: 'cascade' }),
-    effectiveFrom: date('effective_from', { mode: 'string' }).notNull(),
-    closingDay: integer('closing_day').notNull(),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => [
-    primaryKey({ columns: [table.ledgerAccountId, table.effectiveFrom] }),
-    check('ledger_closing_days_day', sql`${table.closingDay} between 1 and 31`),
-  ],
-);
-
 // A statement of a ledger account as the bank issued it (STATEMENT-CYCLES.md):
 // its closing date, and when known its period's first day and the next
 // closing date it printed. Added by a passing statement check and by the
