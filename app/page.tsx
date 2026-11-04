@@ -10,10 +10,12 @@ import {
   getLinkedAccountGroups,
   getReplacementCandidates,
   getSettlements,
+  getImportSkipGroups,
   type ReceiptView,
   type ReplacementCandidate,
 } from '@/db/queries';
 import { TransactionTable } from '@/app/_components/transaction-table';
+import { ImportSkips } from '@/app/_components/import-skips';
 import { ExpensesToolbar } from '@/app/_components/expense-dialogs';
 import { isDemoMode } from '@/lib/demo-mode';
 import { notSyncingReason } from '@/lib/bank-sync/accounts-view';
@@ -36,6 +38,7 @@ export default async function Home() {
     deletedImports,
     linkedAccounts,
     ledgers,
+    importSkips,
   ] = await Promise.all([
     getTransactions(),
     getCategories(),
@@ -46,6 +49,7 @@ export default async function Home() {
     getDeletedImports(),
     getLinkedAccountGroups(),
     getLedgerTabs(),
+    getImportSkipGroups(),
   ]);
   // Statement cycles (STATEMENT-CYCLES.md): each linked account's header in
   // All names its current cycle rather than one long range of dates.
@@ -220,6 +224,7 @@ export default async function Home() {
           ledgers={ledgers}
         />
       </Suspense>
+      <ImportSkips groups={importSkips} />
     </main>
   );
 }

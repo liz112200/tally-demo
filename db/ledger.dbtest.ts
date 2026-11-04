@@ -6,8 +6,8 @@ import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { db } from './index';
-import { bankAccounts, imports, ledgerAccounts, syncSkippedRows, transactions } from './schema';
-import { getInsightRows, getTransactions, insertImport, insertTransaction, saveConnectionAccounts, softDeleteTransactionById } from './queries';
+import { bankAccounts, importSkippedRows, imports, ledgerAccounts, syncSkippedRows, transactions } from './schema';
+import { getImportSkipGroups, getInsightRows, getTransactions, insertImport, insertTransaction, saveConnectionAccounts, softDeleteTransactionById } from './queries';
 import { boundaryReview, choicesFor, ledgerChoices, mapAccountToLedger } from './ledger';
 import { account, owner, person, ptxn, removal, row, split, sync, type TestAccount } from './test/fixtures';
 import { adoptAccount, answerHeldRow, declineReissued, finishBoundaryReview, recordStatementCheck, setUpAccountSync } from '@/app/_actions/ledger';
@@ -546,6 +546,9 @@ describe('a CSV imported after a bank is linked', () => {
     expect(batch).toEqual({ name: 'Chase 09/10 – 09/10', rows: 1 });
     const batches = await db.select({ ledger: imports.ledgerAccountId }).from(imports).where(inArray(imports.filename, ['chase-test.csv']));
     expect(new Set(batches.map((b) => b.ledger))).toEqual(new Set([ledger.id]));
+    // The covered row is recorded as left out, with why.
+    const skipped = await db.select().from(importSkippedRows).where(eq(importSkippedRows.descriptionRaw, `CHASE ${tag} C`));
+    expect(skipped.map((r) => [r.date, r.amountCents, r.reason, r.filename])).toEqual([['2026-09-15', 12_000, 'covered', 'chase-test.csv']]);
     // The Chase ledger account is shared by every test file's Chase imports;
     // leave it with no bank, so no later test's rows are left out as covered.
     await db.update(bankAccounts).set({ syncEnabled: false, ledgerAccountId: null }).where(eq(bankAccounts.id, acc.accountId));
@@ -570,6 +573,56 @@ describe('a re-import that overlaps an earlier one', () => {
       .innerJoin(transactions, eq(transactions.importId, imports.id))
       .where(eq(transactions.descriptionRaw, `CHASE ${tag} C`));
     expect(batch).toEqual({ name: 'Chase 08/09 – 08/09', rows: 1 });
+  });
+
+  it('records every row it leaves out and why, even when it imports nothing', async () => {
+    const tag = randomUUID().slice(0, 6).toUpperCase();
+    const file = (rows: [string, string, string][]) => {
+      const text = ['Details,Posting Date,Description,Amount,Type,Balance,Check or Slip #', ...rows.map(([d, desc, amt]) => `DEBIT,${d},"${desc}",${amt},DEBIT_CARD,0,,`)].join('\n');
+      const fd = new FormData();
+      fd.set('file', new File([text], `chase-${tag}.csv`, { type: 'text/csv' }));
+      return fd;
+    };
+    const mine = async () =>
+      (await db.select().from(importSkippedRows).where(sql`${importSkippedRows.descriptionRaw} like ${`CHASE ${tag} %`}`)).map((r) => ({
+        description: r.descriptionRaw.slice(-1),
+        reason: r.reason,
+        hasImport: r.importId !== null,
+        confirmId: r.confirmId,
+      }));
+    await confirmImport({}, file([['08/01/2026', `CHASE ${tag} A`, '-31.00'], ['08/02/2026', `CHASE ${tag} B`, '-32.00']]));
+    const [a] = (await getTransactions()).filter((t) => t.descriptionRaw === `CHASE ${tag} A`);
+    await softDeleteTransactionById(a.id);
+    // B is live, A was deleted, D appears twice in the file: one D imports,
+    // the other collides on the index.
+    const second = await confirmImport(
+      {},
+      file([
+        ['08/01/2026', `CHASE ${tag} A`, '-31.00'],
+        ['08/02/2026', `CHASE ${tag} B`, '-32.00'],
+        ['08/03/2026', `CHASE ${tag} D`, '-34.00'],
+        ['08/03/2026', `CHASE ${tag} D`, '-34.00'],
+      ]),
+    );
+    expect(second).toEqual({ ok: true, result: { inserted: 1, skipped: 3, forced: 0, covered: 0 } });
+    const afterSecond = await mine();
+    expect(afterSecond.map(({ description, reason, hasImport }) => [description, reason, hasImport]).sort()).toEqual([
+      ['A', 'duplicate_of_deleted', true],
+      ['B', 'duplicate', true],
+      ['D', 'collision', true],
+    ]);
+    expect(new Set(afterSecond.map((r) => r.confirmId)).size).toBe(1);
+    // The same file again imports nothing and leaves no import, but its
+    // skips are recorded with the filename and no import.
+    const third = await confirmImport({}, file([['08/02/2026', `CHASE ${tag} B`, '-32.00']]));
+    expect(third).toEqual({ ok: true, result: { inserted: 0, skipped: 1, forced: 0, covered: 0 } });
+    const afterThird = (await mine()).filter((r) => !afterSecond.some((x) => x.confirmId === r.confirmId));
+    expect(afterThird.map(({ description, reason, hasImport }) => [description, reason, hasImport])).toEqual([['B', 'duplicate', false]]);
+    const groups = (await getImportSkipGroups()).filter((g) => g.filename === `chase-${tag}.csv`);
+    expect(groups.map((g) => [g.importName === null, g.rows.length])).toEqual([
+      [true, 1],
+      [false, 3],
+    ]);
   });
 });
 

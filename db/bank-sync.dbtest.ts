@@ -5,7 +5,8 @@
 import { describe, expect, it, vi, beforeAll, afterAll } from 'vitest';
 import { sql, eq } from 'drizzle-orm';
 import { db } from './index';
-import { bankAccounts, settlements } from './schema';
+import { bankAccounts, bankFlagResolutions, settlements } from './schema';
+import { dismissBankFlag } from '@/app/_actions/bank-flags';
 import {
   clearBankFlag,
   deleteSplitByTransactionId,
@@ -40,6 +41,20 @@ import { loadRecording, recordedTransactions, replay } from './test/replay';
 import { AccessToken } from '@/lib/bank-sync/access-token';
 import { createPlaidProvider } from '@/lib/bank-sync/plaid/provider';
 import type { BankProvider } from '@/lib/bank-sync/provider';
+
+// The actions revalidate, which needs a request outside a test.
+vi.mock('next/cache', () => ({ revalidatePath: () => {} }));
+
+// What clearing a row's flags recorded (bank_flag_resolutions), oldest first.
+async function flagRecords(transactionId: string) {
+  return (
+    await db
+      .select()
+      .from(bankFlagResolutions)
+      .where(eq(bankFlagResolutions.transactionId, transactionId))
+      .orderBy(bankFlagResolutions.resolvedAt, bankFlagResolutions.id)
+  ).map((r) => ({ flag: r.flag, before: r.bankAmountBeforeCents, amount: r.amountCents, removed: r.removedByBankAt !== null, resolution: r.resolution }));
+}
 
 async function settlementIdsOf(personId: string): Promise<string[]> {
   return (
@@ -129,6 +144,7 @@ describe('resolving the flags', () => {
       expect(creditOf(after, id)).toBe(0);
     }
     expect((await rowById(s.r1.id)).bankAmountBeforeCents).toBeNull();
+    expect(await flagRecords(s.r1.id)).toEqual([{ flag: 'amount', before: 90_000, amount: 95_000, removed: false, resolution: 'split_resaved' }]);
   });
 
   it('re-saving at a lower amount: the overpaid part becomes credit, nothing is owed', async () => {
@@ -153,6 +169,8 @@ describe('resolving the flags', () => {
     expect(balanceOf(after, s.alex)?.netCents).toBe(0);
     const [alexPayment] = await settlementIdsOf(s.alex);
     expect(creditOf(after, alexPayment)).toBe(12_500);
+    // The removed mark stays: the row still needs deleting or keeping.
+    expect(await flagRecords(s.r3.id)).toEqual([]);
   });
 
   it('deleting a removed row: its allocations stop counting and return to credit; the bank marker is cleared', async () => {
@@ -166,16 +184,48 @@ describe('resolving the flags', () => {
     const r3 = await rowById(s.r3.id);
     expect(r3.deletedAt).not.toBeNull();
     expect(r3.removedByBankAt).toBeNull();
+    expect(await flagRecords(s.r3.id)).toEqual([{ flag: 'removed', before: null, amount: 25_000, removed: true, resolution: 'row_deleted' }]);
   });
 
-  it('dismissing a flag changes nothing but the flag, and is a no-op the second time', async () => {
+  it('dismissing a flag changes nothing but the flag, records what it said, and says so when there is nothing to dismiss', async () => {
     const s = await settledScenario();
     await sync(s.acc, { modified: [{ ...s.t1, amountCents: 95_000 }] });
     const flagged = await moneySnapshot();
-    await clearBankFlag(s.r1.id, 'amount');
-    await clearBankFlag(s.r1.id, 'amount');
+    expect(await dismissBankFlag(s.r1.id, 'amount')).toEqual({ ok: true, message: "Kept as it is. The bank's earlier amount is recorded." });
+    // Already cleared (another tab): an error, never a second success.
+    expect(await dismissBankFlag(s.r1.id, 'amount')).toEqual({
+      error: 'That mark is already cleared, or the row was deleted. Reload to see it as it is.',
+    });
+    expect(await clearBankFlag(s.r1.id, 'amount')).toBe(false);
     expect(await moneySnapshot()).toEqual(flagged);
     expect((await rowById(s.r1.id)).bankAmountBeforeCents).toBeNull();
+    expect(await flagRecords(s.r1.id)).toEqual([{ flag: 'amount', before: 90_000, amount: 95_000, removed: false, resolution: 'kept' }]);
+    // Dismissing a flag the row never had matches nothing.
+    expect(await clearBankFlag(s.r3.id, 'removed')).toBe(false);
+    expect(await flagRecords(s.r3.id)).toEqual([]);
+  });
+
+  it('removing the split of a row whose amount changed records the flag it clears', async () => {
+    const s = await settledScenario();
+    await sync(s.acc, { modified: [{ ...s.t1, amountCents: 95_000 }] });
+    await deleteSplitByTransactionId(s.r1.id);
+    expect(await flagRecords(s.r1.id)).toEqual([{ flag: 'amount', before: 90_000, amount: 95_000, removed: false, resolution: 'split_removed' }]);
+  });
+
+  it('the bank returning to the amount the split was built on clears the flag, recorded as the bank changing it back', async () => {
+    const s = await settledScenario();
+    await sync(s.acc, { modified: [{ ...s.t1, amountCents: 95_000 }] });
+    await sync(s.acc, { modified: [{ ...s.t1, amountCents: 90_000 }] });
+    expect((await rowById(s.r1.id)).bankAmountBeforeCents).toBeNull();
+    expect(await moneySnapshot()).toEqual(s.before);
+    expect(await flagRecords(s.r1.id)).toEqual([{ flag: 'amount', before: 90_000, amount: 90_000, removed: false, resolution: 'bank_reverted' }]);
+  });
+
+  it('a flag cleared by any other write is still recorded, as unlabelled', async () => {
+    const s = await settledScenario();
+    await sync(s.acc, { modified: [{ ...s.t1, amountCents: 95_000 }] });
+    await db.execute(sql`update transactions set bank_amount_before_cents = null where id = ${s.r1.id}`);
+    expect(await flagRecords(s.r1.id)).toEqual([{ flag: 'amount', before: 90_000, amount: 95_000, removed: false, resolution: 'unlabelled' }]);
   });
 
   it('remove and identical re-add in one sync: the row takes the new id; split and payments untouched', async () => {
@@ -215,6 +265,7 @@ describe('resolving the flags', () => {
     expect(movedSplit).toHaveLength(1);
     expect((await rowById(s.r3.id)).deletedAt).not.toBeNull();
     expect((await rowById(target.id)).note).toBe('with the team');
+    expect(await flagRecords(s.r3.id)).toEqual([{ flag: 'removed', before: null, amount: 25_000, removed: true, resolution: 'moved_to_replacement' }]);
     // A second attempt finds nothing to move.
     expect(await moveBuiltOnToReplacement(s.r3.id, target.id)).toEqual({
       error: 'This row is no longer flagged as removed by the bank.',

@@ -875,3 +875,70 @@ export const syncSkippedRows = pgTable(
   ],
 );
 
+
+// A row an import confirm left out (migration 0036), so an omission is
+// recorded, never silent: a duplicate of a live row (`duplicate`) or of a
+// deleted one (`duplicate_of_deleted`) not ticked "include anyway", a row a
+// bank already syncs (`covered`, on or after its account's cutover), or one
+// the unique index refused (`collision`, e.g. two identical rows in one
+// file). Carries its upload's name and time itself: a confirm that skipped
+// every row leaves no import behind, and `import_id` is then NULL.
+export const importSkippedRows = pgTable(
+  'import_skipped_rows',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    importId: uuid('import_id').references(() => imports.id, { onDelete: 'set null' }),
+    // One confirm: every row it skipped shares this id.
+    confirmId: uuid('confirm_id').notNull(),
+    filename: text('filename'),
+    source: transactionSource('source').notNull(),
+    accountLabel: text('account_label'),
+    date: date('date', { mode: 'string' }).notNull(),
+    amountCents: bigint('amount_cents', { mode: 'number' }).notNull(),
+    descriptionRaw: text('description_raw').notNull(),
+    reason: text('reason').$type<'duplicate' | 'duplicate_of_deleted' | 'covered' | 'collision'>().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    check('import_skipped_rows_reason', sql`${table.reason} in ('duplicate', 'duplicate_of_deleted', 'covered', 'collision')`),
+    index('import_skipped_rows_confirm').on(table.confirmId),
+  ],
+);
+
+// What a bank flag said when it was cleared (migration 0036), written by a
+// trigger on transactions for every path that clears one, so clearing never
+// loses the bank's earlier amount or the fact that it was flagged. The path
+// names itself (`tally.flag_resolution`, set for the transaction); a delete
+// is read from the same update; anything else is `unlabelled`, still kept.
+export const bankFlagResolutions = pgTable(
+  'bank_flag_resolutions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    transactionId: uuid('transaction_id')
+      .notNull()
+      .references(() => transactions.id),
+    flag: text('flag').$type<'amount' | 'removed'>().notNull(),
+    // The amount flag: the amount the split was computed from.
+    bankAmountBeforeCents: bigint('bank_amount_before_cents', { mode: 'number' }),
+    // The row's amount when the flag was cleared.
+    amountCents: bigint('amount_cents', { mode: 'number' }).notNull(),
+    // The removed flag: when the bank removed it.
+    removedByBankAt: timestamp('removed_by_bank_at', { withTimezone: true }),
+    resolution: text('resolution')
+      .$type<'kept' | 'split_resaved' | 'split_removed' | 'row_deleted' | 'moved_to_replacement' | 'bank_reverted' | 'unlabelled'>()
+      .notNull(),
+    resolvedAt: timestamp('resolved_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    check('bank_flag_resolutions_flag', sql`${table.flag} in ('amount', 'removed')`),
+    check(
+      'bank_flag_resolutions_fields',
+      sql`(${table.flag} = 'amount') = (${table.bankAmountBeforeCents} is not null) and (${table.flag} = 'removed') = (${table.removedByBankAt} is not null)`,
+    ),
+    check(
+      'bank_flag_resolutions_resolution',
+      sql`${table.resolution} in ('kept', 'split_resaved', 'split_removed', 'row_deleted', 'moved_to_replacement', 'bank_reverted', 'unlabelled')`,
+    ),
+    index('bank_flag_resolutions_transaction').on(table.transactionId),
+  ],
+);

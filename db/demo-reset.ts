@@ -23,14 +23,19 @@ import { TEST_MARKER } from './test/target';
 import { buildDemoSeed, type DemoSeed } from '../lib/demo/seed';
 
 // Every app table, wiped together. share_links included: demo visitors'
-// published snapshots go with everything else.
-const TABLES = [
+// published snapshots go with everything else. db/demo-bank.dbtest.ts fails
+// on a table in the database that is in neither list.
+export const TABLES = [
   'settlement_allocations', 'settlements', 'receipt_item_assignments',
   'receipt_items', 'receipt_images', 'receipts', 'split_shares', 'splits',
   'transactions', 'imports', 'categorization_rules', 'categories', 'persons',
   'share_links', 'ledger_accounts', 'bank_category_map', 'sync_skipped_rows',
-  'bank_accounts', 'bank_connections', 'ledger_statements',
+  'bank_accounts', 'bank_connections', 'ledger_statements', 'bank_flag_resolutions',
+  'import_skipped_rows',
 ];
+// Sign-in, never wiped: the demo has none, and a reset must not sign anyone
+// out of a database that has.
+export const KEPT_TABLES = ['users', 'sessions', 'passkey_credentials', 'auth_challenges'];
 
 type Tx = Parameters<Parameters<ReturnType<typeof drizzle<typeof schema>>['transaction']>[0]>[0];
 

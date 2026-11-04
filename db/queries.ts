@@ -12,6 +12,7 @@ import {
   sql,
 } from 'drizzle-orm';
 import { db } from './index';
+import type { FlagHistoryItem } from '@/lib/flag-history';
 import {
   bankAccounts,
   bankCategoryMap,
@@ -32,6 +33,7 @@ import {
   splits,
   splitShares,
   transactions,
+  importSkippedRows,
 } from './schema';
 import { dedupHash, type DedupFields } from '@/lib/parsers/dedup';
 import { normalizeMerchant } from '@/lib/parsers/normalize';
@@ -113,6 +115,9 @@ export type TransactionRow = {
   bankAmountBeforeCents: number | null;
   // Set when the bank removed a row the owner had built on.
   removedByBankAt: Date | null;
+  // Flags cleared before, oldest first, with what each said and why it was
+  // cleared (bank_flag_resolutions): a dismissal is not a row never flagged.
+  flagHistory: FlagHistoryEntry[];
   // The ledger account the row belongs to: its bank account's for a synced
   // row, its upload's for a CSV row; null for manual entries.
   ledgerAccountId: string | null;
@@ -121,6 +126,8 @@ export type TransactionRow = {
   // the Amex and Discover CSVs is the purchase date.
   postedDate: string;
 };
+
+export type FlagHistoryEntry = FlagHistoryItem;
 
 // The dedup hash of a row's current values, in SQL: the canonical string of
 // lib/parsers/dedup.ts (source|account label|date|amount|description), so a
@@ -151,6 +158,14 @@ export async function getTransactions(): Promise<TransactionRow[]> {
       editedAfterImport: sql<boolean>`(${transactions.providerTransactionId} is null and ${transactions.dedupHash} is not null and ${transactions.dedupHash} <> ${importHashSql})`,
       ledgerAccountId: sql<string | null>`coalesce(${bankAccounts.ledgerAccountId}, ${imports.ledgerAccountId})`,
       postedDate: sql<string>`coalesce(${transactions.providerRaw}->>'date', ${transactions.date}::text)`,
+      // Names written out: a correlated subquery, kept clear of Drizzle's
+      // column rendering.
+      flagHistory: sql<FlagHistoryEntry[]>`coalesce((
+        select json_agg(json_build_object(
+          'flag', r.flag, 'bankAmountBeforeCents', r.bank_amount_before_cents, 'amountCents', r.amount_cents,
+          'removedByBankAt', r.removed_by_bank_at, 'resolution', r.resolution, 'resolvedAt', r.resolved_at
+        ) order by r.resolved_at, r.id)
+        from bank_flag_resolutions r where r.transaction_id = "transactions"."id"), '[]'::json)`,
     })
     .from(transactions)
     .leftJoin(categories, eq(transactions.categoryId, categories.id))
@@ -465,6 +480,14 @@ const rowHasReceipt = () =>
 // that must run inside an existing transaction take this.
 export type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
+// Why a bank flag is being cleared, for the record the trigger writes into
+// bank_flag_resolutions (migration 0036). For this transaction only; a path
+// that names nothing is recorded as a delete or as `unlabelled`, never lost.
+export type FlagResolution = 'kept' | 'split_resaved' | 'split_removed' | 'moved_to_replacement' | 'bank_reverted';
+async function labelFlagResolution(tx: Tx, resolution: FlagResolution): Promise<void> {
+  await tx.execute(sql`select set_config('tally.flag_resolution', ${resolution}, true)`);
+}
+
 // For each newly created debt share, consume the counterparty's existing
 // same-direction unallocated settlement credit (a prior overpayment), oldest
 // settlement first, writing settlement_allocations (fork 5). Runs inside the
@@ -762,6 +785,7 @@ export async function replaceSplit(input: {
   return db.transaction(async (tx) => {
     const refused = await lockRowForSplit(tx, input.transactionId, input.amountCents);
     if (refused) return { error: refused };
+    await labelFlagResolution(tx, 'split_resaved');
     await tx
       .update(transactions)
       .set({ bankAmountBeforeCents: null })
@@ -828,6 +852,7 @@ export async function deleteSplitByTransactionId(
       .where(eq(splits.transactionId, transactionId))
       .returning({ id: splits.id });
     if (deleted.length === 0) return null;
+    await labelFlagResolution(tx, 'split_removed');
     await tx
       .update(transactions)
       .set({ bankAmountBeforeCents: null })
@@ -854,6 +879,7 @@ export async function replaceItemSplit(input: {
     // the receipt as before.
     const refused = await lockRowForSplit(tx, input.transactionId, null);
     if (refused) return { error: refused };
+    await labelFlagResolution(tx, 'split_resaved');
     await tx
       .update(transactions)
       .set({ bankAmountBeforeCents: null })
@@ -1795,8 +1821,55 @@ export async function updateImportDisplayName(
     .where(eq(imports.id, importId));
 }
 
+// The rows one import confirm left out, recorded so an omission is never
+// silent (import_skipped_rows, migration 0036). `importId` is null when the
+// confirm wrote nothing and its import was removed.
+export async function insertImportSkips(
+  batch: { confirmId: string; importId: string | null; filename: string; source: TransactionSource; accountLabel: string | null },
+  rows: { date: string; amountCents: number; descriptionRaw: string; reason: 'duplicate' | 'duplicate_of_deleted' | 'covered' | 'collision' }[],
+): Promise<void> {
+  if (rows.length === 0) return;
+  await db.insert(importSkippedRows).values(rows.map((r) => ({ ...batch, ...r })));
+}
+
+export type ImportSkipGroup = {
+  confirmId: string;
+  filename: string | null;
+  // The import the confirm made, when it still stands (not undone, not
+  // removed for having written nothing).
+  importName: string | null;
+  at: Date;
+  rows: { date: string; amountCents: number; descriptionRaw: string; reason: 'duplicate' | 'duplicate_of_deleted' | 'covered' | 'collision' }[];
+};
+
+// Every confirm that left rows out, newest first, its rows by date.
+export async function getImportSkipGroups(): Promise<ImportSkipGroup[]> {
+  const rows = await db
+    .select({
+      confirmId: importSkippedRows.confirmId,
+      filename: importSkippedRows.filename,
+      importName: sql<string | null>`case when ${imports.deletedAt} is null then coalesce(${imports.displayName}, ${imports.filename}) end`,
+      at: importSkippedRows.createdAt,
+      date: importSkippedRows.date,
+      amountCents: importSkippedRows.amountCents,
+      descriptionRaw: importSkippedRows.descriptionRaw,
+      reason: importSkippedRows.reason,
+    })
+    .from(importSkippedRows)
+    .leftJoin(imports, eq(imports.id, importSkippedRows.importId))
+    .orderBy(desc(importSkippedRows.createdAt), asc(importSkippedRows.date), asc(importSkippedRows.id));
+  const groups = new Map<string, ImportSkipGroup>();
+  for (const r of rows) {
+    const g = groups.get(r.confirmId) ?? { confirmId: r.confirmId, filename: r.filename, importName: r.importName, at: r.at, rows: [] };
+    g.rows.push({ date: r.date, amountCents: r.amountCents, descriptionRaw: r.descriptionRaw, reason: r.reason });
+    groups.set(r.confirmId, g);
+  }
+  return [...groups.values()];
+}
+
 // An import whose rows were all dedup skips never happened: hard delete is
-// safe because nothing references it.
+// safe because nothing references it but its skip records, which keep their
+// own filename and date (the reference becomes null).
 export async function deleteEmptyImport(importId: string): Promise<void> {
   await db.delete(imports).where(eq(imports.id, importId));
 }
@@ -2693,6 +2766,9 @@ export async function commitAccountSync(input: {
     });
     if (plan.kind === 'stop') return { kind: 'stopped', reason: plan.reason } as const;
 
+    // The only flags a sync clears are the bank undoing its own change: an
+    // amount back to what the split was built on, a removed row sent again.
+    await labelFlagResolution(tx, 'bank_reverted');
     for (const update of plan.updates) {
       const { removedByBankAt, deletedAt, ...fields } = update.set;
       await tx
@@ -2906,11 +2982,25 @@ export async function getLinkedAccountGroups(): Promise<LinkedAccountGroupRow[]>
 // Dismiss a flag sync set: the owner has looked and keeps the row as it is.
 // Changes nothing else (no share, no allocation). Idempotent: a flag already
 // cleared, or a deleted row, is a no-op.
-export async function clearBankFlag(id: string, flag: 'amount' | 'removed'): Promise<void> {
-  await db
-    .update(transactions)
-    .set(flag === 'amount' ? { bankAmountBeforeCents: null } : { removedByBankAt: null })
-    .where(and(eq(transactions.id, id), isNull(transactions.deletedAt)));
+// Keep the row as it is: the flag is cleared and what it said is recorded
+// (bank_flag_resolutions). False when nothing matched: no such live row, or
+// that flag is not set (already cleared, in another tab).
+export async function clearBankFlag(id: string, flag: 'amount' | 'removed'): Promise<boolean> {
+  return db.transaction(async (tx) => {
+    await labelFlagResolution(tx, 'kept');
+    const cleared = await tx
+      .update(transactions)
+      .set(flag === 'amount' ? { bankAmountBeforeCents: null } : { removedByBankAt: null })
+      .where(
+        and(
+          eq(transactions.id, id),
+          isNull(transactions.deletedAt),
+          flag === 'amount' ? isNotNull(transactions.bankAmountBeforeCents) : isNotNull(transactions.removedByBankAt),
+        ),
+      )
+      .returning({ id: transactions.id });
+    return cleared.length > 0;
+  });
 }
 
 // How far apart a removed row and its re-added replacement may be dated.
@@ -3029,6 +3119,7 @@ export async function moveBuiltOnToReplacement(fromId: string, toId: string): Pr
         ...(takeCategory ? { categoryId: from.categoryId, categorySource: 'manual' as const } : {}),
       })
       .where(eq(transactions.id, toId));
+    await labelFlagResolution(tx, 'moved_to_replacement');
     await tx
       .update(transactions)
       .set({ deletedAt: sql`now()`, removedByBankAt: null })

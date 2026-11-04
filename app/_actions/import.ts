@@ -1,5 +1,6 @@
 'use server';
 
+import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import type { ActionResult } from '@/lib/action-result';
@@ -23,6 +24,7 @@ import {
   deleteEmptyImport,
   getRules,
   insertImport,
+  insertImportSkips,
   insertTransaction,
   lookupDedupStatus,
   setImportHiddenById,
@@ -251,9 +253,14 @@ export async function confirmImport(
   let forced = 0;
   let covered = 0;
   const writtenDates: string[] = [];
+  // Every row left out, with why: recorded below, never only counted.
+  const skips: Parameters<typeof insertImportSkips>[1] = [];
+  const skip = (row: (typeof result.rows)[number], reason: (typeof skips)[number]['reason']) =>
+    skips.push({ date: row.date, amountCents: row.amountCents, descriptionRaw: row.descriptionRaw, reason });
   for (const [i, row] of result.rows.entries()) {
     if (coveredFrom !== null && row.date >= coveredFrom) {
       covered += 1;
+      skip(row, 'covered');
       continue;
     }
     const isDuplicate = duplicates[i] !== null;
@@ -261,6 +268,7 @@ export async function confirmImport(
     // An unapproved duplicate imports nothing.
     if (plan === 'skip') {
       skipped += 1;
+      skip(row, duplicates[i] === 'deleted' ? 'duplicate_of_deleted' : 'duplicate');
       continue;
     }
     const categoryId = categorize(normalizeMerchant(row.descriptionRaw), engineRules);
@@ -285,6 +293,7 @@ export async function confirmImport(
       // A non-approved collision the preview missed (e.g. two identical rows
       // inside this same file) still no-ops on the index.
       skipped += 1;
+      skip(row, 'collision');
     }
   }
 
@@ -298,6 +307,17 @@ export async function confirmImport(
       defaultImportName(result.rows[0].source, writtenDates[0], writtenDates[writtenDates.length - 1]),
     );
   }
+
+  await insertImportSkips(
+    {
+      confirmId: randomUUID(),
+      importId: written === 0 ? null : importId,
+      filename: upload.filename,
+      source: result.rows[0].source,
+      accountLabel: result.rows[0].accountLabel,
+    },
+    skips,
+  );
 
   revalidatePath('/');
   return { ok: true, result: { inserted, skipped, forced, covered } };

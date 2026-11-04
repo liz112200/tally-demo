@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState } from 'react';
 import { AlertTriangle, ArrowRightLeft, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -16,6 +16,7 @@ import { dismissBankFlag, moveSplitToReplacement } from '@/app/_actions/bank-fla
 import { deleteTransaction } from '@/app/_actions/transactions';
 import { removeSplit } from '@/app/_actions/splits';
 import { ConfirmDialog } from '@/app/_components/confirm-dialog';
+import { useAction } from '@/app/_components/page-result';
 import {
   SplitDialog,
   displayShareName,
@@ -117,16 +118,13 @@ export function BankFlagBlock({
   candidates: ReplacementCandidate[];
   creditByPerson: Record<string, number>;
 }) {
-  const [pending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
+  // Results on the page result line (ACTION-RESULTS.md): the block unmounts
+  // once its flag is cleared, so a message kept here would never be seen.
+  const { run, pending } = useAction();
   const [target, setTarget] = useState<string | null>(candidates.length === 1 ? candidates[0].id : null);
   const ownerId = persons.find((p) => p.isOwner)?.id;
 
-  const dismiss = (flag: 'amount' | 'removed') =>
-    startTransition(async () => {
-      const result = await dismissBankFlag(row.id, flag);
-      setError('error' in result ? result.error : null);
-    });
+  const dismiss = (flag: 'amount' | 'removed') => run(() => dismissBankFlag(row.id, flag));
 
   const smallButton = 'h-6.5 text-xs';
 
@@ -230,7 +228,6 @@ export function BankFlagBlock({
               : `, so people stay charged ${usd(-gap)} more in total than the bank's amount.`}
           </Option>
         </ul>
-        {error && <p role="alert" className="text-destructive">{error}</p>}
       </div>
     );
   }
@@ -286,13 +283,7 @@ export function BankFlagBlock({
                   size="sm"
                   className={smallButton}
                   disabled={pending || chosen === null}
-                  onClick={() =>
-                    startTransition(async () => {
-                      if (!chosen) return;
-                      const result = await moveSplitToReplacement(row.id, chosen.id);
-                      setError('error' in result ? result.error : null);
-                    })
-                  }
+                  onClick={() => chosen && run(() => moveSplitToReplacement(row.id, chosen.id))}
                 >
                   <ArrowRightLeft data-icon="inline-start" />
                   Move to the re-sent row
@@ -346,7 +337,6 @@ export function BankFlagBlock({
             ` ${candidates.length === 1 ? label(candidates[0]) : 'The re-sent row'} would count as well: the same charge twice.`}
         </Option>
       </ul>
-      {error && <p role="alert" className="text-destructive">{error}</p>}
     </div>
   );
 }

@@ -45,6 +45,17 @@ one); a denylist only knew the strings someone listed; the transaction scan
 first passed while reading none. An enumerating check asserts a minimum of
 what it found, and a new test is confirmed by the suite's count rising.
 
+A default that merely was not recorded is acceptable; a default that
+destroys information or hides an omission is not. A stored cutover date
+cannot show whether the owner typed it or accepted it, but it can be read
+and checked at any time, so it is not instrumented. A skipped import row, a
+cleared bank flag, or a held row closed unanswered left nothing to read
+afterwards, and each was mistaken for a decision (2026-11-04); they are now
+recorded (import_skipped_rows, bank_flag_resolutions, `resolved_at`), and a
+question cannot be closed unanswered. DEFAULTS.md lists what the data can
+and cannot tell. A chat message saying an app action was taken is not a
+record of it: read the row the action writes.
+
 ## Invariants
 
 These are decided. Do not reintroduce the alternatives.
@@ -158,7 +169,11 @@ These are decided. Do not reintroduce the alternatives.
   row and attaches the inserted transactions via `transactions.import_id`;
   manual entries stay NULL. `row_count` counts rows actually inserted
   (dedup skips excluded), and a confirm where every row was a skip leaves
-  no import row behind. Backfilled imports (one synthetic row per source,
+  no import row behind. Every row a confirm leaves out (a duplicate of a
+  live or a deleted row, a row a bank already covers, an index collision)
+  is recorded in `import_skipped_rows` with its upload's name and time,
+  `import_id` NULL when no import remains, and listed under Expenses as
+  "Rows not imported". Backfilled imports (one synthetic row per source,
   created by migration 0008 for pre-phase-7 rows) are identified by
   `filename IS NULL` — real uploads always carry a filename. "Undo import"
   soft-deletes the import row and every transaction in it; the deleted_at
@@ -300,7 +315,10 @@ These are decided. Do not reintroduce the alternatives.
   built on (split, receipt, note, manual category); where the bank changes or
   removes such a row, sync updates it and flags it (`bank_amount_before_cents`,
   `removed_by_bank_at`), and money moves between people only when the owner
-  resolves the flag. Pending rows are never splittable, take no receipt, and
+  resolves the flag. Clearing a flag, by any path, records what it said in
+  `bank_flag_resolutions` (a trigger on transactions; each path names itself
+  through `tally.flag_resolution`, else a delete or `unlabelled`), shown on
+  the row as its bank changes. Pending rows are never splittable, take no receipt, and
   are left out of every spending total; their posted row takes them over in
   place. Date, amount and description of a synced row are the bank's and
   cannot be edited. A split save locks the row and refuses unless it is live,

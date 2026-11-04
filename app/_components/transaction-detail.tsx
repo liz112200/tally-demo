@@ -29,6 +29,7 @@ import { ConfirmDialog } from '@/app/_components/confirm-dialog';
 import { NoteBlock } from '@/app/_components/note-block';
 import { PaidAlongsideBlock, type AlongsideLink } from '@/app/_components/paid-alongside';
 import { BankFlagBlock, dropSentence } from '@/app/_components/bank-flag-block';
+import { flagHistoryLine } from '@/lib/flag-history';
 import { ReceiptWizardDialog } from '@/app/_components/receipt-wizard';
 import {
   SplitDialog,
@@ -400,6 +401,22 @@ export function TransactionDetailPanel({
           candidates={replacementCandidates}
           creditByPerson={creditByPerson}
         />
+        {row.flagHistory.length > 0 && (
+          <div>
+            <SectionLabel>Bank changes</SectionLabel>
+            <ul className="space-y-0.5 text-xs text-muted-foreground">
+              {row.flagHistory.map((h) => (
+                <li key={`${h.flag}-${h.resolvedAt}`}>
+                  {flagHistoryLine(
+                    h,
+                    (mills) => formatUSD(toCents(mills)),
+                    (iso) => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <div>
           <SectionLabel>Description</SectionLabel>
           {editing ? (

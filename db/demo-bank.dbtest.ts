@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { db } from './index';
 import { bankAccounts, bankConnections, categories, splitShares, splits, syncSkippedRows, transactions } from './schema';
 import { getBankConnections } from './queries';
-import { wipeDemoTables, writeDemoSeed } from './demo-reset';
+import { KEPT_TABLES, TABLES, wipeDemoTables, writeDemoSeed } from './demo-reset';
 import { boundaryReview, lastCsvDates } from './ledger';
 import { buildDemoSeed, type DemoSeed } from '@/lib/demo/seed';
 import { syncConnection } from '@/app/_actions/bank';
@@ -34,6 +34,19 @@ beforeAll(async () => {
 afterAll(async () => {
   delete process.env.DEMO_MODE;
   await db.transaction((tx) => wipeDemoTables(tx));
+});
+
+describe('the demo reset', () => {
+  it('wipes every table in the database but sign-in, which it names', async () => {
+    const rows = (await db.execute(sql`
+      select table_name from information_schema.tables
+      where table_schema = 'public' and table_type = 'BASE TABLE'
+      order by table_name`)) as unknown as { table_name: string }[];
+    const present = rows.map((r) => r.table_name);
+    // It looked: the migrated database has its tables.
+    expect(present.length).toBeGreaterThanOrEqual(26);
+    expect([...TABLES, ...KEPT_TABLES].sort()).toEqual(present);
+  });
 });
 
 describe('the demo bank', () => {
