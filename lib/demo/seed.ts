@@ -190,6 +190,8 @@ export type DemoSeed = {
     periodStart: string | null;
     nextClosingDate: string | null;
     startsNewCycle: boolean;
+    chargesCents: number | null;
+    creditsCents: number | null;
     source: 'verification' | 'owner';
     createdAt: Date;
   }[];
@@ -1112,6 +1114,8 @@ function buildLinkedBanks(input: {
         periodStart: statement.from,
         nextClosingDate: null,
         startsNewCycle: false,
+        chargesCents: statement.chargesCents,
+        creditsCents: statement.creditsCents,
         source: 'verification',
         createdAt: new Date(ledger.cutoverConfirmedAt!.getTime() + 3_600_000),
       });

@@ -24,6 +24,7 @@ import {
   setUpAccountSync,
 } from '@/app/_actions/ledger';
 import { parseClosingDates, type StatementRecord } from '@/lib/statement-cycles';
+import { formatUSD, toCents } from '@/lib/money';
 import type { ActionResult } from '@/lib/action-result';
 import { resultMessage } from './action-message';
 import { useLoginResult } from './login-result';
@@ -231,10 +232,13 @@ export function StatementsControl({
   ledgerAccountId,
   statements,
   today,
+  kind,
 }: {
   ledgerAccountId: string;
-  statements: (StatementRecord & { source: 'verification' | 'owner' })[];
+  statements: (StatementRecord & { source: 'verification' | 'owner'; chargesCents: number | null; creditsCents: number | null })[];
   today: string;
+  // The statement's own words for its two totals.
+  kind: 'card' | 'checking';
 }) {
   const { run, pending } = useRun();
   const [mode, setMode] = useState<'closed' | 'one' | 'list'>('closed');
@@ -242,7 +246,10 @@ export function StatementsControl({
   const [start, setStart] = useState('');
   const [next, setNext] = useState('');
   const [changed, setChanged] = useState(false);
+  const [charges, setCharges] = useState('');
+  const [credits, setCredits] = useState('');
   const [text, setText] = useState('');
+  const [chargesLabel, creditsLabel] = kind === 'card' ? ['Purchases + fees + interest', 'Payments + credits'] : ['Withdrawals', 'Deposits'];
   const read = text.trim() === '' ? null : parseClosingDates(text, today);
   const done = (r: ActionResult) => {
     if ('ok' in r) {
@@ -251,6 +258,8 @@ export function StatementsControl({
       setStart('');
       setNext('');
       setChanged(false);
+      setCharges('');
+      setCredits('');
       setText('');
     }
   };
@@ -270,6 +279,11 @@ export function StatementsControl({
                   {st.closingDate}
                 </span>
                 {st.nextClosingDate && <span>next {st.nextClosingDate}</span>}
+                {st.chargesCents !== null && st.creditsCents !== null && (
+                  <span>
+                    {formatUSD(toCents(st.chargesCents))} / {formatUSD(toCents(st.creditsCents))}
+                  </span>
+                )}
                 {st.startsNewCycle && <span>new closing day from here</span>}
                 <span>{st.source === 'verification' ? 'from a statement check' : ''}</span>
                 <button
@@ -316,7 +330,20 @@ export function StatementsControl({
               </Label>
               <Input id={`next-${ledgerAccountId}`} type="date" className="h-7" value={next} onChange={(e) => setNext(e.target.value)} />
             </div>
+            <div className="grid gap-1">
+              <Label htmlFor={`charges-${ledgerAccountId}`} className="text-xs">
+                {chargesLabel} (optional)
+              </Label>
+              <Input id={`charges-${ledgerAccountId}`} inputMode="decimal" className="h-7 w-28" placeholder="0.00" value={charges} onChange={(e) => setCharges(e.target.value)} />
+            </div>
+            <div className="grid gap-1">
+              <Label htmlFor={`credits-${ledgerAccountId}`} className="text-xs">
+                {creditsLabel} (optional)
+              </Label>
+              <Input id={`credits-${ledgerAccountId}`} inputMode="decimal" className="h-7 w-28" placeholder="0.00" value={credits} onChange={(e) => setCredits(e.target.value)} />
+            </div>
           </div>
+          <p className="text-muted-foreground">With its totals, Expenses compares the statement with its period&apos;s rows.</p>
           <label className="flex items-center gap-2">
             <input type="checkbox" checked={changed} onChange={(e) => setChanged(e.target.checked)} />
             The closing day changed with this statement (earlier ones stop counting toward the next date)
@@ -327,7 +354,10 @@ export function StatementsControl({
               className="h-7"
               disabled={pending || closing === ''}
               onClick={() =>
-                run(() => recordStatement({ ledgerAccountId, closingDate: closing, periodStart: start, nextClosingDate: next, startsNewCycle: changed }), done)
+                run(
+                  () => recordStatement({ ledgerAccountId, closingDate: closing, periodStart: start, nextClosingDate: next, startsNewCycle: changed, charges, credits }),
+                  done,
+                )
               }
             >
               Record

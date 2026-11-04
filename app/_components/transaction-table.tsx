@@ -27,16 +27,18 @@ import {
 } from '@/lib/table-state';
 import {
   applyExpenseFilters,
-  availableSourceTabs,
-  filterBySource,
+  availableTabs,
+  filterByTab,
   filterPatch,
   hasActiveFilters,
   readFilters,
-  readSourceTab,
-  sourceTabPatch,
+  readTab,
+  tabPatch,
   summarizeView,
   needsReview,
 } from '@/lib/expense-filters';
+import { groupByPeriod, type PeriodStatement } from '@/lib/statement-periods';
+import { PeriodHeader } from '@/app/_components/period-header';
 import {
   groupRowsByImport,
   type AccountGroupMeta,
@@ -54,8 +56,8 @@ import { setImportHidden, showAllImports } from '@/app/_actions/import';
 import { BulkActionBar } from '@/app/_components/bulk-action-bar';
 import { NoteIndicator } from '@/app/_components/note-block';
 import {
+  AccountTabs,
   ExpenseFilterBar,
-  SourceTabs,
   SummaryStrip,
 } from '@/app/_components/expense-filter-bar';
 import { CategoryCell } from '@/app/_components/category-cell';
@@ -348,6 +350,7 @@ export function TransactionTable({
   imports,
   accounts,
   undoneImports,
+  ledgers,
 }: {
   data: TransactionRow[];
   categories: Category[];
@@ -360,12 +363,17 @@ export function TransactionTable({
   imports: ImportGroupMeta[];
   accounts: AccountGroupMeta[];
   undoneImports: UndoneImport[];
+  // One tab each (STATEMENT-CYCLES.md, the period view), with what its
+  // statement periods need.
+  ledgers: { id: string; label: string; csvSource: string | null; kind: 'card' | 'checking'; purchaseDatedCsv: boolean; statements: PeriodStatement[] }[];
 }) {
   const { params, apply } = useTableState();
   const sort = readSort(params, EXPENSES_SORT);
   const filters = readFilters(params);
-  const sourceTab = readSourceTab(params);
-  const sourceTabs = useMemo(() => availableSourceTabs(data), [data]);
+  const tab = readTab(params, ledgers);
+  const tabs = useMemo(() => availableTabs(data, ledgers), [data, ledgers]);
+  const ledger = tab.kind === 'ledger' ? (ledgers.find((l) => l.id === tab.id) ?? null) : null;
+  const tabKey = tab.kind === 'ledger' ? tab.id : tab.kind;
 
   // Hidden imports are persisted on the imports row (server-side), so the URL
   // stays clean and the choice survives reloads and deployments. Hiding drops
@@ -391,7 +399,7 @@ export function TransactionTable({
   // Filtering and sorting happen here, outside TanStack, so the URL stays
   // the single source of truth and column defs never need rebuilding.
   const visible = useMemo(() => {
-    const filtered = applyExpenseFilters(filterBySource(data, sourceTab), filters, {
+    const filtered = applyExpenseFilters(filterByTab(data, tab), filters, {
       today,
       hasSplit: (id) => id in splitsByTransaction,
       hasReceipt: (id) => id in receiptsByTransaction,
@@ -418,6 +426,7 @@ export function TransactionTable({
     today,
     params,
     hidden,
+    ledgers,
   ]);
 
   const summary = useMemo(() => summarizeView(visible), [visible]);
@@ -441,32 +450,42 @@ export function TransactionTable({
     () => imports.filter((imp) => !hidden.has(imp.id)),
     [imports, hidden],
   );
+  // All groups by upload and linked account; Manual is flat; an account's
+  // tab groups by statement period, every row of the account in one.
   const groups = useMemo(
-    () => groupRowsByImport({ all: data, visible, imports: shownImports, accounts, tab: sourceTab }),
-    [data, visible, shownImports, accounts, sourceTab],
+    () => (tab.kind === 'ledger' ? null : groupRowsByImport({ all: data, visible, imports: shownImports, accounts, tab: tab.kind })),
+    [data, visible, shownImports, accounts, tab.kind],
   );
-  // Hidden imports relevant to the current tab (bank tab filters by source;
-  // the All tab shows every hidden import). Drives the unhide strip.
-  const hiddenImports = useMemo(
+  const periods = useMemo(
     () =>
-      imports.filter(
-        (imp) =>
-          hidden.has(imp.id) &&
-          (sourceTab === 'all' || sourceTab === imp.source),
-      ),
-    [imports, hidden, sourceTab],
+      ledger
+        ? groupByPeriod({ all: filterByTab(data, tab), visible, statements: ledger.statements, purchaseDatedCsv: ledger.purchaseDatedCsv })
+        : null,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [data, visible, ledger, tabKey],
   );
+  // Hidden imports relevant to the current tab (an account's tab: uploads
+  // holding its rows; All: every hidden import). Drives the unhide strip.
+  const hiddenImports = useMemo(() => {
+    const inTab = new Set(filterByTab(data, tab).map((r) => r.importId));
+    return imports.filter((imp) => hidden.has(imp.id) && (tab.kind === 'all' || inTab.has(imp.id)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [imports, hidden, data, tabKey]);
 
-  // Collapsed batches, keyed by group key. Default expanded.
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
-    () => new Set(),
-  );
+  // Groups open or closed. All opens with every group closed, an account's
+  // tab with only its current period open, and with a filter or search
+  // active every group opens, so a match is never hidden behind a header.
+  // A click overrides the default until the tab changes.
+  const filtering = hasActiveFilters(filters);
+  const [toggled, setToggled] = useState<{ tab: string; keys: Map<string, boolean> }>(() => ({ tab: tabKey, keys: new Map() }));
+  const overrides = toggled.tab === tabKey ? toggled.keys : new Map<string, boolean>();
+  const collapsedByDefault = (key: string) => !filtering && (tab.kind === 'all' || (tab.kind === 'ledger' && key !== 'current'));
+  const isCollapsed = (key: string) => overrides.get(key) ?? collapsedByDefault(key);
   const toggleGroup = (key: string) =>
-    setCollapsedGroups((current) => {
-      const next = new Set(current);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
+    setToggled(() => {
+      const keys = new Map(overrides);
+      keys.set(key, !isCollapsed(key));
+      return { tab: tabKey, keys };
     });
 
   // Bulk selection (fork 1): React state, not the URL. Tab or filter
@@ -475,7 +494,7 @@ export function TransactionTable({
   // a server refresh (e.g. after a bulk delete) can never leave stale ids
   // acting on rows that are no longer in view.
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
-  const viewKey = JSON.stringify([sourceTab, filters]);
+  const viewKey = JSON.stringify([tabKey, filters]);
   useEffect(() => {
     setSelected(new Set());
   }, [viewKey]);
@@ -628,10 +647,11 @@ export function TransactionTable({
 
   return (
     <div className="space-y-2">
-      <SourceTabs
-        tabs={sourceTabs}
-        active={sourceTab}
-        onChange={(tab) => apply(sourceTabPatch(tab))}
+      <AccountTabs
+        tabs={tabs}
+        active={tab}
+        labels={Object.fromEntries(ledgers.map((l) => [l.id, l.label]))}
+        onChange={(next) => apply(tabPatch(next))}
       />
       <ExpenseFilterBar
         filters={filters}
@@ -682,7 +702,7 @@ export function TransactionTable({
             ))}
           </thead>
           <tbody>
-            {visible.length === 0 && groups === null && (
+            {visible.length === 0 && groups === null && periods === null && (
               <tr>
                 <td
                   colSpan={COLUMNS.length}
@@ -690,24 +710,48 @@ export function TransactionTable({
                 >
                   {hasActiveFilters(filters)
                     ? 'No rows match the current filters.'
-                    : sourceTab === 'all'
-                      ? 'No rows in this view.'
-                      : `No ${sourceTab} rows yet.`}
+                    : 'No rows in this view.'}
                 </td>
               </tr>
             )}
-            {groups === null
+            {periods
+              ? periods.map((period) => (
+                  <Fragment key={period.key}>
+                    <PeriodHeader
+                      group={period}
+                      collapsed={isCollapsed(period.key)}
+                      onToggle={() => toggleGroup(period.key)}
+                      colSpan={COLUMNS.length}
+                      kind={ledger!.kind}
+                      statements={ledger!.statements}
+                      today={today}
+                    />
+                    {!isCollapsed(period.key) && period.rows.length === 0 && (
+                      <tr className="border-b last:border-0">
+                        <td colSpan={COLUMNS.length} className="px-8 py-3 text-xs text-muted-foreground">
+                          {period.count > 0 ? 'No rows in this period match the current filters.' : 'No rows in this period yet.'}
+                        </td>
+                      </tr>
+                    )}
+                    {!isCollapsed(period.key) &&
+                      period.rows.map((dataRow) => {
+                        const row = rowById.get(dataRow.id);
+                        return row ? renderRow(row) : null;
+                      })}
+                  </Fragment>
+                ))
+              : groups === null
               ? table.getRowModel().rows.map(renderRow)
               : groups.map((group) => (
                   <Fragment key={group.key}>
                     <ImportGroupHeader
                       group={group}
-                      collapsed={collapsedGroups.has(group.key)}
+                      collapsed={isCollapsed(group.key)}
                       onToggle={() => toggleGroup(group.key)}
                       onHide={group.imp ? () => hideImport(group.imp!.id) : undefined}
                       colSpan={COLUMNS.length}
                     />
-                    {!collapsedGroups.has(group.key) &&
+                    {!isCollapsed(group.key) &&
                       group.rows.length === 0 && (
                         <tr className="border-b last:border-0">
                           <td
@@ -722,7 +766,7 @@ export function TransactionTable({
                           </td>
                         </tr>
                       )}
-                    {!collapsedGroups.has(group.key) &&
+                    {!isCollapsed(group.key) &&
                       group.rows.map((dataRow) => {
                         const row = rowById.get(dataRow.id);
                         return row ? renderRow(row) : null;

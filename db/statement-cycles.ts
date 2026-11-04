@@ -1,11 +1,11 @@
 import 'server-only';
-import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { db } from './index';
-import { bankAccounts, ledgerStatements, transactions } from './schema';
+import { bankAccounts, ledgerAccounts, ledgerStatements, transactions } from './schema';
 import { verificationRows } from './ledger';
 import { currentCycle, type CurrentCycle, type StatementRecord } from '@/lib/statement-cycles';
 
-export type RecordedStatement = StatementRecord & { source: 'verification' | 'owner' };
+export type RecordedStatement = StatementRecord & { source: 'verification' | 'owner'; chargesCents: number | null; creditsCents: number | null };
 
 // The statements recorded for each ledger account (STATEMENT-CYCLES.md),
 // oldest first.
@@ -20,6 +20,8 @@ export async function statementsFor(ledgerAccountIds: string[]): Promise<Map<str
       nextClosingDate: ledgerStatements.nextClosingDate,
       startsNewCycle: ledgerStatements.startsNewCycle,
       source: ledgerStatements.source,
+      chargesCents: ledgerStatements.chargesCents,
+      creditsCents: ledgerStatements.creditsCents,
     })
     .from(ledgerStatements)
     .where(inArray(ledgerStatements.ledgerAccountId, ledgerAccountIds))
@@ -76,4 +78,46 @@ export async function cycleSoFar(ledgerAccountId: string, statements: StatementR
     pendingInCents: pending.filter((r) => r.amountCents < 0).reduce((n, r) => n - r.amountCents, 0),
     pendingCount: pending.length,
   };
+}
+
+// The ledger accounts Expenses gives a tab each (STATEMENT-CYCLES.md, the
+// period view), by name, with what their periods need: the statement's words
+// (card or checking), whether their CSV dates rows by purchase (the caveat),
+// and their recorded statements.
+export type LedgerTab = {
+  id: string;
+  label: string;
+  csvSource: string | null;
+  kind: 'card' | 'checking';
+  purchaseDatedCsv: boolean;
+  statements: RecordedStatement[];
+};
+
+export async function getLedgerTabs(): Promise<LedgerTab[]> {
+  const rows = await db
+    .select({
+      id: ledgerAccounts.id,
+      label: ledgerAccounts.displayName,
+      csvSource: ledgerAccounts.csvSource,
+      basis: ledgerAccounts.cutoverBasis,
+      // Written out with table names: in a single-table select Drizzle renders
+      // its columns unqualified, and a bare "id" inside this subquery would be
+      // the bank account's (CLAUDE.md, Working style).
+      bankType: sql<string | null>`(select b.type from bank_accounts b where b.ledger_account_id = ledger_accounts.id order by b.created_at limit 1)`,
+    })
+    .from(ledgerAccounts)
+    .orderBy(asc(ledgerAccounts.displayName), asc(ledgerAccounts.id));
+  const statements = await statementsFor(rows.map((r) => r.id));
+  return rows.map((r) => ({
+    id: r.id,
+    label: r.label,
+    csvSource: r.csvSource,
+    // Checking where the bank says so; a CSV-only Chase ledger is checking too
+    // (its parser reads the checking export).
+    kind: r.bankType === 'depository' || (r.bankType === null && r.csvSource === 'chase') ? 'checking' : 'card',
+    // A ledger account dated on the transaction basis has a CSV that records
+    // the purchase date (Amex, Discover); the posted basis records posting.
+    purchaseDatedCsv: r.basis === 'transaction',
+    statements: statements.get(r.id) ?? [],
+  }));
 }

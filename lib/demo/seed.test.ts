@@ -225,7 +225,14 @@ describe('the linked banks', () => {
     // A passed statement check records its statement, as the app does.
     const amexStatement = seed.bankStatements[amex.account.providerAccountId];
     expect(seed.ledgerStatements).toEqual([
-      expect.objectContaining({ ledgerAccountId: amex.ledger.id, closingDate: amexStatement.to, periodStart: amexStatement.from, source: 'verification' }),
+      expect.objectContaining({
+        ledgerAccountId: amex.ledger.id,
+        closingDate: amexStatement.to,
+        periodStart: amexStatement.from,
+        chargesCents: amexStatement.chargesCents,
+        creditsCents: amexStatement.creditsCents,
+        source: 'verification',
+      }),
     ]);
   });
 

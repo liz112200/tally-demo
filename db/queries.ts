@@ -113,6 +113,13 @@ export type TransactionRow = {
   bankAmountBeforeCents: number | null;
   // Set when the bank removed a row the owner had built on.
   removedByBankAt: Date | null;
+  // The ledger account the row belongs to: its bank account's for a synced
+  // row, its upload's for a CSV row; null for manual entries.
+  ledgerAccountId: string | null;
+  // The date its statement counts it on (STATEMENT-CYCLES.md): the bank's
+  // posting date for a synced row; the row's own date otherwise, which for
+  // the Amex and Discover CSVs is the purchase date.
+  postedDate: string;
 };
 
 // The dedup hash of a row's current values, in SQL: the canonical string of
@@ -142,10 +149,13 @@ export async function getTransactions(): Promise<TransactionRow[]> {
       unverified: sql<boolean>`(${transactions.bankAccountId} is not null and ${bankAccounts.verifiedAt} is null)`,
       alongsideOfId: transactions.alongsideTransactionId,
       editedAfterImport: sql<boolean>`(${transactions.providerTransactionId} is null and ${transactions.dedupHash} is not null and ${transactions.dedupHash} <> ${importHashSql})`,
+      ledgerAccountId: sql<string | null>`coalesce(${bankAccounts.ledgerAccountId}, ${imports.ledgerAccountId})`,
+      postedDate: sql<string>`coalesce(${transactions.providerRaw}->>'date', ${transactions.date}::text)`,
     })
     .from(transactions)
     .leftJoin(categories, eq(transactions.categoryId, categories.id))
     .leftJoin(bankAccounts, eq(bankAccounts.id, transactions.bankAccountId))
+    .leftJoin(imports, eq(imports.id, transactions.importId))
     .where(isNull(transactions.deletedAt))
     .orderBy(desc(transactions.date), desc(transactions.createdAt));
   return rows.map(({ categoryIsSplittable, categoryCountsAsSpending, ...row }) => ({
@@ -2851,6 +2861,7 @@ export type LinkedAccountGroupRow = {
   // Slice 7: the ledger account it syncs into, and whether its rows count.
   ledgerName: string | null;
   verifiedAt: Date | null;
+  ledgerAccountId: string | null;
   // For the stale-sync line (lib/bank-sync/staleness.ts).
   syncEnabled: boolean;
   lastSyncError: string | null;
@@ -2871,6 +2882,7 @@ export async function getLinkedAccountGroups(): Promise<LinkedAccountGroupRow[]>
       status: bankConnections.status,
       itemErrorCode: bankConnections.itemErrorCode,
       ledgerName: ledgerAccounts.displayName,
+      ledgerAccountId: bankAccounts.ledgerAccountId,
       verifiedAt: bankAccounts.verifiedAt,
       syncEnabled: bankAccounts.syncEnabled,
       lastSyncError: bankAccounts.lastSyncError,

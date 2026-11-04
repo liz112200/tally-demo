@@ -2,7 +2,6 @@
 // lib/expense-filters.ts. Groups derive from the imports list — a batch
 // whose rows are all filtered out still renders as an empty group — while
 // row order inside a group follows the caller's current sort.
-import type { SourceTab } from './expense-filters';
 
 export type ImportGroupMeta = {
   id: string;
@@ -69,6 +68,9 @@ export type AccountGroupMeta = {
   lastSyncedAt: string | null;
   // Why the account is not syncing (lib/bank-sync/accounts-view.ts), or null.
   notSyncing?: { text: string; needsOwner: boolean } | null;
+  // Its current statement cycle, worded as on /accounts, shown in place of
+  // one long date range (STATEMENT-CYCLES.md); null without a statement.
+  cycleText?: string | null;
 };
 
 const ACCOUNT_KEY_PREFIX = 'account:';
@@ -93,8 +95,7 @@ export type RowGroup<T> = {
 
 // Returns null when the view should render flat: the Manual tab (manual
 // entries are never grouped) or a view with neither imports nor linked
-// accounts. Synced rows group by account (the Linked tab shows only those);
-// CSV rows group by upload batch.
+// accounts. Synced rows group by account; CSV rows group by upload batch.
 export function groupRowsByImport<T extends GroupableRow>(input: {
   // Every non-deleted row, unfiltered (batch stats).
   all: readonly T[];
@@ -104,15 +105,13 @@ export function groupRowsByImport<T extends GroupableRow>(input: {
   imports: readonly ImportGroupMeta[];
   // Linked accounts, in display order.
   accounts?: readonly AccountGroupMeta[];
-  tab: SourceTab;
+  // Upload and account groups are the All tab's; Manual renders flat, and a
+  // ledger account's tab groups by statement period (lib/statement-periods.ts).
+  tab: 'all' | 'manual';
 }): RowGroup<T>[] | null {
   if (input.tab === 'manual') return null;
-  const tabImports =
-    input.tab === 'all'
-      ? input.imports
-      : input.imports.filter((imp) => imp.source === input.tab);
-  const tabAccounts =
-    input.tab === 'all' || input.tab === 'plaid' ? (input.accounts ?? []) : [];
+  const tabImports = input.imports;
+  const tabAccounts = input.accounts ?? [];
   if (tabImports.length === 0 && tabAccounts.length === 0) return null;
 
   const knownImports = new Set(tabImports.map((imp) => imp.id));
@@ -165,10 +164,8 @@ export function groupRowsByImport<T extends GroupableRow>(input: {
     batchDates: null,
     batchSize: ungrouped.length,
   };
-  // Manual entries lead the All tab; on a bank or Linked tab the bucket only
-  // exists defensively (such rows always belong to an import or account), so
-  // it trails.
-  if (input.tab === 'all' && ungrouped.length > 0) groups.push(ungroupedGroup);
+  // Manual entries lead.
+  if (ungrouped.length > 0) groups.push(ungroupedGroup);
   for (const account of tabAccounts) {
     const key = ACCOUNT_KEY_PREFIX + account.id;
     groups.push({ key, imp: null, account, rows: visibleByKey.get(key) ?? [], ...stats(key) });
@@ -176,7 +173,6 @@ export function groupRowsByImport<T extends GroupableRow>(input: {
   for (const imp of tabImports) {
     groups.push({ key: imp.id, imp, account: null, rows: visibleByKey.get(imp.id) ?? [], ...stats(imp.id) });
   }
-  if (input.tab !== 'all' && ungrouped.length > 0) groups.push(ungroupedGroup);
   return groups;
 }
 

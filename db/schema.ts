@@ -374,6 +374,12 @@ export const ledgerStatements = pgTable(
     periodStart: date('period_start', { mode: 'string' }),
     nextClosingDate: date('next_closing_date', { mode: 'string' }),
     startsNewCycle: boolean('starts_new_cycle').notNull().default(false),
+    // The statement's own totals when known, positive as printed: charges
+    // (purchases, fees, interest; withdrawals on checking) and credits
+    // (payments and credits; deposits). A period in Expenses compares its
+    // rows with them and says when they differ.
+    chargesCents: bigint('charges_cents', { mode: 'number' }),
+    creditsCents: bigint('credits_cents', { mode: 'number' }),
     source: text('source').$type<'verification' | 'owner'>().notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -382,6 +388,7 @@ export const ledgerStatements = pgTable(
     check('ledger_statements_source', sql`${table.source} in ('verification', 'owner')`),
     check('ledger_statements_period', sql`${table.periodStart} is null or ${table.periodStart} <= ${table.closingDate}`),
     check('ledger_statements_next', sql`${table.nextClosingDate} is null or ${table.nextClosingDate} > ${table.closingDate}`),
+    check('ledger_statements_totals', sql`(${table.chargesCents} is null or ${table.chargesCents} >= 0) and (${table.creditsCents} is null or ${table.creditsCents} >= 0)`),
   ],
 );
 

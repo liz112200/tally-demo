@@ -107,36 +107,60 @@ export function hasActiveFilters(filters: ExpenseFilters): boolean {
   return Object.values(filterPatch(filters)).some((v) => v !== null);
 }
 
-// ---- Per-account source tabs ----
-// The segmented control above the table is a source filter with its own
-// URL param (?source=chase), separate from the filter bar: switching tabs
-// keeps the filters, and Clear keeps the tab.
+// ---- Account tabs ----
+// The segmented control above the table picks an account with its own URL
+// param (?tab=<ledger account id>), separate from the filter bar: switching
+// tabs keeps the filters, and Clear keeps the tab.
 
-export const SOURCE_TABS = ['all', 'chase', 'discover', 'amex', 'plaid', 'manual'] as const;
-export type SourceTab = (typeof SOURCE_TABS)[number];
+// Expenses tabs (STATEMENT-CYCLES.md, the period view): All, one per ledger
+// account (every row of that account, CSV and synced, with the manual
+// purchases paid alongside its rows), and Manual. They replaced tabs per CSV
+// source plus Linked, which split each card in two at its cutover.
+export type ExpenseTab = { kind: 'all' } | { kind: 'manual' } | { kind: 'ledger'; id: string };
+export type LedgerTabMeta = { id: string; label: string; csvSource: string | null };
 
-export function readSourceTab(params: URLSearchParams): SourceTab {
-  return pick(params.get('source'), SOURCE_TABS, 'all');
+const ALL: ExpenseTab = { kind: 'all' };
+
+// From the URL: `tab` is all, manual or a ledger account id. A link from
+// before carries `source`: a CSV source opens its ledger account, Linked
+// (`plaid`) opens All, manual opens Manual.
+export function readTab(params: URLSearchParams, ledgers: readonly LedgerTabMeta[]): ExpenseTab {
+  const tab = params.get('tab');
+  if (tab === 'manual') return { kind: 'manual' };
+  if (tab && ledgers.some((l) => l.id === tab)) return { kind: 'ledger', id: tab };
+  const source = params.get('source');
+  if (source === 'manual') return { kind: 'manual' };
+  const bySource = source ? ledgers.find((l) => l.csvSource === source) : undefined;
+  return bySource ? { kind: 'ledger', id: bySource.id } : ALL;
 }
 
-export function sourceTabPatch(tab: SourceTab): ParamPatch {
-  return { source: tab === 'all' ? null : tab };
+export function tabPatch(tab: ExpenseTab): ParamPatch {
+  return { tab: tab.kind === 'all' ? null : tab.kind === 'manual' ? 'manual' : tab.id, source: null };
 }
 
-export function filterBySource<T extends { source: string }>(
-  rows: readonly T[],
-  tab: SourceTab,
-): T[] {
-  return tab === 'all' ? [...rows] : rows.filter((row) => row.source === tab);
+export const sameTab = (a: ExpenseTab, b: ExpenseTab) =>
+  a.kind === b.kind && (a.kind !== 'ledger' || (b.kind === 'ledger' && a.id === b.id));
+
+type TabRow = { id: string; source: string; ledgerAccountId: string | null; alongsideOfId: string | null };
+
+// A ledger tab holds the account's rows and the manual purchases paid
+// alongside them; Manual every manual entry.
+export function filterByTab<T extends TabRow>(rows: readonly T[], tab: ExpenseTab): T[] {
+  if (tab.kind === 'all') return [...rows];
+  if (tab.kind === 'manual') return rows.filter((r) => r.source === 'manual');
+  const inLedger = new Set(rows.filter((r) => r.ledgerAccountId === tab.id).map((r) => r.id));
+  return rows.filter((r) => inLedger.has(r.id) || (r.alongsideOfId !== null && inLedger.has(r.alongsideOfId)));
 }
 
-// Tabs render only for sources that actually have rows; 'all' is always
-// present, and tab order is fixed rather than data-ordered.
-export function availableSourceTabs(
-  rows: readonly { source: string }[],
-): SourceTab[] {
-  const present = new Set(rows.map((row) => row.source));
-  return SOURCE_TABS.filter((tab) => tab === 'all' || present.has(tab));
+// All, then each ledger account holding a row (in the order given), then
+// Manual when there are manual entries.
+export function availableTabs(rows: readonly TabRow[], ledgers: readonly LedgerTabMeta[]): ExpenseTab[] {
+  const used = new Set(rows.map((r) => r.ledgerAccountId));
+  return [
+    ALL,
+    ...ledgers.filter((l) => used.has(l.id)).map((l): ExpenseTab => ({ kind: 'ledger', id: l.id })),
+    ...(rows.some((r) => r.source === 'manual') ? [{ kind: 'manual' } as ExpenseTab] : []),
+  ];
 }
 
 // Inclusive lower bound for "last N days": today counts as day one, so

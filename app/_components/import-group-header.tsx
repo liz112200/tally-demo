@@ -172,10 +172,14 @@ export function ImportGroupHeader<T>({
             </span>
           )}
           {!imp && !account && <span>manual entries</span>}
-          {group.batchDates && (
-            <span className="font-mono">
-              {group.batchDates.from} – {group.batchDates.to}
-            </span>
+          {account?.cycleText ? (
+            <span>{account.cycleText}</span>
+          ) : (
+            group.batchDates && (
+              <span className="font-mono">
+                {group.batchDates.from} – {group.batchDates.to}
+              </span>
+            )
           )}
           <span>
             <span className="font-mono">{group.batchSize}</span>{' '}

@@ -179,7 +179,8 @@ export async function recordStatementCheck(accountId: unknown, statement: unknow
       excluded: compared.excluded.map((r) => ({ postedDate: r.postedDate, amountCents: r.amountCents, description: r.description })),
       outcome: which.data,
     };
-    if (!(await recordVerification(id.data, { passed: which.data === 'pass', record, period: { from: s.from, to: s.to } }))) return { error: 'Account not found.' };
+    const period = { from: s.from, to: s.to, chargesCents: s.chargesCents, creditsCents: s.creditsCents };
+    if (!(await recordVerification(id.data, { passed: which.data === 'pass', record, period }))) return { error: 'Account not found.' };
     refresh();
     return which.data === 'pass'
       ? { ok: true, message: 'Verified against the statement. This account’s synced rows now count.' }
@@ -197,6 +198,9 @@ const recordedStatementSchema = z
     periodStart: z.union([isoDate, z.literal('')]),
     nextClosingDate: z.union([isoDate, z.literal('')]),
     startsNewCycle: z.boolean(),
+    // The statement's two totals as printed, optional.
+    charges: z.string().max(40).optional(),
+    credits: z.string().max(40).optional(),
   })
   .refine((s) => !s.periodStart || s.periodStart <= s.closingDate, { message: 'The period starts after it closes.' })
   .refine((s) => !s.nextClosingDate || s.nextClosingDate > s.closingDate, { message: 'The next closing date must come after this one.' });
@@ -209,10 +213,18 @@ export async function recordStatement(input: unknown): Promise<ActionResult> {
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Invalid request.' };
   const s = parsed.data;
   if (s.closingDate > today()) return { error: 'That closing date is still to come; record a statement once it has closed.' };
+  let chargesCents: number | null = null;
+  let creditsCents: number | null = null;
+  try {
+    chargesCents = s.charges?.trim() ? Math.abs(parseDollars(s.charges)) : null;
+    creditsCents = s.credits?.trim() ? Math.abs(parseDollars(s.credits)) : null;
+  } catch {
+    return { error: 'Enter the totals as amounts, like 1,234.56.' };
+  }
   return attempt('recordStatement', async () => {
     await recordStatements(
       s.ledgerAccountId,
-      [{ closingDate: s.closingDate, periodStart: s.periodStart || null, nextClosingDate: s.nextClosingDate || null, startsNewCycle: s.startsNewCycle }],
+      [{ closingDate: s.closingDate, periodStart: s.periodStart || null, nextClosingDate: s.nextClosingDate || null, startsNewCycle: s.startsNewCycle, chargesCents, creditsCents }],
       'owner',
     );
     refresh();

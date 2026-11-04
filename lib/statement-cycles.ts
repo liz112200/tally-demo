@@ -131,24 +131,18 @@ export function ordinal(n: number): string {
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
-// The cycle line on /accounts, in the account's own words: charges and
-// payments and credits on a card, withdrawals and deposits on checking (where
-// "credit" would name a paycheck). Exact dates are stated; a projected close
-// says what it rests on, every time, and a range when the days have varied.
-export function cycleLine(input: {
+// "This cycle, Oct 12 – closes Nov 11, in 7 days: the 11th, from 10
+// statements": the current cycle's dates and how its close is known. Exact
+// dates are stated; a projected close says what it rests on, every time, and
+// a range when the days have varied. Shared by the /accounts line and the
+// current period's header in Expenses.
+export function cycleHead(input: {
   kind: 'card' | 'checking';
   cycle: CurrentCycle;
   today: string;
-  verified: boolean;
-  chargesCents: number;
-  creditsCents: number;
-  pendingOutCents: number;
-  pendingInCents: number;
-  pendingCount: number;
   formatDay: (iso: string) => string;
-  formatMoney: (minor: number) => string;
 }): string {
-  const { kind, cycle, formatDay: day, formatMoney: usd } = input;
+  const { kind, cycle, formatDay: day } = input;
   const left = (iso: string) => daysBetween(input.today, iso);
   const when = (iso: string) => (left(iso) === 0 ? 'today' : left(iso) === 1 ? 'tomorrow' : `in ${left(iso)} days`);
   const start = cycle.start === null ? 'its first day' : cycle.startExact ? day(cycle.start) : `about ${day(cycle.start)}`;
@@ -162,12 +156,36 @@ export function cycleLine(input: {
       `expected to close ${day(cycle.end.from)}–${day(cycle.end.to)}, in ${left(cycle.end.from)}–${left(cycle.end.to)} days: ` +
       `between the ${ordinal(p.minDay)} and the ${ordinal(p.maxDay)} across ${plural(p.count, 'statement')}`;
   else close = `expected to close around ${day(cycle.end.to)}, ${when(cycle.end.to)}: from ${plural(p?.count ?? 0, 'statement')}`;
-  const missing = cycle.missingSince
-    ? ` The statement after the one closing ${day(cycle.missingSince)} is not recorded; record it for an exact start.`
-    : '';
-  const head = `${kind === 'card' ? 'This cycle' : 'This statement period'}, ${start} – ${close}`;
+  return `${kind === 'card' ? 'This cycle' : 'This statement period'}, ${start} – ${close}`;
+}
+
+// The sentence asking for a statement that closed and is not recorded.
+export function missingStatementNote(cycle: CurrentCycle, formatDay: (iso: string) => string): string | null {
+  return cycle.missingSince ? `The statement after the one closing ${formatDay(cycle.missingSince)} is not recorded; record it for an exact start.` : null;
+}
+
+// The cycle line on /accounts, in the account's own words: charges and
+// payments and credits on a card, withdrawals and deposits on checking (where
+// "credit" would name a paycheck).
+export function cycleLine(input: {
+  kind: 'card' | 'checking';
+  cycle: CurrentCycle;
+  today: string;
+  verified: boolean;
+  chargesCents: number;
+  creditsCents: number;
+  pendingOutCents: number;
+  pendingInCents: number;
+  pendingCount: number;
+  formatDay: (iso: string) => string;
+  formatMoney: (minor: number) => string;
+}): string {
+  const { kind, formatMoney: usd } = input;
+  const head = cycleHead(input);
+  const note = missingStatementNote(input.cycle, input.formatDay);
+  const missing = note ? ` ${note}` : '';
   if (!input.verified) return `${head}. No total until this account is verified.${missing}`;
-  const [out, back] = kind === 'card' ? ['charges', 'payments and credits'] : ['withdrawals', 'deposits'];
+  const [out, back] = statementWords(kind);
   // Pending money out and in apart, never netted into one signed figure.
   const sides = [
     input.pendingOutCents > 0 ? `${usd(input.pendingOutCents)} in ${out}` : null,
@@ -175,6 +193,11 @@ export function cycleLine(input: {
   ].filter(Boolean);
   const pending = input.pendingCount > 0 ? `; pending (${input.pendingCount}), counted once posted: ${sides.join(', ')}` : '';
   return `${head}. So far: ${usd(input.chargesCents)} in ${out}, ${usd(input.creditsCents)} in ${back}${pending}.${missing}`;
+}
+
+// A statement's two sides in the account's own words.
+export function statementWords(kind: 'card' | 'checking'): [string, string] {
+  return kind === 'card' ? ['charges', 'payments and credits'] : ['withdrawals', 'deposits'];
 }
 
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];

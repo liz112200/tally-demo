@@ -71,17 +71,6 @@ describe('groupRowsByImport', () => {
     expect(groups[0].rows.map((r) => r.id)).toEqual(['t5']);
   });
 
-  it('keeps only the tab source imports on a bank tab', () => {
-    const chaseRows = rows.filter((r) => r.source === 'chase');
-    const groups = groupRowsByImport({
-      all: rows,
-      visible: chaseRows,
-      imports,
-      tab: 'chase',
-    })!;
-    expect(groups.map((g) => g.key)).toEqual(['i-new', 'i-old']);
-  });
-
   it('preserves the caller sort order inside a group', () => {
     const sorted = [...rows].sort((a, b) => a.date.localeCompare(b.date));
     const groups = groupRowsByImport({ all: rows, visible: sorted, imports, tab: 'all' })!;
@@ -110,10 +99,10 @@ describe('groupRowsByImport', () => {
       all: stray,
       visible: stray,
       imports: [chaseNew],
-      tab: 'chase',
+      tab: 'all',
     })!;
-    expect(groups.map((g) => g.key)).toEqual(['i-new', UNGROUPED_KEY]);
-    expect(groups[1].rows.map((r) => r.id)).toEqual(['t9']);
+    expect(groups.map((g) => g.key)).toEqual([UNGROUPED_KEY, 'i-new']);
+    expect(groups[0].rows.map((r) => r.id)).toEqual(['t9']);
   });
 });
 
@@ -180,30 +169,6 @@ describe('groupRowsByImport with linked accounts', () => {
     expect(checkingGroup.batchSize).toBe(2);
     // An enabled account with nothing synced yet still shows, empty.
     expect(groups[2]).toMatchObject({ account: card, rows: [], batchSize: 0, batchDates: null });
-  });
-
-  it('shows only account groups on the Linked tab', () => {
-    const linked = rows.filter((r) => r.source === 'plaid');
-    const groups = groupRowsByImport({
-      all: linked,
-      visible: linked,
-      imports: [chaseNew],
-      accounts: [checking],
-      tab: 'plaid',
-    })!;
-    expect(groups.map((g) => g.key)).toEqual(['account:acc-1']);
-  });
-
-  it('leaves bank tabs to their uploads', () => {
-    const chase = rows.filter((r) => r.source === 'chase');
-    const groups = groupRowsByImport({
-      all: chase,
-      visible: chase,
-      imports: [chaseNew],
-      accounts: [checking],
-      tab: 'chase',
-    })!;
-    expect(groups.map((g) => g.key)).toEqual(['i-new']);
   });
 
   it('groups accounts even when there are no uploads at all', () => {

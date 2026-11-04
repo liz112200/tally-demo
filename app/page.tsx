@@ -18,6 +18,8 @@ import { ExpensesToolbar } from '@/app/_components/expense-dialogs';
 import { isDemoMode } from '@/lib/demo-mode';
 import { notSyncingReason } from '@/lib/bank-sync/accounts-view';
 import { staleLines } from '@/lib/bank-sync/staleness';
+import { getLedgerTabs } from '@/db/statement-cycles';
+import { currentCycle, cycleHead } from '@/lib/statement-cycles';
 import { AlertTriangle, Info } from 'lucide-react';
 import type { SplitSummary } from '@/app/_components/split-editor';
 import { requireUser } from '@/app/_lib/session';
@@ -33,6 +35,7 @@ export default async function Home() {
     imports,
     deletedImports,
     linkedAccounts,
+    ledgers,
   ] = await Promise.all([
     getTransactions(),
     getCategories(),
@@ -42,7 +45,18 @@ export default async function Home() {
     getImports(),
     getDeletedImports(),
     getLinkedAccountGroups(),
+    getLedgerTabs(),
   ]);
+  // Statement cycles (STATEMENT-CYCLES.md): each linked account's header in
+  // All names its current cycle rather than one long range of dates.
+  const today = new Date().toISOString().slice(0, 10);
+  const shortDay = (iso: string) =>
+    new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+  const cycleTextFor = (ledgerAccountId: string | null) => {
+    const ledger = ledgers.find((l) => l.id === ledgerAccountId);
+    const cycle = ledger ? currentCycle(ledger.statements, today) : null;
+    return ledger && cycle ? cycleHead({ kind: ledger.kind, cycle, today, formatDay: shortDay }) : null;
+  };
   // Synced rows group by the linked account they came from. Plain strings
   // for the client, as with imports.
   // A synced account's group is named after its ledger account, the account
@@ -54,6 +68,7 @@ export default async function Home() {
       a.ledgerName ??
       [a.institutionName, a.mask ? `${a.name} ••${a.mask}` : a.name].filter(Boolean).join(' · '),
     lastSyncedAt: a.lastSyncedAt ? a.lastSyncedAt.toISOString() : null,
+    cycleText: cycleTextFor(a.ledgerAccountId),
     notSyncing:
       notSyncingReason(a, a) ??
       (a.verifiedAt === null ? { text: 'awaiting verification; rows not counted', needsOwner: true } : null),
@@ -202,6 +217,7 @@ export default async function Home() {
           imports={importGroups}
           accounts={accountGroups}
           undoneImports={undoneImports}
+          ledgers={ledgers}
         />
       </Suspense>
     </main>

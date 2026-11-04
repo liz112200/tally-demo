@@ -478,7 +478,7 @@ export async function verificationRows(accountId: string, from: string, to: stri
 // every check adds to the account's history rather than replacing it.
 export async function recordVerification(
   accountId: string,
-  outcome: { passed: boolean; record: Record<string, unknown>; period?: { from: string; to: string } },
+  outcome: { passed: boolean; record: Record<string, unknown>; period?: { from: string; to: string; chargesCents: number; creditsCents: number } },
 ): Promise<boolean> {
   return db.transaction(async (tx) => {
     const updated = await tx
@@ -492,7 +492,8 @@ export async function recordVerification(
       .returning({ id: bankAccounts.id, ledgerAccountId: bankAccounts.ledgerAccountId });
     const [account] = updated;
     if (account && outcome.passed && outcome.period && account.ledgerAccountId) {
-      await recordStatements(account.ledgerAccountId, [{ closingDate: outcome.period.to, periodStart: outcome.period.from }], 'verification', tx);
+      const { from, to, chargesCents, creditsCents } = outcome.period;
+      await recordStatements(account.ledgerAccountId, [{ closingDate: to, periodStart: from, chargesCents, creditsCents }], 'verification', tx);
     }
     return updated.length > 0;
   });
@@ -504,7 +505,14 @@ export async function recordVerification(
 // a change-of-cycle mark is never cleared, and the first source stays.
 export async function recordStatements(
   ledgerAccountId: string,
-  statements: { closingDate: string; periodStart?: string | null; nextClosingDate?: string | null; startsNewCycle?: boolean }[],
+  statements: {
+    closingDate: string;
+    periodStart?: string | null;
+    nextClosingDate?: string | null;
+    startsNewCycle?: boolean;
+    chargesCents?: number | null;
+    creditsCents?: number | null;
+  }[],
   source: 'verification' | 'owner',
   conn: Tx | typeof db = db,
 ): Promise<void> {
@@ -518,6 +526,8 @@ export async function recordStatements(
         periodStart: s.periodStart ?? null,
         nextClosingDate: s.nextClosingDate ?? null,
         startsNewCycle: s.startsNewCycle ?? false,
+        chargesCents: s.chargesCents ?? null,
+        creditsCents: s.creditsCents ?? null,
         source,
       })),
     )
@@ -527,6 +537,8 @@ export async function recordStatements(
         periodStart: sql`coalesce(excluded.period_start, ${ledgerStatements.periodStart})`,
         nextClosingDate: sql`coalesce(excluded.next_closing_date, ${ledgerStatements.nextClosingDate})`,
         startsNewCycle: sql`${ledgerStatements.startsNewCycle} or excluded.starts_new_cycle`,
+        chargesCents: sql`coalesce(excluded.charges_cents, ${ledgerStatements.chargesCents})`,
+        creditsCents: sql`coalesce(excluded.credits_cents, ${ledgerStatements.creditsCents})`,
       },
     });
 }

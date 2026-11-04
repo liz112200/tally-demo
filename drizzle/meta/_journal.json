@@ -239,6 +239,13 @@
       "when": 1793736363824,
       "tag": "0033_drop_ledger_closing_days",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1793767327298,
+      "tag": "0034_statement_totals",
+      "breakpoints": true
     }
   ]
 }

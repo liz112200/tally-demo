@@ -197,7 +197,7 @@ function LedgerLines({
         </div>
       ) : null}
       <CycleLine cycle={closing.cycle} kind={closing.kind} verified={state.verifiedAt !== null} today={closing.today} />
-      {linked && <StatementsControl ledgerAccountId={state.ledgerAccountId} statements={closing.statements} today={closing.today} />}
+      {linked && <StatementsControl ledgerAccountId={state.ledgerAccountId} statements={closing.statements} today={closing.today} kind={closing.kind} />}
       {review && linked && (
         <details open className="mt-1 rounded-lg border px-3 py-2">
           <summary className="cursor-pointer text-foreground">Boundary review: the days around {review.cutover}</summary>

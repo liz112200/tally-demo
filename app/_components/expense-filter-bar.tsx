@@ -19,55 +19,45 @@ import {
   type DateRangeKey,
   type ExpenseFilters,
   type ReceiptFilterKey,
-  type SourceTab,
+  type ExpenseTab,
   type SplitStatusKey,
   type ViewSummary,
+  sameTab,
 } from '@/lib/expense-filters';
 
 type Category = { id: string; name: string };
 
-const SOURCE_TAB_LABELS: Record<SourceTab, string> = {
-  all: 'All',
-  chase: 'Chase',
-  discover: 'Discover',
-  amex: 'Amex',
-  plaid: 'Linked',
-  manual: 'Manual',
-};
-
-// Per-account segmented control, same visual grammar as the split editor's
-// method picker. Tabs render only for sources present in the data.
-export function SourceTabs({
+// Account tabs (STATEMENT-CYCLES.md): All, one per ledger account by its
+// name, Manual. Same visual grammar as the split editor's method picker.
+export function AccountTabs({
   tabs,
   active,
+  labels,
   onChange,
 }: {
-  tabs: SourceTab[];
-  active: SourceTab;
-  onChange: (tab: SourceTab) => void;
+  tabs: ExpenseTab[];
+  active: ExpenseTab;
+  // Ledger account names by id.
+  labels: Record<string, string>;
+  onChange: (tab: ExpenseTab) => void;
 }) {
   if (tabs.length <= 1) return null;
+  const label = (t: ExpenseTab) => (t.kind === 'all' ? 'All' : t.kind === 'manual' ? 'Manual' : (labels[t.id] ?? 'Account'));
   return (
-    <div
-      role="tablist"
-      aria-label="Filter by account"
-      className="inline-flex w-fit gap-1 rounded-lg bg-muted p-1 text-[13px]"
-    >
+    <div role="tablist" aria-label="Filter by account" className="inline-flex w-fit flex-wrap gap-1 rounded-lg bg-muted p-1 text-[13px]">
       {tabs.map((tab) => (
         <button
-          key={tab}
+          key={tab.kind === 'ledger' ? tab.id : tab.kind}
           type="button"
           role="tab"
-          aria-selected={active === tab}
+          aria-selected={sameTab(active, tab)}
           onClick={() => onChange(tab)}
           className={cn(
             'rounded-md px-2.5 py-0.5 transition-colors',
-            active === tab
-              ? 'bg-card font-medium shadow-sm'
-              : 'text-muted-foreground hover:text-foreground',
+            sameTab(active, tab) ? 'bg-card font-medium shadow-sm' : 'text-muted-foreground hover:text-foreground',
           )}
         >
-          {SOURCE_TAB_LABELS[tab]}
+          {label(tab)}
         </button>
       ))}
     </div>

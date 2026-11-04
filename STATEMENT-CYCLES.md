@@ -89,23 +89,90 @@ back (dates without a year are their latest occurrence) and records nothing
 while any part of it is unreadable. The owner's dates live only in the
 database, never in the repository.
 
-## Open, for the period view
+## The period view (decided and built 2026-11-03)
 
-Ask the owner again on or after 2026-11-10, after a week of living with the
-cycle line, whether the period view is still wanted. If it is, these three
-are decided with the owner, not by default:
+The owner asked for it the day "this cycle so far" shipped: the cycle line
+gives one number per card, and what they wanted was to see where one
+statement ends and the next begins while reading the list.
 
-- **Tabs or picker.** If an account picker lists ledger accounts while the
-  source tabs still say "Amex", the same word means two things on one
-  screen: rows from the Amex CSV, and everything in the Amex ledger account.
-  Neither control is confusing alone; together they are. The choice is
-  between the picker (smaller, leaves that conflict) and replacing the
-  source tabs with ledger-account tabs (bigger, and also closes PHASE11's
-  "one Expenses group per ledger account"). Answer the conflict; do not
-  assume the picker is additive.
-- **The purchase-date caveat in the UI**, beside every period that reaches
-  back before a cutover (above).
-- **Rows with no statement stay visible**: manual entries, CSV rows before a
-  cutover, rows of an unverified account, pending rows. Each has its place
-  (above and in the earlier proposal); none may drop out of a period view
-  unremarked.
+### Tabs: one per ledger account (option Y, the owner's choice)
+
+The source tabs (All, Chase, Discover, Amex, Linked, Manual) date from CSV
+imports: "Amex" means rows from the Amex CSV. Since linking, one card's
+history is split across two tabs (Amex's rows before the cutover under
+Amex, after it under Linked), and Venture X, with no CSV, appears only under
+Linked. No source tab can show a statement period that spans a cutover. A
+ledger-account picker beside them would put the same word on two controls
+meaning different things, and two controls filtering one axis can combine to
+nothing (the Amex CSV tab with Venture X picked).
+
+So the tabs become: **All · one tab per ledger account · Manual**. Linked
+and the source tabs go. A ledger tab holds every row of that account, CSV
+and synced, grouped by statement period. All keeps today's grouping (manual
+entries, each linked account, each CSV upload), because Undo import, Restore,
+rename and hide live on upload headers. This closes PHASE11's "one Expenses
+group per ledger account". Old links with `?source=` open the matching
+ledger tab, or All.
+
+### Periods within a ledger tab
+
+- **Boundaries** come from the recorded statements; a row belongs to the
+  period its statement counts it in: the posting date for synced rows,
+  which is what the statement uses. A row bought on the closing day and
+  posted the next day therefore sits in the next period, with its purchase
+  date showing; the period header says so when it holds one.
+- **Headers** replace the single date range: the newest is the current
+  cycle, worded as on /accounts (its close and what that rests on); past
+  periods read "Statement Sep 12 – Oct 11 · 41 rows · charges, credits" and
+  are collapsed; the current one is open. In All, each linked account's
+  header names its current cycle instead of one long range.
+- **Totals** in a header are the rows listed, counted as a statement counts
+  them: posted rows of every category, card payments and other transfers
+  included, with pending rows and purchases paid alongside left out and
+  named. The owner first chose "as the Expenses summary counts them"; that
+  leaves transfers out, and a statement counts a card payment as a credit,
+  so no period could ever match its statement, which the comparison below
+  needs. The Expenses spending and credit totals stay in the summary strip.
+  The header labels its figures "statement figures" (with a tooltip saying
+  transfers are in them), so a period's charges, which include card
+  payments, are not read against Insights and taken for an error.
+  Rows of an unverified account are in a period's totals (they are on the
+  statement) and named, as not yet in spending.
+- **The statement beside its rows.** Where a recorded statement carries its
+  totals (every statement check records them; one recorded by hand may),
+  the header states both: "the statement says $X and $Y: matches", or, per
+  side that differs, the statement's figure, the rows' and the difference.
+  Never an error: a difference is an amount edited on purpose, a row
+  deleted, or a row missing, and the owner wants to see which.
+- **CSV rows carry no posting date** (Amex, Discover), so they can only be
+  placed by their own date, the purchase date: the same limitation as the
+  caveat below, not a second rule. Chase's CSV records the posting date.
+- **Collapsed by default.** All opens with every group closed; an
+  account's tab with only its current period open. With a search or filter
+  active every group opens, so a match is never hidden behind a header (the
+  demo strip's "Split a dinner" opens a search). Tabs show names only: a
+  figure per tab would be noise, and /accounts has it.
+
+### The purchase-date caveat, in the UI
+
+Every period holding CSV rows from a CSV that records the purchase date
+(Amex, Discover; Chase's records the posting date) says beside its total
+that a purchase near the closing day may belong to the neighbouring
+statement.
+
+### Rows with no statement never drop out
+
+- Rows before the earliest recorded statement form one group, "Before the
+  recorded statements", by date, with no boundaries invented.
+- Rows after the latest closing are the current cycle, its start marked
+  "about" when a statement is missing.
+- Pending rows stay in the current cycle, marked, out of its total, counted
+  in its header.
+- Rows of an unverified account stay in their period, marked not counted,
+  out of its total.
+- Manual entries belong to no account: the Manual and All tabs, as now. A
+  purchase paid alongside a card row (PAID-ALONGSIDE.md) is shown under that
+  row's period too, marked as manual and left out of the period's total
+  (it is not on the statement), so it does not vanish from the account it
+  was paid beside.
+- Every ledger tab's period counts add up to its row count, tested.

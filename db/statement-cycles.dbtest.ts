@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { db } from './index';
 import { transactions } from './schema';
 import { cycleSoFar, statementsFor } from './statement-cycles';
+import { getTransactions } from './queries';
 import { account, ptxn, removal, row, sync } from './test/fixtures';
 import { recordClosingDates, recordStatement, recordStatementCheck, removeStatement } from '@/app/_actions/ledger';
 import { formatCents, toCents } from '@/lib/money';
@@ -28,11 +29,19 @@ describe('recording statements', () => {
       message: 'Recorded 3 closing dates, 2026-08-06 to 2026-10-06.',
     });
     expect(await recorded(acc.ledgerAccountId)).toEqual([
-      { closingDate: '2026-08-06', periodStart: null, nextClosingDate: null, startsNewCycle: false, source: 'owner' },
-      { closingDate: '2026-09-07', periodStart: null, nextClosingDate: null, startsNewCycle: false, source: 'owner' },
+      { closingDate: '2026-08-06', periodStart: null, nextClosingDate: null, startsNewCycle: false, source: 'owner', chargesCents: null, creditsCents: null },
+      { closingDate: '2026-09-07', periodStart: null, nextClosingDate: null, startsNewCycle: false, source: 'owner', chargesCents: null, creditsCents: null },
       // The list carried only its closing date: the start and next date stay.
-      { closingDate: '2026-10-06', periodStart: '2026-09-07', nextClosingDate: '2026-11-05', startsNewCycle: false, source: 'owner' },
+      { closingDate: '2026-10-06', periodStart: '2026-09-07', nextClosingDate: '2026-11-05', startsNewCycle: false, source: 'owner', chargesCents: null, creditsCents: null },
     ]);
+  });
+
+  it('records a statement\'s totals as printed, exactly, and refuses unreadable ones', async () => {
+    const acc = await account();
+    const base = { ledgerAccountId: acc.ledgerAccountId, closingDate: '2026-10-06', periodStart: '2026-09-07', nextClosingDate: '', startsNewCycle: false };
+    expect(await recordStatement({ ...base, charges: '1,234.56', credits: 'about 200' })).toEqual({ error: 'Enter the totals as amounts, like 1,234.56.' });
+    expect(await recordStatement({ ...base, charges: '1,234.56', credits: '200' })).toMatchObject({ ok: true });
+    expect((await recorded(acc.ledgerAccountId))[0]).toMatchObject({ chargesCents: 1_234_560, creditsCents: 200_000 });
   });
 
   it('refuses a closing still to come, an unreadable list, and a second removal', async () => {
@@ -57,9 +66,10 @@ describe('recording statements', () => {
       recordStatementCheck(acc.accountId, { from, to, charges: formatCents(toCents(chargesCents)), credits: '0.00', excludedKeys: [], confirmed: true }, 'pass');
     expect(await check('2026-09-07', '2026-10-06', 4_000)).toMatchObject({ ok: true });
     expect(await check('2026-10-07', '2026-11-05', 6_000)).toMatchObject({ ok: true });
-    expect((await recorded(acc.ledgerAccountId)).map((s) => [s.periodStart, s.closingDate, s.source])).toEqual([
-      ['2026-09-07', '2026-10-06', 'verification'],
-      ['2026-10-07', '2026-11-05', 'verification'],
+    // Each with the totals it was checked against.
+    expect((await recorded(acc.ledgerAccountId)).map((s) => [s.periodStart, s.closingDate, s.source, s.chargesCents, s.creditsCents])).toEqual([
+      ['2026-09-07', '2026-10-06', 'verification', 4_000, 0],
+      ['2026-10-07', '2026-11-05', 'verification', 6_000, 0],
     ]);
   });
 });
@@ -88,5 +98,16 @@ describe('the cycle so far', () => {
       pendingCount: 1,
     });
     expect(await cycleSoFar(acc.ledgerAccountId, [], '2026-11-03')).toBeNull();
+  });
+});
+
+describe('rows in Expenses', () => {
+  it('carry their ledger account and the date their statement counts them on', async () => {
+    const acc = await account();
+    const t = ptxn(acc, { date: '2026-10-07', authorizedDate: '2026-10-06', amountCents: 4_200 });
+    await sync(acc, { added: [{ ...t, raw: { transaction_id: t.providerTransactionId, date: '2026-10-07' } }] });
+    const synced = (await getTransactions()).find((r) => r.descriptionRaw === t.descriptionRaw)!;
+    // Shown on the purchase date (the account's basis), counted on the posting date.
+    expect(synced).toMatchObject({ date: '2026-10-06', postedDate: '2026-10-07', ledgerAccountId: acc.ledgerAccountId });
   });
 });

@@ -4,14 +4,14 @@ import {
   DEFAULT_FILTERS,
   UNCATEGORIZED_FILTER,
   applyExpenseFilters,
-  availableSourceTabs,
-  filterBySource,
+  availableTabs,
+  filterByTab,
   filterPatch,
   hasActiveFilters,
   rangeCutoff,
   readFilters,
-  readSourceTab,
-  sourceTabPatch,
+  readTab,
+  tabPatch,
   summarizeView,
   type ExpenseFilters,
   type FilterableTransaction,
@@ -231,34 +231,40 @@ describe('applyExpenseFilters', () => {
   });
 });
 
-describe('source tabs', () => {
+describe('account tabs', () => {
+  const ledgers = [
+    { id: 'L-amex', label: 'Amex', csvSource: 'amex' },
+    { id: 'L-card', label: 'Card', csvSource: null },
+  ];
+
   it('round-trips through the URL and keeps "all" out of it', () => {
-    expect(
-      applyPatch(new URLSearchParams('source=chase'), sourceTabPatch('all')).toString(),
-    ).toBe('');
-    const params = applyPatch(new URLSearchParams(), sourceTabPatch('discover'));
-    expect(readSourceTab(params)).toBe('discover');
+    expect(applyPatch(new URLSearchParams('tab=L-amex'), tabPatch({ kind: 'all' })).toString()).toBe('');
+    const params = applyPatch(new URLSearchParams(), tabPatch({ kind: 'ledger', id: 'L-card' }));
+    expect(readTab(params, ledgers)).toEqual({ kind: 'ledger', id: 'L-card' });
+    expect(readTab(new URLSearchParams('tab=manual'), ledgers)).toEqual({ kind: 'manual' });
+    expect(readTab(new URLSearchParams('tab=L-gone'), ledgers)).toEqual({ kind: 'all' });
   });
 
-  it('rejects unknown sources', () => {
-    expect(readSourceTab(new URLSearchParams('source=venmo'))).toBe('all');
+  it('opens an old source link on its ledger account, Linked on All', () => {
+    expect(readTab(new URLSearchParams('source=amex'), ledgers)).toEqual({ kind: 'ledger', id: 'L-amex' });
+    expect(readTab(new URLSearchParams('source=plaid'), ledgers)).toEqual({ kind: 'all' });
+    expect(readTab(new URLSearchParams('source=manual'), ledgers)).toEqual({ kind: 'manual' });
+    expect(applyPatch(new URLSearchParams('source=amex'), tabPatch({ kind: 'all' })).toString()).toBe('');
   });
 
-  it('filters rows by source', () => {
+  it('holds an account\'s rows, CSV and synced, and the purchases paid alongside them', () => {
     const rows = [
-      { id: 'a', source: 'chase' },
-      { id: 'b', source: 'discover' },
+      { id: 'csv', source: 'amex', ledgerAccountId: 'L-amex', alongsideOfId: null },
+      { id: 'synced', source: 'plaid', ledgerAccountId: 'L-amex', alongsideOfId: null },
+      { id: 'other', source: 'plaid', ledgerAccountId: 'L-card', alongsideOfId: null },
+      { id: 'cash', source: 'manual', ledgerAccountId: null, alongsideOfId: 'synced' },
+      { id: 'lone', source: 'manual', ledgerAccountId: null, alongsideOfId: null },
     ];
-    expect(filterBySource(rows, 'chase').map((r) => r.id)).toEqual(['a']);
-    expect(filterBySource(rows, 'all').map((r) => r.id)).toEqual(['a', 'b']);
-    expect(filterBySource(rows, 'amex')).toEqual([]);
-  });
-
-  it('offers tabs only for sources present in the data', () => {
-    expect(
-      availableSourceTabs([{ source: 'chase' }, { source: 'amex' }]),
-    ).toEqual(['all', 'chase', 'amex']);
-    expect(availableSourceTabs([])).toEqual(['all']);
+    expect(filterByTab(rows, { kind: 'ledger', id: 'L-amex' }).map((r) => r.id)).toEqual(['csv', 'synced', 'cash']);
+    expect(filterByTab(rows, { kind: 'manual' }).map((r) => r.id)).toEqual(['cash', 'lone']);
+    expect(filterByTab(rows, { kind: 'all' })).toHaveLength(5);
+    expect(availableTabs(rows, ledgers)).toEqual([{ kind: 'all' }, { kind: 'ledger', id: 'L-amex' }, { kind: 'ledger', id: 'L-card' }, { kind: 'manual' }]);
+    expect(availableTabs([], ledgers)).toEqual([{ kind: 'all' }]);
   });
 });
 

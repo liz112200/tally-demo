@@ -109,9 +109,10 @@ roll forward unchanged.
 
 ## Surfaced in slice 7
 
-- **One Expenses group per ledger account.** Synced groups take the ledger
-  account's name, but its CSV batches stay groups of their own. Merging them
-  is display only.
+- **One Expenses group per ledger account.** Resolved by the period view
+  (STATEMENT-CYCLES.md): each ledger account has its own tab holding its CSV
+  and synced rows together, by statement period; All keeps the upload and
+  account groups, where Undo import and Restore live.
 - **Renaming a ledger account.** Names are given at the backfill
   (db/ledger-backfill.ts --name); a CSV source first imported later gets a
   default name ("Chase"). There is no rename yet.
