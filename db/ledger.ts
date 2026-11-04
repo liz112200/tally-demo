@@ -274,6 +274,7 @@ export type BoundaryRow = {
   description: string;
   kind: 'csv' | 'before_cutover' | 'possible_duplicate';
   resolution: 'same' | 'released' | null;
+  resolvedAt: Date | null;
   // On a bank row: the CSV row it pairs with (pairWithCsv) when that row is
   // the same merchant at another amount. Stated as a fact; the cause is the
   // owner's to know (an edit, a hold, a tip).
@@ -339,6 +340,7 @@ export async function boundaryReview(accountId: string): Promise<{ cutover: stri
         description: c.description,
         kind: 'csv' as const,
         resolution: null,
+        resolvedAt: null,
         differsFrom: null,
       })),
     ...setAside.flatMap((s, i) => {
@@ -352,6 +354,7 @@ export async function boundaryReview(accountId: string): Promise<{ cutover: stri
           description: s.descriptionRaw,
           kind: s.reason,
           resolution: s.resolution,
+          resolvedAt: s.resolvedAt,
           differsFrom: twin && twin.amountCents !== s.amountCents ? { date: twin.date, amountCents: twin.amountCents } : null,
         },
       ];
@@ -410,7 +413,7 @@ export async function resolveHeldRow(
     }
     await tx
       .update(syncSkippedRows)
-      .set({ resolution: answer })
+      .set({ resolution: answer, resolvedAt: sql`now()` })
       .where(and(eq(syncSkippedRows.bankAccountId, accountId), eq(syncSkippedRows.providerTransactionId, providerTransactionId)));
     return {
       ok: true,
@@ -419,13 +422,38 @@ export async function resolveHeldRow(
   });
 }
 
-export async function dismissBoundaryReview(accountId: string): Promise<boolean> {
+// Closing the review. Refused while a held row is unanswered: an open
+// question closed is read later as a decision (2026-11-04). One statement, so
+// a row a sync holds meanwhile is either counted here or reopens the review.
+export async function dismissBoundaryReview(accountId: string): Promise<{ ok: true } | Refusal> {
+  // Names written out: Drizzle leaves column references unqualified here.
+  const unanswered = sql`exists (
+    select 1 from sync_skipped_rows s
+    where s.bank_account_id = bank_accounts.id
+      and s.reason = 'possible_duplicate'
+      and s.resolution is null
+      and s.removed_at is null)`;
   const updated = await db
     .update(bankAccounts)
     .set({ boundaryReviewedAt: sql`now()` })
-    .where(and(eq(bankAccounts.id, accountId), isNull(bankAccounts.boundaryReviewedAt), isNotNull(bankAccounts.lastSyncedAt)))
+    .where(and(eq(bankAccounts.id, accountId), isNull(bankAccounts.boundaryReviewedAt), isNotNull(bankAccounts.lastSyncedAt), sql`not ${unanswered}`))
     .returning({ id: bankAccounts.id });
-  return updated.length > 0;
+  if (updated.length > 0) return { ok: true };
+  const [open] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(syncSkippedRows)
+    .where(
+      and(
+        eq(syncSkippedRows.bankAccountId, accountId),
+        eq(syncSkippedRows.reason, 'possible_duplicate'),
+        isNull(syncSkippedRows.resolution),
+        isNull(syncSkippedRows.removedAt),
+      ),
+    );
+  if (open.n > 0) {
+    return { error: `${open.n === 1 ? 'One held row is' : `${open.n} held rows are`} not answered yet. Answer ${open.n === 1 ? 'it' : 'each'} first: same purchase, or different.` };
+  }
+  return { error: 'There is no boundary review open for this account.' };
 }
 
 // ---- Verification ----

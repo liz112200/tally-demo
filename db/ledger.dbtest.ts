@@ -179,10 +179,55 @@ describe('possible duplicates near the cutover', () => {
       message: 'Kept out: the same purchase as the CSV row.',
     });
     expect(await row(acc, same.providerTransactionId)).toBeUndefined();
+    // The answer is a record: what, and when.
+    const answered = await boundaryReview(acc.accountId);
+    expect(answered?.rows.find((r) => r.kind === 'possible_duplicate')).toMatchObject({ resolution: 'same', resolvedAt: expect.any(Date) });
     expect(await answerHeldRow(acc.accountId, same.providerTransactionId, 'released')).toEqual({ ok: true, message: 'Added as a purchase of its own.' });
     expect(await row(acc, same.providerTransactionId)).toMatchObject({ amountCents: 4_750, source: 'plaid' });
     expect(await answerHeldRow(acc.accountId, same.providerTransactionId, 'released')).toEqual({ error: 'That row was already added.' });
     expect(await csvRowsOf(tag)).toEqual(before);
+  });
+});
+
+describe('closing the boundary review', () => {
+  it('is refused while a held row is unanswered, and allowed once each is answered', async () => {
+    const { ledgerId } = await csvLedger([
+      { date: '2026-09-10', amountCents: 3_815 },
+      { date: '2026-09-09', amountCents: 1_260 },
+    ]);
+    const acc = await newAccount();
+    await setUpAccountSync(acc.accountId, { kind: 'existing', ledgerAccountId: ledgerId, cutoverDate: null });
+    const first = ptxn(acc, { date: '2026-09-11', authorizedDate: null, amountCents: 3_815 });
+    const second = ptxn(acc, { date: '2026-09-12', authorizedDate: null, amountCents: 1_260 });
+    expect(await sync(acc, { added: [first, second] })).toMatchObject({ kind: 'applied', counts: { held: 2 } });
+    const reviewedAt = async () =>
+      (await db.select({ at: bankAccounts.boundaryReviewedAt }).from(bankAccounts).where(eq(bankAccounts.id, acc.accountId)))[0].at;
+
+    expect(await finishBoundaryReview(acc.accountId)).toEqual({ error: '2 held rows are not answered yet. Answer each first: same purchase, or different.' });
+    expect(await reviewedAt()).toBeNull();
+    await answerHeldRow(acc.accountId, first.providerTransactionId, 'same');
+    expect(await finishBoundaryReview(acc.accountId)).toEqual({ error: 'One held row is not answered yet. Answer it first: same purchase, or different.' });
+    await answerHeldRow(acc.accountId, second.providerTransactionId, 'released');
+    expect(await finishBoundaryReview(acc.accountId)).toEqual({ ok: true, message: 'Boundary review done.' });
+    expect(await reviewedAt()).not.toBeNull();
+    expect(await finishBoundaryReview(acc.accountId)).toEqual({ error: 'There is no boundary review open for this account.' });
+  });
+
+  it('an answer cannot be stored without its time, nor a time without an answer', async () => {
+    const { ledgerId } = await csvLedger([{ date: '2026-09-10', amountCents: 2_940 }]);
+    const acc = await newAccount();
+    await setUpAccountSync(acc.accountId, { kind: 'existing', ledgerAccountId: ledgerId, cutoverDate: null });
+    const held = ptxn(acc, { date: '2026-09-11', authorizedDate: null, amountCents: 2_940 });
+    await sync(acc, { added: [held] });
+    const where = and(eq(syncSkippedRows.bankAccountId, acc.accountId), eq(syncSkippedRows.providerTransactionId, held.providerTransactionId));
+    // The constraint by name, not any error: Drizzle wraps the driver's.
+    const refusedBy = (q: Promise<unknown>) =>
+      q.then(
+        () => null,
+        (e: { constraint_name?: string; cause?: { constraint_name?: string } }) => e.constraint_name ?? e.cause?.constraint_name,
+      );
+    expect(await refusedBy(db.update(syncSkippedRows).set({ resolution: 'same' }).where(where))).toBe('sync_skipped_rows_resolved_at');
+    expect(await refusedBy(db.update(syncSkippedRows).set({ resolvedAt: new Date() }).where(where))).toBe('sync_skipped_rows_resolved_at');
   });
 });
 

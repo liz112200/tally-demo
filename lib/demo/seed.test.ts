@@ -203,6 +203,10 @@ describe('the linked banks', () => {
     expect(chase.aside.filter((r) => r.reason === 'possible_duplicate')).toEqual([]);
     expect(amex.account.boundaryReviewedAt).toBeNull();
     expect(chase.account.boundaryReviewedAt).not.toBeNull();
+    // The seed answers no held row, so no review it closes may hold one: the
+    // app refuses that close (db/ledger.ts, dismissBoundaryReview).
+    const closedOverHeld = [amex, chase].filter((a) => a.account.boundaryReviewedAt !== null && a.aside.some((r) => r.reason === 'possible_duplicate'));
+    expect(closedOverHeld).toEqual([]);
   });
 
   it('carries a CSV row the owner raised, beside the bank row at its original amount', () => {

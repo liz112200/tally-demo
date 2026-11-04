@@ -853,8 +853,13 @@ export const syncSkippedRows = pgTable(
     pending: boolean('pending').notNull(),
     reason: text('reason').$type<'before_cutover' | 'possible_duplicate'>().notNull(),
     // For a held possible duplicate: the owner's answer. 'released' rows were
-    // inserted as transactions; 'same' rows stay out.
+    // inserted as transactions; 'same' rows stay out. NULL is unanswered, never
+    // a decision: a held row stays out until answered, and the boundary review
+    // cannot close while one is (2026-11-04: two were closed over unanswered,
+    // and a chat message stood in for the answer).
     resolution: text('resolution').$type<'same' | 'released'>(),
+    // When the owner answered, so an answer is a record and not a flag.
+    resolvedAt: timestamp('resolved_at', { withTimezone: true }),
     providerRaw: jsonb('provider_raw').notNull(),
     removedAt: timestamp('removed_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -866,6 +871,7 @@ export const syncSkippedRows = pgTable(
       'sync_skipped_rows_resolution',
       sql`${table.resolution} is null or (${table.reason} = 'possible_duplicate' and ${table.resolution} in ('same', 'released'))`,
     ),
+    check('sync_skipped_rows_resolved_at', sql`(${table.resolution} is null) = (${table.resolvedAt} is null)`),
   ],
 );
 

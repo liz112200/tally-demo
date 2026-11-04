@@ -105,6 +105,17 @@ synced rows, which this slice never does).
   CSV rows from those days, once, read-only. A purchase pending when the CSV
   was exported is in neither source; this is where the owner sees it, and
   adds it by hand if it is real.
+- **A held row is answered, never closed over.** Each held row takes an
+  answer, "Same purchase" (it stays out) or "Different: add it" (it is
+  inserted), stored with the time it was given (`resolved_at`, migration
+  0035; a CHECK keeps answer and time together). An unanswered row also
+  stays out, so without the stored answer the two cannot be told apart, and
+  the default reads later as a decision. Done reviewing is therefore
+  refused while a row is unanswered, and a review closed before that rule
+  with one unanswered comes back on /accounts until it is answered. Found
+  2026-11-04: Discover's review was closed two minutes after its two rows
+  were held, neither answered; the answer was given only in a chat message,
+  drafted as done before it was, and analysis built on it.
 - **Held rows match on merchant too.** A bank row in the first week is held
   when a CSV row within seven days has its amount or its merchant (the first
   word of the normalized description past wallet and processor prefixes such
@@ -164,7 +175,8 @@ synced rows, which this slice never does).
   aside and not released, this sync's rows before the cutover, the first
   week's), and only a first-week row's pairing holds it. Simulated on the
   three real accounts, 7 days with that pairing holds exactly the rows 3
-  days held (the two Discover rows, both answered the same purchase), and
+  days held (the two Discover rows, unanswered in the app until the rule
+  above; see "A held row is answered"), and
   the boundary reviews are unchanged.
 - **Pairing is one to one, equal amounts first.** The hold and the review
   pair bank rows with CSV rows across all of them at once (`pairWithCsv`):

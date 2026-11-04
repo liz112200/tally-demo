@@ -200,7 +200,22 @@ function LedgerLines({
       {linked && <StatementsControl ledgerAccountId={state.ledgerAccountId} statements={closing.statements} today={closing.today} kind={closing.kind} />}
       {review && linked && (
         <details open className="mt-1 rounded-lg border px-3 py-2">
-          <summary className="cursor-pointer text-foreground">Boundary review: the days around {review.cutover}</summary>
+          <summary className="cursor-pointer text-foreground">
+            Boundary review: the days around {review.cutover}
+            {state.boundaryReviewedAt && (
+              <span className="text-amber-700 dark:text-amber-400">
+                {' '}
+                · {state.heldCount === 1 ? 'one held row' : `${state.heldCount} held rows`} not answered
+              </span>
+            )}
+          </summary>
+          {state.boundaryReviewedAt && (
+            <p className="mt-1 text-amber-700 dark:text-amber-400">
+              This review was closed on {formatDay(state.boundaryReviewedAt)} without an answer for{' '}
+              {state.heldCount === 1 ? 'one held row' : `${state.heldCount} held rows`}. Unanswered, a held row stays out, but
+              nothing records that you decided it. Answer each below.
+            </p>
+          )}
           <p className="mt-1 text-muted-foreground">
             CSV rows from the last week before the cutover, beside bank rows that were not added: those before it, and those
             held because they match a CSV row. A purchase pending when you exported the CSV is in neither; add it by hand if
@@ -223,10 +238,10 @@ function LedgerLines({
                       : r.kind === 'before_cutover'
                         ? '(bank, before the cutover: not added)'
                         : r.resolution === 'same'
-                          ? '(bank: kept out as the same purchase)'
+                          ? `(bank: kept out as the same purchase, answered ${formatDay(r.resolvedAt!)})`
                           : r.resolution === 'released'
-                            ? '(bank: added as its own purchase)'
-                            : '(bank: held, may be the CSV row)'}
+                            ? `(bank: added as its own purchase, answered ${formatDay(r.resolvedAt!)})`
+                            : '(bank: held, may be the CSV row: not answered)'}
                   </span>
                   {r.differsFrom && (
                     <span className="block text-amber-700 dark:text-amber-400">
@@ -241,9 +256,11 @@ function LedgerLines({
               </li>
             ))}
           </ul>
-          <div className="mt-2">
-            <FinishReviewButton accountId={accountId} />
-          </div>
+          {!state.boundaryReviewedAt && (
+            <div className="mt-2">
+              <FinishReviewButton accountId={accountId} />
+            </div>
+          )}
         </details>
       )}
     </div>
@@ -310,7 +327,9 @@ export default async function AccountsPage() {
       allAccounts
         .filter((a) => {
           const l = ledger.get(a.id);
-          return a.lastSyncedAt !== null && l?.cutoverDate && !l.boundaryReviewedAt;
+          // Open, or closed with a held row unanswered (closed before that
+          // was refused): a question stays on screen until it is answered.
+          return a.lastSyncedAt !== null && l?.cutoverDate && (!l.boundaryReviewedAt || l.heldCount > 0);
         })
         .map(async (a) => [a.id, await boundaryReview(a.id)] as const),
     ),

@@ -101,9 +101,10 @@ export async function finishBoundaryReview(accountId: unknown): Promise<ActionRe
   const id = uuid.safeParse(accountId);
   if (!id.success) return { error: 'Invalid request.' };
   return attempt('finishBoundaryReview', async () => {
-    if (!(await dismissBoundaryReview(id.data))) return { error: 'There is no boundary review open for this account.' };
+    const result = await dismissBoundaryReview(id.data);
+    if ('error' in result) return result;
     refresh();
-    return { ok: true, message: 'Boundary review done. Rows held as possible duplicates and not answered stay out.' };
+    return { ok: true, message: 'Boundary review done.' };
   });
 }
 
