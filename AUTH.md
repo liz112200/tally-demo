@@ -50,7 +50,7 @@ arrives.
 
 ## Data (migration 0026)
 
-Passkeys also record the AAGUID their provider reports, so /devices names
+Passkeys also record the AAGUID their provider reports, so Settings (Devices) names
 where one lives (iCloud Keychain, Google Password Manager) instead of
 reading the backup flag as "synced": Chrome and Safari on one Mac keep
 passkeys in different managers, and neither offers the other's.
@@ -89,7 +89,7 @@ passkeys in different managers, and neither offers the other's.
   snapshots, CLAUDE.md), static assets, and the cron route below.
 - **Cookie:** `__Host-` prefixed, HttpOnly, Secure (not on localhost),
   SameSite=Lax, Path=/. Server Actions already reject cross-origin POSTs.
-- **Sign out** (header) revokes the session row; /devices lists the
+- **Sign out** (header) revokes the session row; Settings (Devices) lists the
   passkeys and signed-in sessions, adds a passkey on the current device, and
   signs out any other session.
 
@@ -170,7 +170,7 @@ owner".
   an unknown passkey.
 - In a browser, 2026-10-27, Chrome with its built-in virtual authenticator
   against a dev server: no session redirects to /sign-in (keeping `next`);
-  setup with the token; /devices lists the passkey and session; adding a
+  setup with the token; Settings (Devices) lists the passkey and session; adding a
   passkey on a device that already holds one is refused; sign out; signing
   in returns to the page asked for; a device with no passkey is told to add
   one from a signed-in device. Not covered there: a real platform passkey

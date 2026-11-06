@@ -3,13 +3,16 @@ import { eq, sql } from 'drizzle-orm';
 import { db } from './index';
 import { bankAccounts, bankConnections, categories, splitShares, splits, syncSkippedRows, transactions } from './schema';
 import { getBankConnections } from './queries';
-import { KEPT_TABLES, TABLES, wipeDemoTables, writeDemoSeed } from './demo-reset';
+import { TABLES, UNNAMED_TABLES, wipeDemoTables, writeDemoSeed } from './demo-reset';
 import { boundaryReview, lastCsvDates } from './ledger';
 import { buildDemoSeed, type DemoSeed } from '@/lib/demo/seed';
 import { syncConnection } from '@/app/_actions/bank';
 import { runScheduledSync } from '@/app/_lib/scheduled-sync';
 import { answerHeldRow, checkAgainstStatement, recordStatementCheck } from '@/app/_actions/ledger';
 import { formatCents, toCents } from '@/lib/money';
+import { loadBoard, needsYouFacts } from '@/app/_lib/board';
+import { needsYouItems } from '@/lib/needs-you';
+import { conversionChecks, convertEditedRow } from './alongside';
 
 vi.mock('next/cache', () => ({ revalidatePath: () => {} }));
 
@@ -37,7 +40,7 @@ afterAll(async () => {
 });
 
 describe('the demo reset', () => {
-  it('wipes every table in the database but sign-in, which it names', async () => {
+  it('names every table in the database: those it wipes, and the sign-in tables the cascade reaches', async () => {
     const rows = (await db.execute(sql`
       select table_name from information_schema.tables
       where table_schema = 'public' and table_type = 'BASE TABLE'
@@ -45,7 +48,7 @@ describe('the demo reset', () => {
     const present = rows.map((r) => r.table_name);
     // It looked: the migrated database has its tables.
     expect(present.length).toBeGreaterThanOrEqual(26);
-    expect([...TABLES, ...KEPT_TABLES].sort()).toEqual(present);
+    expect([...TABLES, ...UNNAMED_TABLES].sort()).toEqual(present);
   });
 });
 
@@ -192,5 +195,44 @@ describe('the demo bank', () => {
     expect((await db.select().from(transactions).where(eq(transactions.bankAccountId, amex.id))).length).toBe(before);
     expect(await answerHeldRow(amex.id, held.providerTransactionId, 'released')).toMatchObject({ ok: true });
     expect((await db.select().from(transactions).where(eq(transactions.bankAccountId, amex.id))).length).toBe(before + 1);
+  });
+
+  it('opens with a Needs you band a visitor can act on: the held row, a statement that disagrees, an account to verify', async () => {
+    await reseed();
+    const band = async () => needsYouItems(needsYouFacts(await loadBoard()), { day: (iso) => iso, money: (n) => formatCents(toCents(n)) });
+    const amexLedger = seed.ledgerAccounts.find((l) => l.csvSource === 'amex')!;
+    const chase = accountOf('Chase');
+    const items = await band();
+    // Never All clear on arrival: a recruiter would see nothing the app does.
+    expect(items.length).toBeGreaterThanOrEqual(3);
+    expect(items.map((i) => i.key)).toEqual(expect.arrayContaining([`held:${amexLedger.id}`, `verify:${chase.id}`]));
+    const differs = items.find((i) => i.key.startsWith(`differs:${amexLedger.id}:`));
+    expect(differs?.text).toMatch(/more\.$/);
+    // Every account has a cycle: no "record a statement" line on arrival.
+    expect(items.filter((i) => i.key.startsWith('nostatement:') || i.key.startsWith('missing:') || i.key.startsWith('totals:'))).toEqual([]);
+
+    // A visitor's answer resolves its line.
+    const [held] = await db.select().from(syncSkippedRows).where(eq(syncSkippedRows.reason, 'possible_duplicate'));
+    await answerHeldRow(accountOf('American Express').id, held.providerTransactionId, 'same');
+    expect((await band()).map((i) => i.key)).not.toContain(`held:${amexLedger.id}`);
+  });
+
+  it('offers Move exactly where the conversion accepts it, and the car hire converts, clearing its line', async () => {
+    await reseed();
+    const checks = await conversionChecks();
+    // It looked: the demo has a raised, split row.
+    expect(checks.size).toBeGreaterThanOrEqual(1);
+    for (const [id, check] of checks) {
+      // The preview (apply false) runs the conversion's own transaction.
+      const preview = await convertEditedRow(id, 'check', false);
+      expect('error' in preview ? preview.error : null, id).toBe('error' in check ? check.error : null);
+    }
+    const hire = [...checks].find(([, c]) => !('error' in c));
+    expect(hire).toBeDefined();
+    const band = async () =>
+      (await needsYouItems(needsYouFacts(await loadBoard()), { day: (iso) => iso, money: (n) => formatCents(toCents(n)) })).map((i) => i.key);
+    expect(await band()).toContain('raised');
+    expect(await convertEditedRow(hire![0], 'Gas on the way', true)).toMatchObject({ ok: true });
+    expect(await band()).not.toContain('raised');
   });
 });

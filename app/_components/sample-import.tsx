@@ -46,7 +46,7 @@ export function SampleImportButton() {
   const fromStrip = searchParams.get('demo') === 'sample-import';
   useEffect(() => {
     if (!fromStrip) return;
-    router.replace('/', { scroll: false });
+    router.replace('/expenses', { scroll: false });
     void open();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fromStrip]);

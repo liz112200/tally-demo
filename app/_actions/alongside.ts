@@ -18,7 +18,7 @@ const id = z.string().uuid();
 const what = z.string().trim().min(1, 'Say what it was.').max(120);
 
 function refresh() {
-  revalidatePath('/');
+  revalidatePath('/', 'layout');
   revalidatePath('/people');
   revalidatePath('/insights');
 }

@@ -371,6 +371,7 @@ export function TransactionDetailPanel({
   creditByPerson,
   alongsideOf = null,
   alongside = [],
+  conversion,
 }: {
   row: TransactionRow;
   split: SplitSummary | null;
@@ -381,6 +382,9 @@ export function TransactionDetailPanel({
   creditByPerson: Record<string, number>;
   alongsideOf?: AlongsideLink | null;
   alongside?: AlongsideLink[];
+  // A raised row with a split: null when converting it would be accepted,
+  // else why not; undefined for any other row.
+  conversion?: string | null;
 }) {
   // Inline edit of description / amount / date (phase 7); the form
   // replaces the static description block while open. Synced rows are the
@@ -436,7 +440,7 @@ export function TransactionDetailPanel({
                 <CategoryProvenance row={row} />
               </p>
               <div className="mt-1.5">
-                <PaidAlongsideBlock row={row} alongsideOf={alongsideOf} alongside={alongside} hasSplit={split !== null} />
+                <PaidAlongsideBlock row={row} alongsideOf={alongsideOf} alongside={alongside} conversion={conversion} />
               </div>
               <div className="mt-1.5">
                 {synced ? (

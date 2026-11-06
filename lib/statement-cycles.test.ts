@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { closingPattern, currentCycle, cycleLine, parseClosingDates, type StatementRecord } from './statement-cycles';
+import { closingPattern, currentCycle, parseClosingDates, type StatementRecord } from './statement-cycles';
 
 // Invented days and dates throughout; none is an account's real one.
 const st = (closingDate: string, over: Partial<StatementRecord> = {}): StatementRecord => ({
@@ -63,55 +63,6 @@ describe('currentCycle', () => {
 
   it('closes a short month on its last day', () => {
     expect(currentCycle([st('2027-01-31')], '2027-02-10')).toMatchObject({ end: { from: '2027-02-28', to: '2027-02-28' } });
-  });
-});
-
-describe('cycleLine', () => {
-  const base = {
-    today: '2026-10-20',
-    verified: true,
-    chargesCents: 52_000,
-    creditsCents: 15_000,
-    pendingOutCents: 0,
-    pendingInCents: 0,
-    pendingCount: 0,
-    formatDay: (iso: string) => iso.slice(5),
-    formatMoney: (n: number) => `$${n / 1000}`,
-  };
-  const steady = [st('2026-08-06'), st('2026-09-06'), st('2026-10-06')];
-
-  it('states a steady day with the count it rests on', () => {
-    expect(cycleLine({ ...base, kind: 'card', cycle: currentCycle(steady, '2026-10-20')! })).toBe(
-      'This cycle, 10-07 – closes 11-06, in 17 days: the 6th, from 3 statements. So far: $52 in charges, $15 in payments and credits.',
-    );
-  });
-
-  it('gives a range with its spread and count, and checking its own words', () => {
-    const varied = [st('2026-08-18'), st('2026-09-16'), st('2026-10-18')];
-    const line = cycleLine({ ...base, kind: 'checking', today: '2026-10-25', cycle: currentCycle(varied, '2026-10-25')! });
-    expect(line).toBe(
-      'This statement period, 10-19 – expected to close 11-16–11-18, in 22–24 days: between the 16th and the 18th across 3 statements. ' +
-        'So far: $52 in withdrawals, $15 in deposits.',
-    );
-    expect(line).not.toMatch(/credit|charge/);
-  });
-
-  it('marks a projected start, a printed close, few statements, pending, and an unverified account', () => {
-    const missing = cycleLine({ ...base, kind: 'card', today: '2026-11-20', cycle: currentCycle(steady, '2026-11-20')! });
-    expect(missing).toContain('This cycle, about 11-07 –');
-    expect(missing).toContain('The statement after the one closing 10-06 is not recorded; record it for an exact start.');
-    const printed = currentCycle([st('2026-10-06', { nextClosingDate: '2026-11-05' })], '2026-10-20')!;
-    expect(cycleLine({ ...base, kind: 'card', cycle: printed })).toContain('closes 11-05, in 16 days, as the last statement printed');
-    const few = currentCycle([st('2026-10-06')], '2026-10-20')!;
-    expect(cycleLine({ ...base, kind: 'card', cycle: few, pendingOutCents: 7_500, pendingCount: 1 })).toBe(
-      'This cycle, 10-07 – expected to close around 11-06, in 17 days: from 1 statement. So far: $52 in charges, $15 in payments and credits; ' +
-        'pending (1), counted once posted: $7.5 in charges.',
-    );
-    // A pending withdrawal and a pending deposit stay apart, never one signed net.
-    const both = cycleLine({ ...base, kind: 'checking', cycle: few, pendingOutCents: 19_990, pendingInCents: 338_000, pendingCount: 2 });
-    expect(both).toContain('pending (2), counted once posted: $19.99 in withdrawals, $338 in deposits.');
-    expect(both).not.toMatch(/-\$/);
-    expect(cycleLine({ ...base, kind: 'checking', cycle: few, verified: false })).toMatch(/\. No total until this account is verified\.$/);
   });
 });
 

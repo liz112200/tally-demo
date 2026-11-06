@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useState, useTransit
 import { X } from 'lucide-react';
 import { SOMETHING_WENT_WRONG, type ActionResult } from '@/lib/action-result';
 import { MessageLine, type Message } from './action-message';
+import { FADE_AFTER_MS, fadesAway } from '@/lib/result-fade';
 
 // The page's result line (ACTION-RESULTS.md): the latest action's result,
 // pinned to the bottom of the viewport so it is seen wherever the action
@@ -15,7 +16,7 @@ import { MessageLine, type Message } from './action-message';
 // after the owner has left is dropped with it. The root layout, which never
 // unmounts, held it first, and a result from Expenses was seen on /people.
 //
-// /accounts opts out: each login there has its own result slot
+// /accounts/logins opts out: each login there has its own result slot
 // (login-result.tsx) and its controls never report here, so one result is
 // never shown in two places; and since this line clears on navigation, a
 // result from another page is never left beside them.
@@ -26,12 +27,27 @@ const PageResultContext = createContext<Report | null>(null);
 
 export function PageResultProvider({ children }: { children: ReactNode }) {
   const [message, setMessage] = useState<Message>(null);
+  // A confirmation with no figures fades (lib/result-fade.ts); anything with
+  // figures, a warning or an error stays until replaced or dismissed. Held
+  // while the pointer or focus is on it, so it is not taken away mid-read.
+  const [held, setHeld] = useState(false);
+  useEffect(() => {
+    if (!message || held || !fadesAway(message)) return;
+    const timer = setTimeout(() => setMessage((current) => (current === message ? null : current)), FADE_AFTER_MS);
+    return () => clearTimeout(timer);
+  }, [message, held]);
   return (
     <PageResultContext.Provider value={setMessage}>
       {children}
       {message && (
         // Above the Expenses bulk-action bar (bottom-6), which it must not cover.
-        <div className="fixed bottom-20 left-1/2 z-40 flex w-max max-w-[min(36rem,calc(100vw-2rem))] -translate-x-1/2 items-start gap-2 rounded-lg border bg-card px-3 py-2 shadow-lg">
+        <div
+          onMouseEnter={() => setHeld(true)}
+          onMouseLeave={() => setHeld(false)}
+          onFocus={() => setHeld(true)}
+          onBlur={() => setHeld(false)}
+          className="fixed bottom-20 left-1/2 z-40 flex w-max max-w-[min(36rem,calc(100vw-2rem))] -translate-x-1/2 items-start gap-2 rounded-lg border bg-card px-3 py-2 shadow-lg"
+        >
           <MessageLine message={message} />
           <button
             type="button"

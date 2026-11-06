@@ -105,7 +105,7 @@ export async function uploadReceipt(
       rawLlmResponse: null,
       items: [],
     });
-    revalidatePath('/');
+    revalidatePath('/', 'layout');
     return { ok: true, receiptId };
   }
 
@@ -136,7 +136,7 @@ export async function uploadReceipt(
         amountCents: item.amount_cents * CENTS_TO_MINOR,
       })),
     });
-    revalidatePath('/');
+    revalidatePath('/', 'layout');
     // Operational trace: latency and free-tier token consumption per call.
     console.log(
       `[receipt-extract] ${Date.now() - startedAt}ms ${files.length} image(s)`,
@@ -224,7 +224,7 @@ export async function removeReceipt(formData: FormData): Promise<ActionResult> {
     if (!removed) return { error: 'This row has no receipt to remove; it may already be removed.' };
     // Best-effort: an orphaned blob is a nuisance, not a correctness bug.
     await Promise.all(removed.blobUrls.map((url) => del(url).catch(() => {})));
-    revalidatePath('/');
+    revalidatePath('/', 'layout');
     revalidatePath('/people');
     return {
       ok: true,
@@ -272,6 +272,6 @@ export async function saveReceiptReview(
     mismatchNote: payload.mismatchNote,
     items: payload.items,
   });
-  revalidatePath('/');
+  revalidatePath('/', 'layout');
   return { ok: true };
 }

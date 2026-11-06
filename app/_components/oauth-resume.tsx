@@ -74,7 +74,7 @@ export function OAuthResume({ sandboxOverride }: { sandboxOverride: boolean }) {
   }, [stage.kind, ready, open]);
 
   const back = (
-    <Link href="/accounts" className="text-sm underline underline-offset-2">
+    <Link href="/accounts/logins" className="text-sm underline underline-offset-2">
       Back to Accounts
     </Link>
   );

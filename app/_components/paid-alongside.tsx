@@ -24,16 +24,18 @@ export function PaidAlongsideBlock({
   row,
   alongsideOf,
   alongside,
-  hasSplit,
+  conversion,
 }: {
   row: TransactionRow;
   // The charge this row was paid alongside, when it is such a purchase.
   alongsideOf: AlongsideLink | null;
   // What was paid alongside this row.
   alongside: AlongsideLink[];
-  hasSplit: boolean;
+  // A raised row with a split: null when the conversion would accept it
+  // (Move is offered), else why not (said, with no button); undefined for
+  // any other row. The same check as the band and the raised filter.
+  conversion: string | null | undefined;
 }) {
-  const synced = row.bankAccountId !== null;
   return (
     <div className="space-y-1 text-xs">
       {alongsideOf && (
@@ -51,9 +53,12 @@ export function PaidAlongsideBlock({
           ))}
         </ul>
       )}
+      {typeof conversion === 'string' && (
+        <p className="text-muted-foreground">Raised after it came in. Moving the extra is not offered: {conversion}</p>
+      )}
       <div className="flex flex-wrap gap-2">
         {!alongsideOf && <AddAlongsideButton row={row} />}
-        {row.editedAfterImport && !synced && hasSplit && <ConvertButton row={row} />}
+        {conversion === null && <ConvertButton row={row} />}
       </div>
     </div>
   );
@@ -175,7 +180,13 @@ function ConvertButton({ row }: { row: TransactionRow }) {
           </DialogDescription>
         </DialogHeader>
         {loading && <p className="text-sm text-muted-foreground">Working out what would change…</p>}
-        {refusal && <p className="text-sm">{refusal}</p>}
+        {/* Offered only where the conversion accepts the row; a refusal here
+            means the row changed since (another tab), and is said as one. */}
+        {refusal && (
+          <p role="alert" className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-200">
+            Not converted: {refusal}
+          </p>
+        )}
         {plan && (
           <div className="grid gap-3 text-sm">
             <p>
@@ -231,6 +242,11 @@ function ConvertButton({ row }: { row: TransactionRow }) {
           </div>
         )}
         <DialogFooter>
+          {refusal ? (
+            <Button variant="outline" onClick={() => setOpen(false)}>
+              Close
+            </Button>
+          ) : (
           <Button
             // Never enabled under a refusal: a changed description clears it.
             disabled={!plan || pending || !what.trim() || error !== null}
@@ -243,6 +259,7 @@ function ConvertButton({ row }: { row: TransactionRow }) {
           >
             {pending ? 'Converting…' : 'Convert'}
           </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

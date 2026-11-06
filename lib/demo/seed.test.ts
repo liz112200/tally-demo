@@ -6,6 +6,7 @@ import { detectParser } from '../parsers/detect';
 import { toCents } from '../money';
 import { compareToStatement } from '../bank-sync/verify';
 import { dedupHash } from '../parsers/dedup';
+import { addDays } from '../bank-sync/cutover';
 
 // Balances and the simplification view exactly as /people derives them.
 function derive(seed: DemoSeed) {
@@ -228,7 +229,7 @@ describe('the linked banks', () => {
     expect(chase.account.verifiedAt).toBeNull();
     // A passed statement check records its statement, as the app does.
     const amexStatement = seed.bankStatements[amex.account.providerAccountId];
-    expect(seed.ledgerStatements).toEqual([
+    expect(seed.ledgerStatements.filter((s) => s.source === 'verification')).toEqual([
       expect.objectContaining({
         ledgerAccountId: amex.ledger.id,
         closingDate: amexStatement.to,
@@ -238,6 +239,21 @@ describe('the linked banks', () => {
         source: 'verification',
       }),
     ]);
+  });
+
+  it('records four closings on one day for every account, so each card has a cycle', () => {
+    for (const ledger of seed.ledgerAccounts) {
+      const mine = seed.ledgerStatements.filter((s) => s.ledgerAccountId === ledger.id).sort((a, b) => a.closingDate.localeCompare(b.closingDate));
+      expect(mine, ledger.displayName).toHaveLength(4);
+      // The latest carries totals, so the board can say whether it agrees.
+      expect(mine[3].chargesCents, ledger.displayName).not.toBeNull();
+      // Each period starts the day after the closing before it: no gap, no
+      // overlap for the period view to show.
+      expect(mine[3].periodStart, ledger.displayName).toBe(addDays(mine[2].closingDate, 1));
+    }
+    // Hand-recorded closings are the owner's; only Amex's latest came from a
+    // statement check.
+    expect(seed.ledgerStatements.filter((s) => s.source === 'owner')).toHaveLength(11);
   });
 
   it('splits a synced Amex flight, which the fourth press changes', () => {

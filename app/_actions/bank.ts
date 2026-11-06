@@ -35,7 +35,7 @@ export type LinkResultState =
 export type SyncResultState = { ok: true; lines: string[]; complete: boolean } | { error: string };
 
 // Time the sync may spend fetching before it stops on purpose, inside the
-// 300 s function limit (Hobby's maximum; app/accounts/page.tsx sets it) with
+// 300 s function limit (Hobby's maximum; app/accounts/logins/page.tsx sets it) with
 // room left for the commits.
 const SYNC_FETCH_BUDGET_MS = 240_000;
 
@@ -163,13 +163,13 @@ export async function completeLink(
     loaded = await loadAccounts(connectionId);
   } catch (err) {
     logError('completeLink: accounts', err);
-    revalidatePath('/accounts');
+    revalidatePath('/', 'layout');
     return {
       ok: true,
       warning: `Linked, but its accounts could not be loaded: ${describeError(err)} Use Retry on the connection.`,
     };
   }
-  revalidatePath('/accounts');
+  revalidatePath('/', 'layout');
   return { ok: true, message: `Linked ${loaded.institutionName ?? 'the bank'}: ${accountsLoaded(loaded.accounts)}.` };
 }
 
@@ -185,7 +185,7 @@ export async function retryLoadAccounts(connectionId: unknown): Promise<LinkResu
     logError('retryLoadAccounts', err);
     return { error: describeError(err) };
   }
-  revalidatePath('/accounts');
+  revalidatePath('/', 'layout');
   return { ok: true, message: `Loaded ${accountsLoaded(loaded.accounts)}.` };
 }
 
@@ -275,8 +275,8 @@ export async function completeUpdate(connectionId: unknown, accountSelection: un
           : { ran: true, lines: result.lines, complete: result.complete };
   }
 
-  revalidatePath('/accounts');
-  revalidatePath('/');
+  revalidatePath('/', 'layout');
+  revalidatePath('/', 'layout');
   const message = updateResultMessage({ accountSelection: selection.data, health, reload, sync });
   return message.kind === 'success'
     ? { ok: true, message: message.text, details: message.details }
@@ -308,8 +308,8 @@ export async function setAccountSync(accountId: unknown, enabled: unknown): Prom
     logError('setAccountSync', err);
     return { error: describeError(err) };
   }
-  revalidatePath('/accounts');
-  revalidatePath('/');
+  revalidatePath('/', 'layout');
+  revalidatePath('/', 'layout');
   return { ok: true };
 }
 
@@ -326,8 +326,8 @@ export async function syncConnection(connectionId: unknown): Promise<SyncResultS
     };
   }
   if ('error' in result) return result;
-  revalidatePath('/accounts');
-  revalidatePath('/');
+  revalidatePath('/', 'layout');
+  revalidatePath('/', 'layout');
   return { ok: true, lines: result.lines, complete: result.complete };
 }
 
@@ -346,8 +346,8 @@ export async function checkConnection(connectionId: unknown): Promise<LinkResult
       accessToken: opened.accessToken,
       provider: await bankProvider(),
     });
-    revalidatePath('/accounts');
-    revalidatePath('/');
+    revalidatePath('/', 'layout');
+    revalidatePath('/', 'layout');
     if (code === undefined) return { error: 'Plaid could not be asked just now; nothing changed. Try again shortly.' };
     return { ok: true, message: code === null ? 'Checked: the login is healthy.' : `Checked: ${healthClause(code)}.` };
   } catch (err) {
@@ -370,8 +370,8 @@ export async function setLoginPaused(connectionId: unknown, paused: unknown): Pr
     logError('setLoginPaused', err);
     return { error: describeError(err) };
   }
-  revalidatePath('/accounts');
-  revalidatePath('/');
+  revalidatePath('/', 'layout');
+  revalidatePath('/', 'layout');
   return {
     ok: true,
     message: flag.data ? 'Paused. Nothing syncs until you resume it.' : 'Resumed. Sync now fetches what the bank has since.',
@@ -406,8 +406,8 @@ export async function removeLogin(connectionId: unknown, typedName: unknown): Pr
     logError('removeLogin', err);
     return { error: describeError(err) };
   }
-  revalidatePath('/accounts');
-  revalidatePath('/');
+  revalidatePath('/', 'layout');
+  revalidatePath('/', 'layout');
   return {
     ok: true,
     message:

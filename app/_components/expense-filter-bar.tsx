@@ -43,23 +43,27 @@ export function AccountTabs({
 }) {
   if (tabs.length <= 1) return null;
   const label = (t: ExpenseTab) => (t.kind === 'all' ? 'All' : t.kind === 'manual' ? 'Manual' : (labels[t.id] ?? 'Account'));
+  // A filter, not a set of tabs (the accounts board, 2026-11-05): pills, one
+  // pressed, wrapping on a phone.
   return (
-    <div role="tablist" aria-label="Filter by account" className="inline-flex w-fit flex-wrap gap-1 rounded-lg bg-muted p-1 text-[13px]">
-      {tabs.map((tab) => (
-        <button
-          key={tab.kind === 'ledger' ? tab.id : tab.kind}
-          type="button"
-          role="tab"
-          aria-selected={sameTab(active, tab)}
-          onClick={() => onChange(tab)}
-          className={cn(
-            'rounded-md px-2.5 py-0.5 transition-colors',
-            sameTab(active, tab) ? 'bg-card font-medium shadow-sm' : 'text-muted-foreground hover:text-foreground',
-          )}
-        >
-          {label(tab)}
-        </button>
-      ))}
+    <div role="group" aria-label="Account" className="flex flex-wrap gap-1.5 text-[13px]">
+      {tabs.map((tab) => {
+        const on = sameTab(active, tab);
+        return (
+          <button
+            key={tab.kind === 'ledger' ? tab.id : tab.kind}
+            type="button"
+            aria-pressed={on}
+            onClick={() => onChange(tab)}
+            className={cn(
+              'min-h-8 rounded-full border px-3 transition-colors',
+              on ? 'border-foreground bg-foreground font-medium text-background' : 'bg-card text-muted-foreground hover:text-foreground',
+            )}
+          >
+            {label(tab)}
+          </button>
+        );
+      })}
     </div>
   );
 }

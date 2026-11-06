@@ -128,7 +128,7 @@ export function ShareDetailDialog({
 
         {share.transactionId && (
           <Link
-            href={`/?tx=${share.transactionId}`}
+            href={`/expenses?tx=${share.transactionId}`}
             className="inline-flex items-center gap-1.5 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
           >
             <ExternalLink className="size-3" aria-hidden />

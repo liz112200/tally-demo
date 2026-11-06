@@ -23,7 +23,7 @@ import {
 import { requireUser } from '@/app/_lib/session';
 
 function revalidateSplitViews() {
-  revalidatePath('/');
+  revalidatePath('/', 'layout');
   revalidatePath('/people');
 }
 

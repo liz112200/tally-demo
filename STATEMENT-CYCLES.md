@@ -91,6 +91,11 @@ database, never in the repository.
 
 ## The period view (decided and built 2026-11-03)
 
+Superseded on 2026-11-05 by the accounts board (ACCOUNTS-BOARD.md): the
+periods moved to each account's page, Expenses reads by month, and uploads
+are managed on the account's page. The grouping rules below still hold
+there; the tabs and the All grouping do not.
+
 The owner asked for it the day "this cycle so far" shipped: the cycle line
 gives one number per card, and what they wanted was to see where one
 statement ends and the next begins while reading the list.

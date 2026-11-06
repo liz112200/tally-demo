@@ -63,6 +63,11 @@ the login's health (per connection) already record what happened.
 
 ## The stale line on Expenses
 
+Superseded on 2026-11-05 (ACCOUNTS-BOARD.md): the needs-you and not-run
+cases are lines in the Needs you band on the home page, a login that needs
+the owner as soon as it does; the transient case is not raised (nothing to
+do) and shows on Bank logins. The wording below is unchanged.
+
 Shown when any enabled account on an unpaused login has not synced for 36
 hours, one line per account, naming the account and saying which case it is:
 

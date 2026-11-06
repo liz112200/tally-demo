@@ -143,26 +143,6 @@ export function rowsPhrase(n: number): string {
   return `${n} ${n === 1 ? 'row' : 'rows'}`;
 }
 
-// Why an account of this login is not syncing, for its group header in
-// Expenses; null when nothing stops it. `needsOwner` when the owner has
-// something to do (a login to reconnect or replace); a pause, a removal or
-// an account the bank stopped sharing is information, not a call to act.
-export type NotSyncing = { text: string; needsOwner: boolean };
-
-export function notSyncingReason(login: {
-  status: 'active' | 'paused' | 'removed';
-  itemErrorCode: string | null;
-}, account: { unsharedAt: Date | null }): NotSyncing | null {
-  if (login.status === 'removed') return { text: 'login removed; not syncing', needsOwner: false };
-  if (login.status === 'paused') return { text: 'paused; not syncing', needsOwner: false };
-  if (account.unsharedAt !== null) return { text: 'no longer shared by the bank; not syncing', needsOwner: false };
-  const kind: ItemHealthKind = classifyItemError(login.itemErrorCode);
-  if (kind === 'healthy' || kind === 'bank_unavailable') return null;
-  return kind === 'gone'
-    ? { text: 'Plaid no longer has this login; not syncing', needsOwner: true }
-    : { text: 'not syncing: reconnect on Accounts', needsOwner: true };
-}
-
 export const actionSentence = {
   reconnect: (institution: string) =>
     `Opens ${institution}'s sign-in for this same login. No new Item is used, and nothing in the ledger changes.`,

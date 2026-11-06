@@ -201,7 +201,7 @@ export async function finishAddDevice(challengeId: unknown, response: unknown): 
     if (!verified) return { error: 'That passkey could not be registered. Start again.' };
     const label = await currentDeviceLabel();
     await addPasskey(user.id, { ...verified, deviceLabel: label });
-    revalidatePath('/devices');
+    revalidatePath('/settings');
     return { ok: true, message: `Passkey added for ${label}. It can sign in from now on.` };
   });
 }
@@ -225,7 +225,7 @@ export async function revokeOtherSession(sessionId: unknown): Promise<ActionResu
   if (id.data === user.sessionId) return { error: 'This is the session you are using; sign out instead.' };
   return attempt('revokeOtherSession', async () => {
     if (!(await revokeSession(user.id, id.data))) return { error: 'That session was not found, or is already signed out.' };
-    revalidatePath('/devices');
+    revalidatePath('/settings');
     return { ok: true, message: 'Signed out on that device.' };
   });
 }

@@ -351,3 +351,14 @@ describe('summarizeView with unverified synced rows', () => {
   });
 });
 
+
+describe('the raised filter', () => {
+  it('keeps the rows the conversion would accept, as the server checked them', () => {
+    const rows = [tx({ id: 'convertible' }), tx({ id: 'refused' }), tx({ id: 'plain' })];
+    const filters: ExpenseFilters = { ...DEFAULT_FILTERS, review: 'raised' };
+    expect(applyExpenseFilters(rows, filters, { ...ctx(), convertible: (id) => id === 'convertible' }).map((r) => r.id)).toEqual(['convertible']);
+    // Without the check, nothing is offered.
+    expect(applyExpenseFilters(rows, filters, ctx())).toEqual([]);
+    expect(readFilters(new URLSearchParams('review=raised')).review).toBe('raised');
+  });
+});

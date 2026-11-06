@@ -11,7 +11,7 @@ import {
   getCoreRowModel,
   useReactTable,
 } from '@tanstack/react-table';
-import { Plus, ReceiptText, Split as SplitIcon, Upload, Zap } from 'lucide-react';
+import { ChevronDown, ChevronRight, Plus, ReceiptText, Split as SplitIcon, Upload, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { formatUSD, toCents } from '@/lib/money';
@@ -36,23 +36,15 @@ import {
   tabPatch,
   summarizeView,
   needsReview,
+  type ExpenseTab,
 } from '@/lib/expense-filters';
-import { groupByPeriod, type PeriodStatement } from '@/lib/statement-periods';
-import { PeriodHeader } from '@/app/_components/period-header';
-import {
-  groupRowsByImport,
-  type AccountGroupMeta,
-  type ImportGroupMeta,
-} from '@/lib/import-groups';
+import { foldEmptyPeriods, groupByPeriod, type PeriodStatement } from '@/lib/statement-periods';
+import { groupByMonth } from '@/lib/month-groups';
+import { FoldedPeriodsRow, PeriodHeader } from '@/app/_components/period-header';
+import type { ImportGroupMeta } from '@/lib/import-groups';
 import { useTableState } from '@/app/_lib/use-table-state';
 import { SortHeaderButton } from '@/app/_components/sort-controls';
-import { ImportGroupHeader } from '@/app/_components/import-group-header';
-import { HiddenImportsStrip } from '@/app/_components/hidden-imports-strip';
-import {
-  UndoneImportsStrip,
-  type UndoneImport,
-} from '@/app/_components/undone-imports-strip';
-import { setImportHidden, showAllImports } from '@/app/_actions/import';
+import { showAllImports } from '@/app/_actions/import';
 import { BulkActionBar } from '@/app/_components/bulk-action-bar';
 import { NoteIndicator } from '@/app/_components/note-block';
 import {
@@ -348,9 +340,9 @@ export function TransactionTable({
   replacementCandidates,
   creditByPerson,
   imports,
-  accounts,
-  undoneImports,
   ledgers,
+  account,
+  conversions,
 }: {
   data: TransactionRow[];
   categories: Category[];
@@ -360,19 +352,27 @@ export function TransactionTable({
   receiptsByTransaction: Record<string, ReceiptView>;
   replacementCandidates: Record<string, ReplacementCandidate[]>;
   creditByPerson: Record<string, number>;
+  // Every live import; hidden ones keep their rows out of the view.
   imports: ImportGroupMeta[];
-  accounts: AccountGroupMeta[];
-  undoneImports: UndoneImport[];
   // One tab each (STATEMENT-CYCLES.md, the period view), with what its
   // statement periods need.
   ledgers: { id: string; label: string; csvSource: string | null; kind: 'card' | 'checking'; purchaseDatedCsv: boolean; statements: PeriodStatement[] }[];
+  // An account's own page (the accounts board, 2026-11-05): its rows only,
+  // by statement period, with no tabs and no import strips; the page's
+  // Imports section holds Hide, Show, Undo and Restore.
+  account?: string;
+  // Raised rows with a split: null when the conversion would accept it, else
+  // why not (lib/conversion.ts).
+  conversions: Record<string, string | null>;
 }) {
   const { params, apply } = useTableState();
   const sort = readSort(params, EXPENSES_SORT);
   const filters = readFilters(params);
-  const tab = readTab(params, ledgers);
+  const tab: ExpenseTab = account ? { kind: 'ledger', id: account } : readTab(params, ledgers);
   const tabs = useMemo(() => availableTabs(data, ledgers), [data, ledgers]);
-  const ledger = tab.kind === 'ledger' ? (ledgers.find((l) => l.id === tab.id) ?? null) : null;
+  // Statement periods on an account's own page only; Expenses reads by month.
+  const ledger = account ? (ledgers.find((l) => l.id === account) ?? null) : null;
+  const tabLedger = tab.kind === 'ledger' ? (ledgers.find((l) => l.id === tab.id) ?? null) : null;
   const tabKey = tab.kind === 'ledger' ? tab.id : tab.kind;
 
   // Hidden imports are persisted on the imports row (server-side), so the URL
@@ -387,8 +387,6 @@ export function TransactionTable({
   // Hiding moves the group, which is its own confirmation; a failure still
   // shows, on the page result line.
   const { run } = useAction();
-  const hideImport = (id: string) => run(() => setImportHidden(id, true));
-  const unhideImport = (id: string) => run(() => setImportHidden(id, false));
 
   // Local calendar date for the relative ranges; computed once per mount.
   const [today] = useState(() => {
@@ -403,6 +401,7 @@ export function TransactionTable({
       today,
       hasSplit: (id) => id in splitsByTransaction,
       hasReceipt: (id) => id in receiptsByTransaction,
+      convertible: (id) => conversions[id] === null,
     })
       // Rows of a hidden import drop out of the view (and thus the summary
       // and selection), not just its group header.
@@ -443,34 +442,35 @@ export function TransactionTable({
     return { byId, byAnchor };
   }, [data]);
 
-  // Upload-batch grouping (null = flat view: the Manual tab, or no imports).
-  // Batch stats come from the unfiltered data so headers keep reading as
-  // the statement period while filters narrow the rows.
-  const shownImports = useMemo(
-    () => imports.filter((imp) => !hidden.has(imp.id)),
-    [imports, hidden],
-  );
-  // All groups by upload and linked account; Manual is flat; an account's
-  // tab groups by statement period, every row of the account in one.
-  const groups = useMemo(
-    () => (tab.kind === 'ledger' ? null : groupRowsByImport({ all: data, visible, imports: shownImports, accounts, tab: tab.kind })),
-    [data, visible, shownImports, accounts, tab.kind],
+  // By calendar month while sorted by date; any other sort is one list, since
+  // months would scatter. An account's page groups by statement period.
+  const months = useMemo(
+    () => (account || sort.sort !== 'date' ? null : groupByMonth(visible, today)),
+    [account, sort.sort, visible, today],
   );
   const periods = useMemo(
     () =>
       ledger
-        ? groupByPeriod({ all: filterByTab(data, tab), visible, statements: ledger.statements, purchaseDatedCsv: ledger.purchaseDatedCsv })
+        ? foldEmptyPeriods(
+            groupByPeriod({
+              all: filterByTab(data, tab),
+              visible,
+              statements: ledger.statements,
+              purchaseDatedCsv: ledger.purchaseDatedCsv,
+              inHiddenImport: (r) => r.importId !== null && hidden.has(r.importId),
+            }),
+          )
         : null,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [data, visible, ledger, tabKey],
+    [data, visible, ledger, tabKey, hidden],
   );
-  // Hidden imports relevant to the current tab (an account's tab: uploads
-  // holding its rows; All: every hidden import). Drives the unhide strip.
-  const hiddenImports = useMemo(() => {
-    const inTab = new Set(filterByTab(data, tab).map((r) => r.importId));
-    return imports.filter((imp) => hidden.has(imp.id) && (tab.kind === 'all' || inTab.has(imp.id)));
+  // Rows of the current tab held out by a hidden import, said above the
+  // table with a way to show them: a hidden row is never silently absent.
+  const hiddenInTab = useMemo(() => {
+    const rows = filterByTab(data, tab).filter((r) => r.importId !== null && hidden.has(r.importId));
+    return { rows: rows.length, imports: new Set(rows.map((r) => r.importId)).size };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [imports, hidden, data, tabKey]);
+  }, [data, hidden, tabKey]);
 
   // Groups open or closed. All opens with every group closed, an account's
   // tab with only its current period open, and with a filter or search
@@ -479,7 +479,8 @@ export function TransactionTable({
   const filtering = hasActiveFilters(filters);
   const [toggled, setToggled] = useState<{ tab: string; keys: Map<string, boolean> }>(() => ({ tab: tabKey, keys: new Map() }));
   const overrides = toggled.tab === tabKey ? toggled.keys : new Map<string, boolean>();
-  const collapsedByDefault = (key: string) => !filtering && (tab.kind === 'all' || (tab.kind === 'ledger' && key !== 'current'));
+  // An account's page opens its current period; Expenses its latest month.
+  const collapsedByDefault = (key: string) => !filtering && (account ? key !== 'current' : key !== months?.[0]?.key);
   const isCollapsed = (key: string) => overrides.get(key) ?? collapsedByDefault(key);
   const toggleGroup = (key: string) =>
     setToggled(() => {
@@ -633,6 +634,7 @@ export function TransactionTable({
                 creditByPerson={creditByPerson}
                 alongsideOf={alongsideLinks.byId.get(row.original.alongsideOfId ?? '') ?? null}
                 alongside={alongsideLinks.byAnchor.get(row.original.id) ?? []}
+                conversion={conversions[row.original.id]}
               />
             </td>
           </tr>
@@ -647,12 +649,32 @@ export function TransactionTable({
 
   return (
     <div className="space-y-2">
-      <AccountTabs
-        tabs={tabs}
-        active={tab}
-        labels={Object.fromEntries(ledgers.map((l) => [l.id, l.label]))}
-        onChange={(next) => apply(tabPatch(next))}
-      />
+      {!account && (
+        <AccountTabs
+          tabs={tabs}
+          active={tab}
+          labels={Object.fromEntries(ledgers.map((l) => [l.id, l.label]))}
+          onChange={(next) => apply(tabPatch(next))}
+        />
+      )}
+      {!account && tabLedger && (
+        <p className="px-1 text-xs">
+          <a href={`/accounts/${tabLedger.id}`} className="text-blue-700 hover:underline dark:text-blue-400">
+            {tabLedger.label}&apos;s statement periods, statements and uploads →
+          </a>
+        </p>
+      )}
+      {!account && hiddenInTab.rows > 0 && (
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-xs text-muted-foreground">
+          <span>
+            {hiddenInTab.rows} {hiddenInTab.rows === 1 ? 'row' : 'rows'} not shown: {hiddenInTab.rows === 1 ? 'it is' : 'they are'} in{' '}
+            {hiddenInTab.imports === 1 ? 'a hidden import' : `${hiddenInTab.imports} hidden imports`}.
+          </span>
+          <button type="button" onClick={() => run(showAllImports)} className="min-h-8 text-blue-700 underline-offset-2 hover:underline dark:text-blue-400">
+            Show them
+          </button>
+        </p>
+      )}
       <ExpenseFilterBar
         filters={filters}
         categories={categories}
@@ -702,7 +724,7 @@ export function TransactionTable({
             ))}
           </thead>
           <tbody>
-            {visible.length === 0 && groups === null && periods === null && (
+            {visible.length === 0 && periods === null && (
               <tr>
                 <td
                   colSpan={COLUMNS.length}
@@ -715,7 +737,10 @@ export function TransactionTable({
               </tr>
             )}
             {periods
-              ? periods.map((period) => (
+              ? periods.map((period) =>
+                  period.kind === 'folded' ? (
+                    <FoldedPeriodsRow key={period.key} folded={period} colSpan={COLUMNS.length} today={today} />
+                  ) : (
                   <Fragment key={period.key}>
                     <PeriodHeader
                       group={period}
@@ -729,7 +754,7 @@ export function TransactionTable({
                     {!isCollapsed(period.key) && period.rows.length === 0 && (
                       <tr className="border-b last:border-0">
                         <td colSpan={COLUMNS.length} className="px-8 py-3 text-xs text-muted-foreground">
-                          {period.count > 0 ? 'No rows in this period match the current filters.' : 'No rows in this period yet.'}
+                          {period.count > 0 ? 'No rows in this period are shown.' : 'No rows in this period yet.'}
                         </td>
                       </tr>
                     )}
@@ -739,51 +764,42 @@ export function TransactionTable({
                         return row ? renderRow(row) : null;
                       })}
                   </Fragment>
-                ))
-              : groups === null
-              ? table.getRowModel().rows.map(renderRow)
-              : groups.map((group) => (
-                  <Fragment key={group.key}>
-                    <ImportGroupHeader
-                      group={group}
-                      collapsed={isCollapsed(group.key)}
-                      onToggle={() => toggleGroup(group.key)}
-                      onHide={group.imp ? () => hideImport(group.imp!.id) : undefined}
-                      colSpan={COLUMNS.length}
-                    />
-                    {!isCollapsed(group.key) &&
-                      group.rows.length === 0 && (
-                        <tr className="border-b last:border-0">
-                          <td
-                            colSpan={COLUMNS.length}
-                            className="px-8 py-3 text-xs text-muted-foreground"
+                  ),
+                )
+              : months === null
+                ? table.getRowModel().rows.map(renderRow)
+                : months.map((month) => (
+                    <Fragment key={month.key}>
+                      <tr className="border-b bg-muted/25">
+                        <td colSpan={COLUMNS.length} className="px-2 py-1">
+                          <button
+                            type="button"
+                            onClick={() => toggleGroup(month.key)}
+                            aria-expanded={!isCollapsed(month.key)}
+                            className="flex min-h-8 w-full items-center gap-1.5 rounded px-1 text-left hover:bg-muted/70"
                           >
-                            {hasActiveFilters(filters)
-                              ? `No rows in this ${group.account ? 'account' : 'import'} match the current filters.`
-                              : group.account
-                                ? 'Nothing synced from this account yet.'
-                                : 'All rows in this import have been deleted.'}
-                          </td>
-                        </tr>
-                      )}
-                    {!isCollapsed(group.key) &&
-                      group.rows.map((dataRow) => {
-                        const row = rowById.get(dataRow.id);
-                        return row ? renderRow(row) : null;
-                      })}
-                  </Fragment>
-                ))}
+                            {isCollapsed(month.key) ? (
+                              <ChevronRight className="size-4 text-muted-foreground" aria-hidden />
+                            ) : (
+                              <ChevronDown className="size-4 text-muted-foreground" aria-hidden />
+                            )}
+                            <span className="text-[13px] font-semibold">{month.label}</span>
+                            <span className="text-xs text-muted-foreground">
+                              · {month.rows.length} {month.rows.length === 1 ? 'row' : 'rows'}
+                            </span>
+                          </button>
+                        </td>
+                      </tr>
+                      {!isCollapsed(month.key) &&
+                        month.rows.map((dataRow) => {
+                          const row = rowById.get(dataRow.id);
+                          return row ? renderRow(row) : null;
+                        })}
+                    </Fragment>
+                  ))}
           </tbody>
         </table>
       </div>
-      {hiddenImports.length > 0 && (
-        <HiddenImportsStrip
-          hidden={hiddenImports}
-          onUnhide={unhideImport}
-          onShowAll={() => run(showAllImports)}
-        />
-      )}
-      {undoneImports.length > 0 && <UndoneImportsStrip undone={undoneImports} />}
       {selectedIds.length > 0 && (
         <BulkActionBar
           selectedIds={selectedIds}

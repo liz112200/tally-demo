@@ -17,7 +17,7 @@ import { requireUser } from '@/app/_lib/session';
 // revalidates both pages.
 function revalidatePeople() {
   revalidatePath('/people');
-  revalidatePath('/');
+  revalidatePath('/', 'layout');
 }
 
 export async function createPerson(

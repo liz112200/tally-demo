@@ -33,9 +33,11 @@ export const TABLES = [
   'bank_accounts', 'bank_connections', 'ledger_statements', 'bank_flag_resolutions',
   'import_skipped_rows',
 ];
-// Sign-in, never wiped: the demo has none, and a reset must not sign anyone
-// out of a database that has.
-export const KEPT_TABLES = ['users', 'sessions', 'passkey_credentials', 'auth_challenges'];
+// Not named in the wipe: the sign-in tables, which the demo never writes.
+// They are emptied anyway: users link to persons, so TRUNCATE ... CASCADE
+// reaches them and the tables that reference users (the reset logs it as a
+// notice). The demo has no sign-in to lose.
+export const UNNAMED_TABLES = ['users', 'sessions', 'passkey_credentials', 'auth_challenges'];
 
 type Tx = Parameters<Parameters<ReturnType<typeof drizzle<typeof schema>>['transaction']>[0]>[0];
 

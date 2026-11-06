@@ -1,9 +1,10 @@
 import 'server-only';
-import { and, asc, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { db } from './index';
 import { persons, settlementAllocations, splitShares, splits, transactions } from './schema';
 import type { Tx } from './queries';
 import { dedupHash } from '@/lib/parsers/dedup';
+import { conversionCheck, type ConversionCheck } from '@/lib/conversion';
 import { normalizeMerchant } from '@/lib/parsers/normalize';
 import { formatUSD, toCents } from '@/lib/money';
 
@@ -80,25 +81,7 @@ export async function insertPaidAlongside(
   return { id: row.id, date: anchor.date };
 }
 
-// The amount a CSV or manual row came in with, when only its amount was
-// raised since: the amount below the current one whose dedup_hash, with the
-// row's date and description as they are, is the stored one. Null when none
-// is (the date or description changed too, or it was edited before the
-// 2026-07-30 rescale recomputed the hashes).
-export function importedAmountBelow(row: {
-  source: string;
-  accountLabel: string | null;
-  date: string;
-  amountCents: number;
-  descriptionRaw: string;
-  dedupHash: string;
-}): number | null {
-  for (let cents = 1; cents * 10 < row.amountCents; cents++) {
-    const amountCents = cents * 10;
-    if (dedupHash({ ...row, amountCents }) === row.dedupHash) return amountCents;
-  }
-  return null;
-}
+export { importedAmountBelow } from '@/lib/conversion';
 
 export type PersonFigures = { owed: number; paid: number; owing: number; credit: number };
 export type ConversionPlan = {
@@ -196,45 +179,35 @@ export async function convertEditedRow(
         .from(transactions)
         .where(eq(transactions.id, transactionId))
         .for('update');
-      if (!row || row.deletedAt) return { error: 'That transaction no longer exists.' };
-      if (row.providerTransactionId !== null || row.dedupHash === null) {
-        return { error: 'Only a CSV or manual row can be converted; a synced row is the bank’s.' };
-      }
-      if (dedupHash(row) === row.dedupHash) {
-        return { error: 'This row has the amount it came in with; there is nothing to move.' };
-      }
-      const original = importedAmountBelow({ ...row, dedupHash: row.dedupHash });
-      if (original === null) {
-        return { error: 'The amount this row came in with cannot be recovered (its date or description changed too, or it was edited before Jul 30), so it is not converted.' };
-      }
       const [owner] = await tx.select({ id: persons.id }).from(persons).where(eq(persons.isOwner, true));
-      const [split] = await tx.select().from(splits).where(eq(splits.transactionId, transactionId)).for('update');
-      if (!split || split.payerPersonId !== owner.id || split.method !== 'equal') {
-        return { error: 'Only a row with an equal split you paid is converted.' };
-      }
-      const shares = await tx
-        .select({ id: splitShares.id, personId: splitShares.personId, amountCents: splitShares.amountCents, name: persons.name, isOwner: persons.isOwner })
-        .from(splitShares)
-        .innerJoin(persons, eq(persons.id, splitShares.personId))
-        .where(eq(splitShares.splitId, split.id))
-        .orderBy(asc(persons.createdAt))
-        .for('update', { of: splitShares });
-      const extra = row.amountCents - original;
-      if (extra % (shares.length * 10) !== 0) {
-        return { error: `The extra does not divide evenly in whole cents among ${shares.length} people, so it is not converted.` };
-      }
-      const part = extra / shares.length;
-      if (shares.some((s) => s.amountCents < part)) return { error: 'A share is smaller than its part of the extra; not converted.' };
-      // Already recorded alongside it: converting would count the extra twice.
-      const already = await tx
-        .select({ descriptionRaw: transactions.descriptionRaw })
-        .from(transactions)
-        .where(and(eq(transactions.alongsideTransactionId, transactionId), eq(transactions.amountCents, extra), sql`${transactions.deletedAt} is null`));
-      if (already.length > 0) {
-        return {
-          error: `"${already[0].descriptionRaw}" for ${usd(extra)} is already recorded alongside this row, so converting would record the extra a second time. If that row is the extra, delete it, then convert.`,
-        };
-      }
+      const [split] = row ? await tx.select().from(splits).where(eq(splits.transactionId, transactionId)).for('update') : [];
+      const shares = split
+        ? await tx
+            .select({ id: splitShares.id, personId: splitShares.personId, amountCents: splitShares.amountCents, name: persons.name, isOwner: persons.isOwner })
+            .from(splitShares)
+            .innerJoin(persons, eq(persons.id, splitShares.personId))
+            .where(eq(splitShares.splitId, split.id))
+            .orderBy(asc(persons.createdAt))
+            .for('update', { of: splitShares })
+        : [];
+      // Purchases already recorded alongside it: converting an extra already
+      // there would count it twice.
+      const alongside = row
+        ? await tx
+            .select({ descriptionRaw: transactions.descriptionRaw, amountCents: transactions.amountCents })
+            .from(transactions)
+            .where(and(eq(transactions.alongsideTransactionId, transactionId), sql`${transactions.deletedAt} is null`))
+        : [];
+      // The same rules the Move button, the raised filter and the Needs you
+      // band use (lib/conversion.ts), so nothing is offered that is refused.
+      const check = conversionCheck({
+        row: row ? { ...row, deleted: row.deletedAt !== null } : null,
+        split: split ? { paidByOwner: split.payerPersonId === owner.id, method: split.method } : null,
+        shareAmounts: shares.map((s) => s.amountCents),
+        alongsideForExtra: (extra) => alongside.find((a) => a.amountCents === extra)?.descriptionRaw ?? null,
+      });
+      if ('error' in check) return check;
+      const { originalCents: original, extraCents: extra, partCents: part } = check;
       if (apply) {
         const twin = await twinOf(tx, row.date, extra, description);
         if (twin.refusal) return { error: twin.refusal };
@@ -320,4 +293,52 @@ export async function convertEditedRow(
     if (err instanceof Refused) return { error: err.message };
     throw err;
   }
+}
+
+// For every live CSV or manual row raised since it came in that has a split:
+// whether converting it would be accepted, and if not, why. Read-only; the
+// same rules as convertEditedRow, so the Move button, the raised filter and
+// the Needs you band offer exactly the conversions it accepts.
+export async function conversionChecks(): Promise<Map<string, ConversionCheck>> {
+  const candidates = await db
+    .select({
+      id: transactions.id,
+      providerTransactionId: transactions.providerTransactionId,
+      dedupHash: transactions.dedupHash,
+      source: transactions.source,
+      accountLabel: transactions.accountLabel,
+      date: transactions.date,
+      amountCents: transactions.amountCents,
+      descriptionRaw: transactions.descriptionRaw,
+      splitId: splits.id,
+      payerPersonId: splits.payerPersonId,
+      method: splits.method,
+    })
+    .from(transactions)
+    .innerJoin(splits, eq(splits.transactionId, transactions.id))
+    .where(and(sql`${transactions.deletedAt} is null`, sql`${transactions.providerTransactionId} is null`, sql`${transactions.dedupHash} is not null`));
+  const raised = candidates.filter((c) => dedupHash(c) !== c.dedupHash);
+  const out = new Map<string, ConversionCheck>();
+  if (raised.length === 0) return out;
+  const [owner] = await db.select({ id: persons.id }).from(persons).where(eq(persons.isOwner, true));
+  const shares = await db
+    .select({ splitId: splitShares.splitId, amountCents: splitShares.amountCents })
+    .from(splitShares)
+    .where(inArray(splitShares.splitId, raised.map((r) => r.splitId)));
+  const alongside = await db
+    .select({ of: transactions.alongsideTransactionId, descriptionRaw: transactions.descriptionRaw, amountCents: transactions.amountCents })
+    .from(transactions)
+    .where(and(inArray(transactions.alongsideTransactionId, raised.map((r) => r.id)), sql`${transactions.deletedAt} is null`));
+  for (const r of raised) {
+    out.set(
+      r.id,
+      conversionCheck({
+        row: { ...r, deleted: false },
+        split: { paidByOwner: r.payerPersonId === owner?.id, method: r.method },
+        shareAmounts: shares.filter((s) => s.splitId === r.splitId).map((s) => s.amountCents),
+        alongsideForExtra: (extra) => alongside.find((a) => a.of === r.id && a.amountCents === extra)?.descriptionRaw ?? null,
+      }),
+    );
+  }
+  return out;
 }

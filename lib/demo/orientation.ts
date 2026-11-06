@@ -10,7 +10,7 @@
 export function orientationSteps(verifyHref: string): { href: string; title: string; detail: string }[] {
   return [
     {
-      href: '/accounts',
+      href: '/',
       title: 'Sync a bank',
       detail: 'Press Sync now on American Express a few times, then answer the purchase held at the cutover: on the CSV, or new?',
     },
@@ -20,7 +20,7 @@ export function orientationSteps(verifyHref: string): { href: string; title: str
       detail: 'Chase checking’s synced rows count only once its statement matches to the cent. Try the real figures, then a typo.',
     },
     {
-      href: '/?q=pizza+night',
+      href: '/expenses?q=pizza+night',
       title: 'Split a dinner',
       detail: 'Open Pizza night and split it equally, by amount, or by percent. Rows with a receipt split item by item.',
     },

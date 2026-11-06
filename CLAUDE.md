@@ -282,7 +282,7 @@ These are decided. Do not reintroduce the alternatives.
   categorized). Rules only ever set or clear NULL, `rule` and `bank` rows;
   they never overwrite a `manual` category. `bank` is the bank's own
   category on a synced row, through the owner's mapping
-  (`bank_category_map`, migration 0028, edited on /rules): it fills only a
+  (`bank_category_map`, migration 0028, edited on Settings): it fills only a
   row no rule matches, rules overwrite it, it never overwrites a manual or
   rule category, and the row shows it as the bank's (dashed tag, "bank"). A
   mapped category must count as spending, so nothing maps to Transfers: the
@@ -371,6 +371,15 @@ These are decided. Do not reintroduce the alternatives.
   `BANK_TOKEN_KEY` is backed up outside Vercel: losing it makes every access
   token unreadable and forces a relink of every Item.
 
+- The home page is the accounts board (ACCOUNTS-BOARD.md): one card per
+  ledger account under the Needs you band; each account has a page holding
+  its statement periods, statements and uploads; Expenses reads by month.
+  A cycle's close is always shown with the statement count it rests on,
+  beside it, never only in a hover, and the account's page always shows the
+  reasoning sentence. A band line must be something the owner can act on
+  that the data shows is still open, and leaves only when the data says it
+  is resolved: no dismissing, no counts for their own sake.
+
 ## Architecture
 
 - Money math and the split engine are pure functions in `lib/`, with no
@@ -393,7 +402,7 @@ These are decided. Do not reintroduce the alternatives.
   `useReportSuccess` (app/_components/page-result.tsx) put the result on the
   page result line, pinned to the bottom of the viewport so it outlives
   whatever the action unmounted; `ConfirmDialog` stays open on an error and
-  shows it there. /accounts uses its per-login result slots instead, never
+  shows it there. /accounts/logins uses its per-login result slots instead, never
   both.
 - File uploads that feed a Server Action hold the selected `File` in client
   state and dispatch the action with a manually built `FormData`, rather

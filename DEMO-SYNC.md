@@ -19,8 +19,10 @@ available.
   Each row is categorized by the rules, else by the bank-category mapping
   (the bistro, which no rule names, is filed under Dining from the bank's
   category), as a real sync would.
-- Expenses shows the synced rows grouped under their ledger account beside
-  the CSV history before each cutover, as for the owner.
+- Each account's page shows its synced rows beside the CSV history before
+  its cutover, by statement period, as for the owner; every account has
+  closing dates recorded by hand, so every card has a cycle
+  (ACCOUNTS-BOARD.md).
 - Linking, reconnecting and managing a login are not offered: there is no
   real bank behind them, and their actions still refuse in demo mode. Sync
   now, the per-account sync switch, answering a held row, finishing the
@@ -108,9 +110,13 @@ does, produced by the real code from seeded inputs, not by setting a flag.
    with one possible duplicate. The visitor answers it: "Same purchase"
    keeps it out, and "A different purchase" adds it and the totals move.
    The review also shows one same-merchant row of another amount: a car
-   hire whose CSV row the owner raised by $38.00 to fold in the gas Jordan
-   owed, then split by amount (its note says so, in Expenses), stated in the
-   review as a fact with both amounts and no guessed cause.
+   hire whose CSV row the owner raised by $38.00 to fold in gas bought with
+   Jordan, then split equally with Jordan (its note says so, in Expenses),
+   stated in the review as a fact with both amounts and no guessed cause.
+   Split equally, it is the one row the visitor can convert with Move:
+   the $38.00 becomes a purchase paid alongside, $19.00 each, and no balance
+   moves. (Split by amount until 2026-11-06, it was offered Move and always
+   refused.)
 2. **Verification the visitor runs.** Chase checking is linked and synced
    but not verified, so its synced rows show as not counted and are not
    splittable. The verify page shows the seed's statement for the period,

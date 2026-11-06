@@ -5,7 +5,6 @@ import {
   itemsLeft,
   itemsUsed,
   loginsByInstitution,
-  notSyncingReason,
   twinAccounts,
   twinSentence,
   twinSummary,
@@ -127,28 +126,6 @@ describe('logins grouped by institution', () => {
     expect(twinSentence(twins.get('a-card')!, true, day)).toBe(
       'Also linked and syncing under 2 other First Platypus Bank logins (10-22, 10-25): every transaction on it is counted 3 times. Keep sync on for one copy only.',
     );
-  });
-});
-
-describe('notSyncingReason', () => {
-  const active = { status: 'active' as const, itemErrorCode: null };
-  it('names what stops an account, most decisive first, and only a broken login asks the owner to act', () => {
-    expect(notSyncingReason({ ...active, status: 'removed' }, { unsharedAt: new Date() })).toEqual({ text: 'login removed; not syncing', needsOwner: false });
-    expect(notSyncingReason({ ...active, status: 'paused' }, { unsharedAt: null })).toEqual({ text: 'paused; not syncing', needsOwner: false });
-    expect(notSyncingReason(active, { unsharedAt: new Date() })).toEqual({ text: 'no longer shared by the bank; not syncing', needsOwner: false });
-    expect(notSyncingReason({ ...active, itemErrorCode: 'ITEM_LOGIN_REQUIRED' }, { unsharedAt: null })).toEqual({
-      text: 'not syncing: reconnect on Accounts',
-      needsOwner: true,
-    });
-    expect(notSyncingReason({ ...active, itemErrorCode: 'ITEM_NOT_FOUND' }, { unsharedAt: null })).toEqual({
-      text: 'Plaid no longer has this login; not syncing',
-      needsOwner: true,
-    });
-  });
-
-  it('says nothing for a healthy login or a bank that is only down for now', () => {
-    expect(notSyncingReason(active, { unsharedAt: null })).toBeNull();
-    expect(notSyncingReason({ ...active, itemErrorCode: 'INSTITUTION_DOWN' }, { unsharedAt: null })).toBeNull();
   });
 });
 

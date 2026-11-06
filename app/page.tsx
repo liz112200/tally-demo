@@ -1,230 +1,46 @@
-import { Suspense } from 'react';
-import {
-  getTransactions,
-  getCategories,
-  getPersons,
-  getSplits,
-  getReceipts,
-  getImports,
-  getDeletedImports,
-  getLinkedAccountGroups,
-  getReplacementCandidates,
-  getSettlements,
-  getImportSkipGroups,
-  type ReceiptView,
-  type ReplacementCandidate,
-} from '@/db/queries';
-import { TransactionTable } from '@/app/_components/transaction-table';
-import { ImportSkips } from '@/app/_components/import-skips';
-import { ExpensesToolbar } from '@/app/_components/expense-dialogs';
-import { isDemoMode } from '@/lib/demo-mode';
-import { notSyncingReason } from '@/lib/bank-sync/accounts-view';
-import { staleLines } from '@/lib/bank-sync/staleness';
-import { getLedgerTabs } from '@/db/statement-cycles';
-import { currentCycle, cycleHead } from '@/lib/statement-cycles';
-import { AlertTriangle, Info } from 'lucide-react';
-import type { SplitSummary } from '@/app/_components/split-editor';
+import { redirect } from 'next/navigation';
 import { requireUser } from '@/app/_lib/session';
+import { loadBoard, needsYouFacts } from '@/app/_lib/board';
+import { NeedsYouBand } from '@/app/_components/needs-you-band';
+import { needsYouItems } from '@/lib/needs-you';
+import { formatUSD, toCents } from '@/lib/money';
+import { AccountBoard } from '@/app/_components/account-board';
 
-export default async function Home() {
+export const dynamic = 'force-dynamic';
+
+// The home page: the accounts board (2026-11-05), with the Needs you band
+// above it. Every account as a card, where it is in its statement cycle and
+// what is true about it, each opening its own page. Bank logins (linking,
+// Reconnect, Set up) are on their own page, linked here.
+export default async function HomePage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   await requireUser();
-  const [
-    transactions,
-    categories,
-    persons,
-    splits,
-    receipts,
-    imports,
-    deletedImports,
-    linkedAccounts,
-    ledgers,
-    importSkips,
-  ] = await Promise.all([
-    getTransactions(),
-    getCategories(),
-    getPersons(),
-    getSplits(),
-    getReceipts(),
-    getImports(),
-    getDeletedImports(),
-    getLinkedAccountGroups(),
-    getLedgerTabs(),
-    getImportSkipGroups(),
-  ]);
-  // Statement cycles (STATEMENT-CYCLES.md): each linked account's header in
-  // All names its current cycle rather than one long range of dates.
-  const today = new Date().toISOString().slice(0, 10);
-  const shortDay = (iso: string) =>
-    new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
-  const cycleTextFor = (ledgerAccountId: string | null) => {
-    const ledger = ledgers.find((l) => l.id === ledgerAccountId);
-    const cycle = ledger ? currentCycle(ledger.statements, today) : null;
-    return ledger && cycle ? cycleHead({ kind: ledger.kind, cycle, today, formatDay: shortDay }) : null;
-  };
-  // Synced rows group by the linked account they came from. Plain strings
-  // for the client, as with imports.
-  // A synced account's group is named after its ledger account, the account
-  // as the owner knows it (REAL-ACCOUNTS.md); one not yet verified against a
-  // statement says its rows are not counted.
-  const accountGroups = linkedAccounts.map((a) => ({
-    id: a.id,
-    label:
-      a.ledgerName ??
-      [a.institutionName, a.mask ? `${a.name} ••${a.mask}` : a.name].filter(Boolean).join(' · '),
-    lastSyncedAt: a.lastSyncedAt ? a.lastSyncedAt.toISOString() : null,
-    cycleText: cycleTextFor(a.ledgerAccountId),
-    notSyncing:
-      notSyncingReason(a, a) ??
-      (a.verifiedAt === null ? { text: 'awaiting verification; rows not counted', needsOwner: true } : null),
-  }));
-  // Accounts that have gone quiet (SCHEDULED-SYNC.md), named with why. Not in
-  // the demo, whose data resets daily and has no scheduled sync.
-  const stale = isDemoMode()
-    ? []
-    : staleLines(
-        linkedAccounts.map((a) => ({
-          label: a.ledgerName ?? (a.mask ? `${a.name} ••${a.mask}` : a.name),
-          institution: a.institutionName ?? 'The bank',
-          connectionStatus: a.status,
-          itemErrorCode: a.itemErrorCode,
-          consentExpiresAt: a.consentExpiresAt,
-          syncEnabled: a.syncEnabled,
-          unshared: a.unsharedAt !== null,
-          lastSyncedAt: a.lastSyncedAt,
-          lastSyncError: a.lastSyncError,
-        })),
-        new Date(),
-      );
-  // The grouping lib works in plain strings; format the upload timestamp
-  // to its calendar date here rather than shipping Dates to the client.
-  const importGroups = imports.map(({ importedAt, ...imp }) => ({
-    ...imp,
-    importedAt: importedAt.toISOString().slice(0, 10),
-  }));
-  // Undone (soft-deleted) batches, for the restore strip. Same timestamp
-  // formatting rule: the client works in plain date strings.
-  const undoneImports = deletedImports.map(
-    ({ importedAt, deletedAt, ...imp }) => ({
-      ...imp,
-      importedAt: importedAt.toISOString().slice(0, 10),
-      deletedOn: deletedAt.toISOString().slice(0, 10),
-    }),
-  );
-  const categoryList = categories.map((c) => ({ id: c.id, name: c.name }));
-  const personList = persons.map((p) => ({
-    id: p.id,
-    name: p.name,
-    isOwner: p.isOwner,
-  }));
-
-  // Rows the bank removed that the owner had built on: where their split
-  // could move if the purchase came back under a new id.
-  const removedIds = transactions.filter((t) => t.removedByBankAt !== null).map((t) => t.id);
-  const replacementCandidates: Record<string, ReplacementCandidate[]> = Object.fromEntries(
-    await getReplacementCandidates(removedIds),
-  );
-
-  // Incoming credit each person already carries (unallocated payments), so
-  // the flag panel can say what re-saving a split would leave them owing.
-  const creditByPerson: Record<string, number> = {};
-  if (Object.keys(replacementCandidates).length > 0 || transactions.some((t) => t.bankAmountBeforeCents !== null)) {
-    for (const s of await getSettlements()) {
-      if (s.direction === 'incoming' && s.unallocatedCents > 0) {
-        creditByPerson[s.personId] = (creditByPerson[s.personId] ?? 0) + s.unallocatedCents;
-      }
-    }
+  // Expenses lived here until then. The board takes no parameters, so a link
+  // carrying any (?tx=, ?q=, ?tab=, ?demo=) was one to Expenses: it goes there.
+  const params = await searchParams;
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    for (const v of Array.isArray(value) ? value : value === undefined ? [] : [value]) query.append(key, v);
   }
-
-  const receiptsByTransaction: Record<string, ReceiptView> = {};
-  for (const r of receipts) {
-    receiptsByTransaction[r.transactionId] = r;
-  }
-
-  const splitsByTransaction: Record<string, SplitSummary> = {};
-  for (const s of splits) {
-    splitsByTransaction[s.transactionId] = {
-      method: s.method,
-      taxCents: s.taxCents,
-      tipCents: s.tipCents,
-      shares: s.shares,
-    };
-  }
-
-  // New splits preselect the owner plus whoever was in the most recent
-  // split, for quick repeat entry with the usual crew.
-  const activeIds = new Set(personList.map((p) => p.id));
-  const latest = splits.reduce<(typeof splits)[number] | null>(
-    (acc, s) => (acc === null || s.createdAt > acc.createdAt ? s : acc),
-    null,
-  );
-  const defaultParticipantIds = [
-    ...new Set([
-      ...personList.filter((p) => p.isOwner).map((p) => p.id),
-      ...(latest?.shares.map((sh) => sh.personId) ?? []),
-    ]),
-  ].filter((id) => activeIds.has(id));
-
+  if ([...query.keys()].length > 0) redirect(`/expenses?${query}`);
+  const board = await loadBoard();
+  const day = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+  const items = needsYouItems(needsYouFacts(board), { day, money: (n) => formatUSD(toCents(n)) });
   return (
-    <main className="mx-auto max-w-6xl px-6 py-8">
-      <div className="mb-5 flex items-end justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Expenses</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            {transactions.length === 0
-              ? 'Nothing recorded yet'
-              : `${transactions.length} row${
-                  transactions.length === 1 ? '' : 's'
-                }`}
-          </p>
-        </div>
-        <ExpensesToolbar categories={categoryList} demo={isDemoMode()} />
+    <main className="mx-auto max-w-6xl space-y-5 px-4 py-6 sm:px-6 sm:py-8">
+      <NeedsYouBand items={items} />
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <h1 className="text-2xl font-bold tracking-tight">Accounts</h1>
+        <a href="/accounts/logins" className="inline-flex min-h-9 items-center text-sm text-blue-700 hover:underline dark:text-blue-400">
+          Bank logins{board.loginCount > 0 ? ` (${board.loginCount})` : ''} →
+        </a>
       </div>
-      {stale.length > 0 && (
-        <ul className="mb-4 space-y-1.5 text-xs">
-          {stale.map((line, i) => (
-            <li
-              key={i}
-              role="status"
-              className={
-                line.kind === 'transient'
-                  ? 'flex items-start gap-1.5 rounded-lg border px-3 py-2 text-muted-foreground'
-                  : 'flex items-start gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-amber-900 dark:text-amber-200'
-              }
-            >
-              {line.kind === 'transient' ? (
-                <Info aria-hidden className="mt-px size-3.5 shrink-0" />
-              ) : (
-                <AlertTriangle aria-hidden className="mt-px size-3.5 shrink-0" />
-              )}
-              <span>
-                {line.text}{' '}
-                <a href="/accounts" className="underline underline-offset-2">
-                  Accounts
-                </a>
-              </span>
-            </li>
-          ))}
-        </ul>
+      {board.cards.length === 0 && board.unmapped.length === 0 ? (
+        <p className="rounded-xl border bg-card p-6 text-sm text-muted-foreground">
+          No accounts yet. Import a CSV from Expenses, or link a bank on the Bank logins page.
+        </p>
+      ) : (
+        <AccountBoard cards={board.cards} unmapped={board.unmapped} />
       )}
-      {/* useTableState reads useSearchParams, which needs a Suspense
-          boundary to prerender; params resolve client-side on hydration. */}
-      <Suspense>
-        <TransactionTable
-          data={transactions}
-          categories={categoryList}
-          persons={personList}
-          splitsByTransaction={splitsByTransaction}
-          defaultParticipantIds={defaultParticipantIds}
-          receiptsByTransaction={receiptsByTransaction}
-          replacementCandidates={replacementCandidates}
-          creditByPerson={creditByPerson}
-          imports={importGroups}
-          accounts={accountGroups}
-          undoneImports={undoneImports}
-          ledgers={ledgers}
-        />
-      </Suspense>
-      <ImportSkips groups={importSkips} />
     </main>
   );
 }

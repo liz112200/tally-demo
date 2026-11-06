@@ -45,7 +45,7 @@ export async function createCategory(
     return { errors: { name: 'A category with that name already exists.' } };
   }
 
-  revalidatePath('/');
-  revalidatePath('/rules');
+  revalidatePath('/', 'layout');
+  revalidatePath('/settings');
   return { ok: true };
 }

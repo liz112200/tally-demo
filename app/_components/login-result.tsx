@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
 import { MessageLine, type Message } from './action-message';
 
-// One result slot per login on /accounts. Every action on a login (Sync now,
+// One result slot per login on /accounts/logins. Every action on a login (Sync now,
 // Reconnect, Choose shared accounts, Check, Pause, Resume, Retry, Remove)
 // reports here, and the latest result replaces the one before. The slot sits
 // on the card itself, so it outlives the button that ran the action: a
@@ -24,6 +24,12 @@ export function LoginResultProvider({ children }: { children: ReactNode }) {
 // For an action on a login. Throws outside a LoginResultProvider, so a
 // control placed where its result would have nowhere to go fails loudly
 // rather than reporting into nothing.
+// The login's slot when inside one (Bank logins), else null: the account's
+// own page has no login, and its controls report on the page result line.
+export function useOptionalLoginResult(): ((result: LoginResult) => void) | null {
+  return useContext(LoginResultContext)?.report ?? null;
+}
+
 export function useLoginResult(): (result: LoginResult) => void {
   const slot = useContext(LoginResultContext);
   if (!slot) throw new Error('useLoginResult must be used inside a LoginResultProvider');

@@ -6,7 +6,7 @@ import { requireUser } from '@/app/_lib/session';
 export const metadata = { title: 'Bank sign-in · tally' };
 
 // A finished Reconnect syncs the login (completeUpdate), so this page allows
-// the same 300 s as /accounts.
+// the same 300 s as /accounts/logins.
 export const maxDuration = 300;
 
 // Where an OAuth institution sends the browser back when Link could not use a

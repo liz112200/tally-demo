@@ -2,12 +2,21 @@
 // test can hold the demo's first-visit strip to it: every page the strip sends
 // a visitor to must be in the demo's nav (lib/demo/orientation.test.ts).
 export const NAV = [
-  { href: '/', label: 'Expenses' },
-  { href: '/insights', label: 'Insights' },
+  // The accounts board is the home page (2026-11-05).
+  { href: '/', label: 'Accounts' },
+  { href: '/expenses', label: 'Expenses' },
   { href: '/people', label: 'People' },
-  { href: '/rules', label: 'Rules' },
-  { href: '/accounts', label: 'Accounts' },
+  { href: '/insights', label: 'Insights' },
+  // Rules, categories, the bank's categories, and devices.
+  { href: '/settings', label: 'Settings' },
 ] as const;
+
+// Which nav item a page belongs to: an account's page and bank logins are
+// Accounts; anything else by its first segment.
+export function navActive(href: string, pathname: string): boolean {
+  if (href === '/') return pathname === '/' || pathname.startsWith('/accounts');
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
 
 // Pages left out of the demo's nav. Empty since the synthetic provider
 // (DEMO-SYNC.md) brought /accounts to the demo; it was hidden until then, and

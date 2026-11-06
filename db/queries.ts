@@ -1745,6 +1745,8 @@ export type ImportRow = {
   // unhides). Hidden imports are still returned here so the strip can list
   // them — the table filters their rows out client-side.
   hidden: boolean;
+  // The ledger account the batch belongs to: its account's page lists it.
+  ledgerAccountId: string | null;
 };
 
 // Non-deleted imports, newest upload first (the group order on /). Hidden
@@ -1759,6 +1761,7 @@ export async function getImports(): Promise<ImportRow[]> {
       importedAt: imports.importedAt,
       rowCount: imports.rowCount,
       hidden: imports.hidden,
+      ledgerAccountId: imports.ledgerAccountId,
     })
     .from(imports)
     .where(isNull(imports.deletedAt))
@@ -1838,6 +1841,9 @@ export type ImportSkipGroup = {
   // The import the confirm made, when it still stands (not undone, not
   // removed for having written nothing).
   importName: string | null;
+  // The ledger account the upload was for: its import's, or, when the
+  // confirm left no import, the CSV's own source and label.
+  ledgerAccountId: string | null;
   at: Date;
   rows: { date: string; amountCents: number; descriptionRaw: string; reason: 'duplicate' | 'duplicate_of_deleted' | 'covered' | 'collision' }[];
 };
@@ -1849,6 +1855,13 @@ export async function getImportSkipGroups(): Promise<ImportSkipGroup[]> {
       confirmId: importSkippedRows.confirmId,
       filename: importSkippedRows.filename,
       importName: sql<string | null>`case when ${imports.deletedAt} is null then coalesce(${imports.displayName}, ${imports.filename}) end`,
+      // Names written out: a correlated subquery, kept clear of Drizzle's
+      // column rendering.
+      ledgerAccountId: sql<string | null>`coalesce("imports"."ledger_account_id", (
+        select la.id from ledger_accounts la
+        where la.csv_source = "import_skipped_rows"."source"
+          and la.csv_account_label is not distinct from "import_skipped_rows"."account_label"
+        order by la.created_at limit 1))`,
       at: importSkippedRows.createdAt,
       date: importSkippedRows.date,
       amountCents: importSkippedRows.amountCents,
@@ -1860,7 +1873,7 @@ export async function getImportSkipGroups(): Promise<ImportSkipGroup[]> {
     .orderBy(desc(importSkippedRows.createdAt), asc(importSkippedRows.date), asc(importSkippedRows.id));
   const groups = new Map<string, ImportSkipGroup>();
   for (const r of rows) {
-    const g = groups.get(r.confirmId) ?? { confirmId: r.confirmId, filename: r.filename, importName: r.importName, at: r.at, rows: [] };
+    const g = groups.get(r.confirmId) ?? { confirmId: r.confirmId, filename: r.filename, importName: r.importName, ledgerAccountId: r.ledgerAccountId, at: r.at, rows: [] };
     g.rows.push({ date: r.date, amountCents: r.amountCents, descriptionRaw: r.descriptionRaw, reason: r.reason });
     groups.set(r.confirmId, g);
   }
@@ -2039,6 +2052,7 @@ export async function getDeletedImports(): Promise<DeletedImportRow[]> {
       importedAt: imports.importedAt,
       rowCount: imports.rowCount,
       hidden: imports.hidden,
+      ledgerAccountId: imports.ledgerAccountId,
       deletedAt: imports.deletedAt,
       // Literal, fully qualified SQL: see rowHasSplit. Written with
       // ${imports.id}, Drizzle rendered a bare "id" that the subquery read as

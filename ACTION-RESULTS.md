@@ -61,7 +61,10 @@ and settlements that can leave balances other than what the owner believes.
 - **`PageResultProvider`** (`app/_components/page-result.tsx`), in
   `app/template.tsx`: one result line per page, fixed above the bottom of
   the viewport (above the Expenses bulk-action bar), replaced by the next
-  result, dismissable. Next mounts a template afresh on every navigation, so
+  result, dismissable. A result carrying figures, a warning or an error stays
+  until replaced or dismissed; a confirmation with no figures (no digit in its
+  text or details) fades after five seconds, held while the pointer or focus
+  is on it (lib/result-fade.ts, 2026-11-06). Next mounts a template afresh on every navigation, so
   the line belongs to one visit to one page and leaving discards it. It was
   first in the root layout, which never unmounts, cleared by an effect on
   the pathname; the owner saw a result from Expenses still showing on

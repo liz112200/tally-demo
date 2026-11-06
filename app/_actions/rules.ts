@@ -64,8 +64,8 @@ export async function createRule(
     throw err;
   }
 
-  revalidatePath('/rules');
-  revalidatePath('/');
+  revalidatePath('/settings');
+  revalidatePath('/', 'layout');
   return { ok: true, message: `Rule ${parsed.data.matchPattern} added. ${RULE_SCOPE}` };
 }
 
@@ -91,8 +91,8 @@ export async function updateRule(
     throw err;
   }
 
-  revalidatePath('/rules');
-  revalidatePath('/');
+  revalidatePath('/settings');
+  revalidatePath('/', 'layout');
   return { ok: true, message: `Rule ${parsed.data.matchPattern} saved. ${RULE_SCOPE}` };
 }
 
@@ -105,8 +105,8 @@ export async function applyRules(
 ): Promise<ApplyRulesState> {
   await requireUser();
   const result = await applyRulesToExisting();
-  revalidatePath('/');
-  revalidatePath('/rules');
+  revalidatePath('/', 'layout');
+  revalidatePath('/settings');
   return { ok: true, result };
 }
 
@@ -118,8 +118,8 @@ export async function deleteRule(formData: FormData): Promise<ActionResult> {
   return attempt('deleteRule', async () => {
     const deleted = await deleteRuleById(id.data);
     if (!deleted) return { error: 'That rule was not found; it may already be deleted.' };
-    revalidatePath('/rules');
-    revalidatePath('/');
+    revalidatePath('/settings');
+    revalidatePath('/', 'layout');
     return { ok: true, message: `Rule ${deleted.matchPattern} deleted. Rows it categorized keep their category.` };
   });
 }

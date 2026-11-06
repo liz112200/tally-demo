@@ -81,7 +81,7 @@ export async function createTransaction(
     }
   }
 
-  revalidatePath('/');
+  revalidatePath('/', 'layout');
   return { ok: true, message };
 }
 
@@ -100,7 +100,7 @@ export async function updateTransactionNote(
     return { error: parsed.error.issues[0]?.message ?? 'Invalid note' };
   }
   await updateTransactionNoteById(parsed.data.id, parsed.data.note);
-  revalidatePath('/');
+  revalidatePath('/', 'layout');
   return { ok: true };
 }
 
@@ -140,7 +140,7 @@ export async function updateTransactionDetails(
     };
   }
 
-  revalidatePath('/');
+  revalidatePath('/', 'layout');
   revalidatePath('/people');
   return { ok: true };
 }
@@ -153,7 +153,7 @@ export async function updateTransactionCategory(
   const parsed = updateCategorySchema.parse({ id, categoryId });
   const result = await dbUpdateCategory(parsed.id, parsed.categoryId);
   if ('error' in result) return { error: result.error };
-  revalidatePath('/');
+  revalidatePath('/', 'layout');
   return {};
 }
 
@@ -169,7 +169,7 @@ export async function bulkCategorizeTransactions(
   const parsedCategory = z.string().uuid().nullable().parse(categoryId);
   const result = await bulkUpdateTransactionCategory(parsed, parsedCategory);
   if ('error' in result) return { error: result.error };
-  revalidatePath('/');
+  revalidatePath('/', 'layout');
   return {};
 }
 
@@ -184,7 +184,7 @@ export async function bulkDeleteTransactions(ids: string[]): Promise<ActionResul
     const asked = parsed.data.length;
     const n = await softDeleteTransactionsByIds(parsed.data);
     if (n === 0) return { error: 'Nothing was deleted; those rows may already be deleted.' };
-    revalidatePath('/');
+    revalidatePath('/', 'layout');
     revalidatePath('/people');
     return n === asked
       ? { ok: true, message: `${n} row${n === 1 ? '' : 's'} deleted.` }
@@ -202,7 +202,7 @@ export async function deleteTransaction(formData: FormData): Promise<ActionResul
     if (!(await softDeleteTransactionById(id.data))) {
       return { error: 'That transaction was not found, or is already deleted.' };
     }
-    revalidatePath('/');
+    revalidatePath('/', 'layout');
     revalidatePath('/people');
     return { ok: true, message: 'Transaction deleted.' };
   });

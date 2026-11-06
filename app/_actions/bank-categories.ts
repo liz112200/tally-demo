@@ -18,7 +18,7 @@ export async function setBankCategory(plaidCategory: unknown, categoryId: unknow
   return attempt('setBankCategory', async () => {
     const result = await setBankCategoryMapping(key.data as (typeof PLAID_CATEGORIES)[number][0], id.data);
     if ('error' in result) return result;
-    revalidatePath('/rules');
+    revalidatePath('/settings');
     const label = PLAID_CATEGORIES.find(([k]) => k === key.data)![1];
     return {
       ok: true,

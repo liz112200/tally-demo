@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { groupByPeriod, statementComparison, type PeriodRow, type PeriodStatement } from './statement-periods';
+import { foldEmptyPeriods, groupByPeriod, notShownText, statementComparison, type PeriodRow, type PeriodStatement } from './statement-periods';
 
 // Invented dates and amounts throughout.
 let n = 0;
@@ -103,5 +103,45 @@ describe('statementComparison', () => {
     expect(bare.kind).toBe('statement');
     expect(statementComparison(bare)).toBeNull();
     expect(groupByPeriod({ all: [], visible: [], statements: [statement('2026-10-06')], purchaseDatedCsv: false }).map((g) => g.kind)).toEqual(['current']);
+  });
+});
+
+describe('rows not shown', () => {
+  it('are counted by why: a hidden import, or the filters', () => {
+    const statements = [statement('2026-09-06', { periodStart: '2026-08-07' })];
+    const a = row('2026-08-10', 1_000);
+    const b = row('2026-08-11', 2_000);
+    const c = row('2026-08-12', 3_000);
+    const [, period] = groupByPeriod({ all: [a, b, c], visible: [c], statements, purchaseDatedCsv: false, inHiddenImport: (r) => r.id === a.id });
+    expect(period).toMatchObject({ count: 3, notShownHidden: 1, notShownFiltered: 1 });
+    expect(notShownText(period.notShownHidden, period.notShownFiltered)).toBe('2 rows not shown: 1 in a hidden import, 1 left out by the filters');
+  });
+
+  it('are named, never a bare count', () => {
+    expect(notShownText(0, 0)).toBeNull();
+    expect(notShownText(4, 0)).toBe('4 rows not shown: they are in a hidden import');
+    expect(notShownText(1, 0)).toBe('1 row not shown: it is in a hidden import');
+    expect(notShownText(0, 3)).toBe('3 rows not shown: left out by the filters');
+  });
+});
+
+describe('foldEmptyPeriods', () => {
+  it('folds each run of empty statements into one line, and never one with totals recorded', () => {
+    const statements = [
+      statement('2026-05-06', { periodStart: '2026-04-07' }),
+      statement('2026-06-06'),
+      statement('2026-07-06', { chargesCents: 5_000, creditsCents: 0 }),
+      statement('2026-08-06'),
+      statement('2026-09-06'),
+    ];
+    const folded = foldEmptyPeriods(groupByPeriod({ all: [row('2026-08-20', 1_000)], visible: [], statements, purchaseDatedCsv: false }));
+    expect(folded.map((g) => [g.kind, g.from, g.to, 'statements' in g ? g.statements : g.count])).toEqual([
+      ['current', '2026-09-07', null, 0],
+      ['statement', '2026-08-07', '2026-09-06', 1],
+      ['folded', '2026-07-07', '2026-08-06', 1],
+      // Zero rows against recorded figures: a difference, shown on its own.
+      ['statement', '2026-06-07', '2026-07-06', 0],
+      ['folded', '2026-04-07', '2026-06-06', 2],
+    ]);
   });
 });

@@ -284,10 +284,12 @@ const MEAN_WEEKDAY_WEIGHT = WEEKDAY_WEIGHT.reduce((a, b) => a + b, 0) / 7;
 
 const TRIP_DAY = 48;
 // The scripted car hire's CSV row, raised by the owner after import to fold
-// in what Jordan owed for gas, then split by amount: half the hire each, the
-// gas on Jordan's share.
+// in the gas bought on the way, then split equally with Jordan: the owner's
+// usual way, and the one Move converts (lib/conversion.ts), so a visitor can
+// move the $38.00 out into a purchase paid alongside, $19.00 each. Split by
+// amount it was offered Move and always refused (2026-11-06).
 const RAISED_BY_CENTS = 3_800;
-const RAISED_NOTE = 'Raised by $38.00 to fold in the gas Jordan owed me.';
+const RAISED_NOTE = 'Raised by $38.00 to fold in the gas Jordan and I bought on the way.';
 const MONTHLY = new Set(['spotify', 'netflix', 'youtube', 'apple', 'comed', 'xfinity', 'statefarm', 'rent', 'interest']);
 const FIXED_DAY: Record<string, number> = { rent: 1, interest: 28 };
 
@@ -634,23 +636,19 @@ export function buildDemoSeed(today: string, seed: number = DEMO_SEED): DemoSeed
     );
   }
 
-  // The raised car hire, split by amount on its raised total.
+  // The raised car hire, split equally with Jordan on its raised total.
   {
     const hire = rows.find((r) => r.scripted === 'raised')!;
     const participantIds = personOrder.filter((id) => id === ownerId || id === personId.jordan);
-    const half = Math.floor(hire.cents / 2);
-    const theirs = (hire.cents - half + RAISED_BY_CENTS) * CENTS_TO_MINOR;
     const amount = (hire.cents + RAISED_BY_CENTS) * CENTS_TO_MINOR;
-    const inputs = participantIds.map((id) => (id === ownerId ? amount - theirs : theirs));
     const split: Split = {
       id: ids.uuid(), transactionId: hire.id, payerPersonId: ownerId, date: null, description: null,
-      method: 'amount', taxCents: 0, tipCents: 0, createdAt: new Date(createdAt(hire).getTime() + 26 * 3_600_000),
+      method: 'equal', taxCents: 0, tipCents: 0, createdAt: new Date(createdAt(hire).getTime() + 26 * 3_600_000),
     };
     splits.push(split);
     addShares(
       split,
-      computeShares(toCents(amount), toCents(0), toCents(0), 'amount', participantIds.map((personId) => ({ personId })), inputs)
-        .map((sh, i) => ({ ...sh, inputAmountCents: inputs[i] })),
+      computeShares(toCents(amount), toCents(0), toCents(0), 'equal', participantIds.map((personId) => ({ personId }))),
       hire.date,
     );
   }
@@ -897,6 +895,11 @@ export function buildDemoSeed(today: string, seed: number = DEMO_SEED): DemoSeed
   const bank = buildLinkedBanks({
     today, rows, ids, categories, engineRules, categoryId, ledgerAccounts, transactions,
   });
+  // 10. Statements recorded by hand, so every account has a cycle on the
+  // board (the accounts board, 2026-11-05).
+  bank.ledgerStatements.push(
+    ...handRecordedStatements({ today, ledgerAccounts, imports, bankAccounts: bank.bankAccounts, transactions, recorded: bank.ledgerStatements }),
+  );
 
   return {
     today,
@@ -929,6 +932,67 @@ export function buildDemoSeed(today: string, seed: number = DEMO_SEED): DemoSeed
       overlapCount: sampleRows.filter((r) => r.daysAgo >= lastEnd).length,
     },
   };
+}
+
+// ---- Statements recorded by hand ----
+
+// The same day n months earlier, or that month's last day.
+function monthsBefore(iso: string, n: number): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  const months = y * 12 + (m - 1) - n;
+  const [yy, mm] = [Math.floor(months / 12), (months % 12) + 1];
+  const last = new Date(Date.UTC(yy, mm, 0)).getUTCDate();
+  return `${yy}-${String(mm).padStart(2, '0')}-${String(Math.min(d, last)).padStart(2, '0')}`;
+}
+
+// What the owner records on an account's page from the bank's list of
+// statements: closing dates, one day of the month, the three before each
+// account's latest. Amex's latest is the statement it was verified against,
+// whose figures (from the bank's rows) differ from the CSV rows the ledger
+// keeps for that period: the car hire raised after import, and the held
+// purchase's CSV twin, which the bank posted after the close. That
+// difference is real, produced by the seed's own rows, and is the one the
+// Needs you band shows. Chase checking's and Discover's latest carry the
+// totals their rows give, so their cards show a statement that agrees.
+const CLOSES_DAYS_AGO: Record<string, number> = { discover: 12 };
+
+function handRecordedStatements(input: {
+  today: string;
+  ledgerAccounts: DemoSeed['ledgerAccounts'];
+  imports: DemoSeed['imports'];
+  bankAccounts: DemoSeed['bankAccounts'];
+  transactions: DemoSeed['transactions'];
+  recorded: DemoSeed['ledgerStatements'];
+}): DemoSeed['ledgerStatements'] {
+  const out: DemoSeed['ledgerStatements'] = [];
+  for (const ledger of input.ledgerAccounts) {
+    const verified = input.recorded.find((s) => s.ledgerAccountId === ledger.id);
+    const latest = verified?.closingDate ?? (ledger.cutoverDate ? addDays(ledger.cutoverDate, -1) : addDays(input.today, -(CLOSES_DAYS_AGO[ledger.csvSource ?? ''] ?? 12)));
+    const importIds = new Set(input.imports.filter((i) => i.ledgerAccountId === ledger.id).map((i) => i.id));
+    const bankIds = new Set(input.bankAccounts.filter((b) => b.ledgerAccountId === ledger.id).map((b) => b.id));
+    const rows = input.transactions.filter(
+      (t) => !t.pending && ((t.importId !== null && importIds.has(t.importId)) || (t.bankAccountId !== null && bankIds.has(t.bankAccountId))),
+    );
+    const from = addDays(monthsBefore(latest, 1), 1);
+    const posted = (t: (typeof rows)[number]) => (t.providerRaw as { date?: string } | null)?.date ?? t.date;
+    const inPeriod = rows.filter((t) => posted(t) >= from && posted(t) <= latest);
+    const at = new Date(`${input.today}T12:00:00Z`);
+    for (const n of [3, 2, 1, 0]) {
+      if (n === 0 && verified) continue;
+      out.push({
+        ledgerAccountId: ledger.id,
+        closingDate: monthsBefore(latest, n),
+        periodStart: n === 0 ? from : null,
+        nextClosingDate: null,
+        startsNewCycle: false,
+        chargesCents: n === 0 ? inPeriod.filter((t) => t.amountCents > 0).reduce((sum, t) => sum + t.amountCents, 0) : null,
+        creditsCents: n === 0 ? inPeriod.filter((t) => t.amountCents < 0).reduce((sum, t) => sum - t.amountCents, 0) : null,
+        source: 'owner',
+        createdAt: new Date(at.getTime() + n * 1000),
+      });
+    }
+  }
+  return out;
 }
 
 // ---- Linked banks ----
@@ -1094,9 +1158,10 @@ function buildLinkedBanks(input: {
 
     // The last statement before the cutover, by posted date, as the bank's
     // rows give it: Amex is seeded verified against it, Chase checking is
-    // left for the visitor.
-    const from = addDays(cutover, -30);
+    // left for the visitor. A calendar month, closing the day before the
+    // cutover, so the closings recorded before it meet it exactly.
     const to = addDays(cutover, -1);
+    const from = addDays(monthsBefore(to, 1), 1);
     const inPeriod = history.filter((t) => !t.pending && t.date >= from && t.date <= to);
     const statement = {
       from,

@@ -25,7 +25,8 @@ export type StaleAccount = {
   lastSyncError: string | null;
 };
 
-export type StaleLine = { kind: 'needs_you' | 'transient' | 'not_run'; text: string };
+// `label` is the account the line is about, which `text` opens with.
+export type StaleLine = { kind: 'needs_you' | 'transient' | 'not_run'; label: string; text: string };
 
 const RETRY = 'The daily sync tries again; look again if this is still here tomorrow.';
 
@@ -42,21 +43,23 @@ export function staleLines(accounts: readonly StaleAccount[], now: Date): StaleL
     const kind = classifyItemError(a.itemErrorCode);
     const consentEnded = a.consentExpiresAt !== null && a.consentExpiresAt.getTime() <= now.getTime();
     if (kind === 'reconnect' || kind === 'fix_at_bank' || kind === 'gone' || kind === 'unknown') {
-      lines.push({ kind: 'needs_you', text: `${head}. ${healthSentence(a.itemErrorCode, a.institution)} This will not fix itself.` });
+      lines.push({ kind: 'needs_you', label: a.label, text: `${head}. ${healthSentence(a.itemErrorCode, a.institution)} This will not fix itself.` });
     } else if (consentEnded) {
       lines.push({
         kind: 'needs_you',
+        label: a.label,
         text: `${head}. ${a.institution} ended this login's consent; Reconnect renews it, with no new Item. This will not fix itself.`,
       });
     } else if (kind === 'bank_unavailable') {
-      lines.push({ kind: 'transient', text: `${head}: ${a.institution} was not answering through Plaid. ${RETRY}` });
+      lines.push({ kind: 'transient', label: a.label, text: `${head}: ${a.institution} was not answering through Plaid. ${RETRY}` });
     } else if (a.lastSyncError) {
-      lines.push({ kind: 'transient', text: `${head}: its last sync failed (${a.lastSyncError}). ${RETRY}` });
+      lines.push({ kind: 'transient', label: a.label, text: `${head}: its last sync failed (${a.lastSyncError}). ${RETRY}` });
     } else {
       lines.push({
         kind: 'not_run',
+        label: a.label,
         text:
-          `${head}, and no error was recorded: the daily sync has not run. Sync now on Accounts brings it up to date; ` +
+          `${head}, and no error was recorded: the daily sync has not run. Sync now on Bank logins brings it up to date; ` +
           'the daily sync itself needs looking at in Vercel (its cron and CRON_SECRET).',
       });
     }

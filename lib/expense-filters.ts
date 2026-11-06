@@ -17,7 +17,11 @@ export type ReceiptFilterKey = (typeof RECEIPT_FILTERS)[number];
 
 // Rows bank sync flagged for the owner (BANK-SYNC.md): an amount changed
 // under a split, or a row the bank removed that the owner had built on.
-export const REVIEW_FILTERS = ['all', 'flagged'] as const;
+// flagged: changed or removed by the bank since it was split. raised: a row
+// raised after it came in that the conversion would accept (lib/conversion.ts),
+// the rows offering Move (PAID-ALONGSIDE.md); the band's "Raised rows" line
+// opens it.
+export const REVIEW_FILTERS = ['all', 'flagged', 'raised'] as const;
 export type ReviewFilterKey = (typeof REVIEW_FILTERS)[number];
 
 export function needsReview(row: {
@@ -189,6 +193,8 @@ export type FilterContext = {
   today: string;
   hasSplit: (transactionId: string) => boolean;
   hasReceipt: (transactionId: string) => boolean;
+  // A raised row the conversion would accept (the server's check).
+  convertible?: (transactionId: string) => boolean;
 };
 
 export function applyExpenseFilters<T extends FilterableTransaction>(
@@ -228,6 +234,7 @@ export function applyExpenseFilters<T extends FilterableTransaction>(
     if (filters.receipt === 'has' && !ctx.hasReceipt(row.id)) return false;
     if (filters.receipt === 'none' && ctx.hasReceipt(row.id)) return false;
     if (filters.review === 'flagged' && !needsReview(row)) return false;
+    if (filters.review === 'raised' && !ctx.convertible?.(row.id)) return false;
     return true;
   });
 }

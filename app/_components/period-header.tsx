@@ -2,13 +2,15 @@
 
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { formatUSD, toCents } from '@/lib/money';
-import { currentCycle, cycleHead, missingStatementNote, statementWords } from '@/lib/statement-cycles';
-import { statementComparison, type PeriodGroup, type PeriodStatement } from '@/lib/statement-periods';
+import { currentCycle, statementWords } from '@/lib/statement-cycles';
+import { cycleSummary } from '@/lib/cycle-summary';
+import { notShownText, statementComparison, type FoldedPeriods, type PeriodGroup, type PeriodStatement } from '@/lib/statement-periods';
 
-// One statement period's header in an account's tab (STATEMENT-CYCLES.md, the
-// period view): its dates and how they are known, its rows counted as a
-// statement counts them, the statement's own figures beside them when
-// recorded, and every row the totals leave out, named.
+// One statement period on an account's page (STATEMENT-CYCLES.md): its dates
+// first and largest, its rows counted as the statement counts them, and
+// whether the statement agrees, as a chip with the difference spelled out
+// beneath. The reasoning behind the current cycle's close and the
+// purchase-date caveat are on the page's header, said once, not per period.
 export function PeriodHeader({
   group,
   collapsed,
@@ -35,80 +37,102 @@ export function PeriodHeader({
   const [out, back] = statementWords(kind);
 
   let title: string;
-  let note: string | null = null;
+  let count: string | null = null;
   if (group.kind === 'current') {
     const cycle = currentCycle(statements, today);
-    title = cycle ? cycleHead({ kind, cycle, today, formatDay: day }) : 'No statement recorded yet: record one on Accounts to see its periods';
-    note = cycle ? missingStatementNote(cycle, day) : null;
-  } else if (group.kind === 'statement') title = `Statement ${day(group.from!)} – ${day(group.to!)}`;
-  else if (group.kind === 'gap') title = `${day(group.from!)} – ${day(group.to!)}: no recorded statement covers these dates`;
-  else title = group.to ? `Before the recorded statements (to ${day(group.to)})` : 'Before the recorded statements';
+    const s = cycle ? cycleSummary({ cycle, statements, today, formatDay: day }) : null;
+    title = s ? `This cycle · ${s.range}` : 'No statement recorded yet';
+    count = s ? s.count : null;
+  } else if (group.kind === 'statement') title = `${day(group.from!)} – ${day(group.to!)}`;
+  else if (group.kind === 'gap') title = `${day(group.from!)} – ${day(group.to!)} · no recorded statement covers these dates`;
+  else title = group.to ? `Before the recorded statements, to ${day(group.to)}` : 'Before the recorded statements';
 
   const comparison = statementComparison(group);
   const s = group.statement;
+  const differs = comparison !== null && (comparison.chargesDiff !== 0 || comparison.creditsDiff !== 0);
   const side = (diff: number, stated: number, listed: number, word: string) =>
-    diff === 0 ? null : `the statement says ${usd(stated)} in ${word}; these rows total ${usd(listed)}, ${usd(Math.abs(diff))} ${diff < 0 ? 'less' : 'more'}`;
-  const compared =
-    comparison && s
-      ? comparison.chargesDiff === 0 && comparison.creditsDiff === 0
-        ? `the statement says ${usd(s.chargesCents!)} and ${usd(s.creditsCents!)}: matches`
-        : [side(comparison.chargesDiff, s.chargesCents!, group.chargesCents, out), side(comparison.creditsDiff, s.creditsCents!, group.creditsCents, back)]
-            .filter(Boolean)
-            .join('; ')
+    diff === 0 ? null : `The statement says ${usd(stated)} in ${word}; these rows total ${usd(listed)}, ${usd(Math.abs(diff))} ${diff < 0 ? 'less' : 'more'}.`;
+  const chip =
+    comparison === null
+      ? group.kind === 'statement'
+        ? { text: 'no totals recorded', tone: 'muted' as const }
+        : null
+      : !differs
+        ? { text: 'matches the statement', tone: 'ok' as const }
+        : {
+            text: [comparison.chargesDiff, comparison.creditsDiff]
+              .filter((d) => d !== 0)
+              .map((d, i, all) => `${usd(Math.abs(d))} ${d < 0 ? 'under' : 'over'}${all.length > 1 ? (i === 0 ? ` in ${out}` : ` in ${back}`) : ''}`)
+              .join(', '),
+            tone: 'warn' as const,
+          };
+  const explained =
+    differs && s
+      ? [side(comparison!.chargesDiff, s.chargesCents!, group.chargesCents, out), side(comparison!.creditsDiff, s.creditsCents!, group.creditsCents, back)]
+          .filter(Boolean)
+          .join(' ')
       : null;
 
-  const leftOut = [
+  const notes = [
     group.pendingCount > 0 ? `${group.pendingCount} pending, not on a statement yet` : null,
-    group.alongsideCount > 0 ? `${group.alongsideCount} paid alongside (manual, not on the statement)` : null,
+    group.alongsideCount > 0 ? `${group.alongsideCount} paid alongside, not on the statement` : null,
+    group.postedOutsideRows > 0 ? `${group.postedOutsideRows} counted by the day the bank posted ${group.postedOutsideRows === 1 ? 'it' : 'them'}` : null,
+    group.unverifiedCount > 0 ? `${group.unverifiedCount} from an account not yet verified: in these figures, not in spending` : null,
+    notShownText(group.notShownHidden, group.notShownFiltered),
   ].filter(Boolean);
-  const caveats = [
-    group.purchaseDatedCsvRows > 0
-      ? 'Includes CSV rows dated by purchase, not posting: one near a closing day may belong to the neighbouring statement.'
-      : null,
-    group.postedOutsideRows > 0
-      ? `${group.postedOutsideRows === 1 ? 'One row is' : `${group.postedOutsideRows} rows are`} counted by the day the bank posted ${group.postedOutsideRows === 1 ? 'it' : 'them'}, shown with the purchase date.`
-      : null,
-    // On the statement, so in its totals; not in spending until verified.
-    group.unverifiedCount > 0
-      ? `${group.unverifiedCount === 1 ? 'One row comes' : `${group.unverifiedCount} rows come`} from an account not yet verified: in these totals, as the statement counts ${group.unverifiedCount === 1 ? 'it' : 'them'}, but not in spending.`
-      : null,
-    note,
-  ].filter(Boolean);
+
+  const chipTone = {
+    ok: 'border-emerald-600/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300',
+    warn: 'border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-300',
+    muted: 'border-border bg-muted text-muted-foreground',
+  };
 
   return (
     <tr className="border-b bg-muted/25">
-      <td colSpan={colSpan} className="px-2 py-1">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+      <td colSpan={colSpan} className="px-2 py-2">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <button
             type="button"
             onClick={onToggle}
             aria-expanded={!collapsed}
             aria-label={collapsed ? 'Expand period' : 'Collapse period'}
-            className="flex items-center rounded p-0.5 hover:bg-muted/70"
+            className="flex min-h-8 items-center gap-1.5 rounded px-1 text-left hover:bg-muted/70"
           >
-            <Chevron className="size-3.5 text-muted-foreground" aria-hidden />
+            <Chevron className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+            <span className="text-[13px] font-semibold text-foreground">{title}</span>
+            {count && <span className="whitespace-nowrap text-xs text-muted-foreground">· {count}</span>}
           </button>
-          <span className="px-1 font-medium text-foreground">{title}</span>
-          <span>
-            <span className="font-mono">{group.count}</span> {group.count === 1 ? 'row' : 'rows'}
-            {group.rows.length !== group.count && (
-              <span>
-                {' '}
-                (<span className="font-mono">{group.rows.length}</span> shown)
-              </span>
-            )}
-          </span>
           {/* Statement figures, not Tally's spending: card payments and other
-              transfers are in them, as the statement counts them, so they
-              differ from Insights and the summary strip on purpose. */}
-          <span title="Counted as the statement counts them: every posted row, card payments and other transfers included. Spending, which leaves transfers out, is in the summary above.">
-            <span className="rounded border px-1 py-px text-[10px] font-medium uppercase tracking-wide">statement figures</span>{' '}
-            <span className="font-mono">{usd(group.chargesCents)}</span> in {out} · <span className="font-mono">{usd(group.creditsCents)}</span> in {back}
+              transfers are in them, as the statement counts them. */}
+          <span
+            className="text-xs text-muted-foreground"
+            title="Counted as the statement counts them: every posted row, card payments and other transfers included. Spending, which leaves transfers out, is on Expenses and Insights."
+          >
+            <span className="font-mono tabular-nums">{usd(group.chargesCents)}</span> {out} ·{' '}
+            <span className="font-mono tabular-nums">{usd(group.creditsCents)}</span> {back}
           </span>
-          {compared && <span className={comparison && (comparison.chargesDiff !== 0 || comparison.creditsDiff !== 0) ? 'text-amber-700 dark:text-amber-400' : undefined}>{compared}</span>}
-          {leftOut.length > 0 && <span>not in these totals: {leftOut.join(', ')}</span>}
+          {chip && <span className={`whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-medium ${chipTone[chip.tone]}`}>{chip.text}</span>}
         </div>
-        {caveats.length > 0 && <div className="pl-7 text-[11px] text-muted-foreground">{caveats.join(' ')}</div>}
+        {explained && <p className="pl-7 pt-0.5 text-xs text-amber-800 dark:text-amber-300">{explained}</p>}
+        {notes.length > 0 && <p className="pl-7 pt-0.5 text-xs text-muted-foreground">{notes.join(' · ')}</p>}
+      </td>
+    </tr>
+  );
+}
+
+// A run of recorded statements with no rows and no totals, as one line.
+export function FoldedPeriodsRow({ folded, colSpan, today }: { folded: FoldedPeriods; colSpan: number; today: string }) {
+  const day = (iso: string) =>
+    new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      ...(iso.slice(0, 4) === today.slice(0, 4) ? {} : { year: 'numeric' }),
+      timeZone: 'UTC',
+    });
+  return (
+    <tr className="border-b bg-muted/10">
+      <td colSpan={colSpan} className="px-9 py-1.5 text-xs text-muted-foreground">
+        {folded.statements === 1 ? '1 statement' : `${folded.statements} statements`} with no rows · {day(folded.from)} – {day(folded.to)}
       </td>
     </tr>
   );

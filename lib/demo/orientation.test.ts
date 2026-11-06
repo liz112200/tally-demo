@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { navFor } from '../nav';
+import { navActive, navFor } from '../nav';
 import { isOrientationDismissed, orientationSteps, setOrientationDismissed } from './orientation';
 
-// The page a link lands under, as the nav names it: /accounts/verify/<id>
-// is under /accounts, /?q=... under /.
-const section = (href: string) => `/${href.split('?')[0].split('/')[1] ?? ''}`;
+// The path a link lands on, without its query.
+const path = (href: string) => href.split('?')[0];
 
 describe('the demo strip', () => {
   it('sends a visitor only to pages the demo nav offers', () => {
@@ -13,7 +12,9 @@ describe('the demo strip', () => {
     const nav = navFor(true).map((n) => n.href);
     const steps = orientationSteps('/accounts/verify/00000000-0000-4000-8000-000000000000');
     expect(steps.length).toBe(4);
-    for (const step of steps) expect(nav, step.title).toContain(section(step.href));
+    // Owned by a nav item the way the header highlights it: /accounts/verify/<id>
+    // is Accounts, /expenses?q=... is Expenses.
+    for (const step of steps) expect(nav.some((href) => navActive(href, path(step.href))), step.title).toBe(true);
   });
 
   it('can always be brought back after it is dismissed', () => {

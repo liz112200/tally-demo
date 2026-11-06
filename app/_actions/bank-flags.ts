@@ -25,7 +25,7 @@ export async function dismissBankFlag(id: unknown, flag: unknown): Promise<Actio
     if (!(await clearBankFlag(parsedId.data, parsedFlag.data))) {
       return { error: 'That mark is already cleared, or the row was deleted. Reload to see it as it is.' };
     }
-    revalidatePath('/');
+    revalidatePath('/', 'layout');
     return {
       ok: true,
       message: parsedFlag.data === 'amount' ? "Kept as it is. The bank's earlier amount is recorded." : 'Kept. The removal is recorded.',
@@ -43,7 +43,7 @@ export async function moveSplitToReplacement(fromId: unknown, toId: unknown): Pr
   return attempt('moveSplitToReplacement', async () => {
     const result = await moveBuiltOnToReplacement(from.data, to.data);
     if ('error' in result) return result;
-    revalidatePath('/');
+    revalidatePath('/', 'layout');
     revalidatePath('/people');
     return { ok: true, message: 'Moved onto the replacement row.' };
   });

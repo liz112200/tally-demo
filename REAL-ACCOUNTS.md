@@ -201,7 +201,8 @@ synced rows, which this slice never does).
   accounts go through the same flow on dev before any real one.
 - **Unverified rows do not count:** not splittable (the split save refuses,
   like a pending row), left out of Insights and the Expenses summary, and
-  marked "awaiting verification" on /accounts and on the Expenses group.
+  marked "not verified yet" on the account's card and page, and a line in
+  the Needs you band until verified (ACCOUNTS-BOARD.md).
 - **The verification view** (per account): the owner enters the statement's
   period, its purchases + fees + interest, and its payments + credits. The
   app sums the fetched rows (inserted and skipped) by posted `date` over that

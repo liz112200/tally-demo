@@ -6,9 +6,12 @@ import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { db } from './index';
-import { bankAccounts, importSkippedRows, imports, ledgerAccounts, syncSkippedRows, transactions } from './schema';
+import { bankAccounts, importSkippedRows, imports, ledgerAccounts, ledgerStatements, syncSkippedRows, transactions } from './schema';
 import { getImportSkipGroups, getInsightRows, getTransactions, insertImport, insertTransaction, saveConnectionAccounts, softDeleteTransactionById } from './queries';
-import { boundaryReview, choicesFor, ledgerChoices, mapAccountToLedger } from './ledger';
+import { boundaryReview, choicesFor, ledgerChoices, mapAccountToLedger, recordStatements } from './ledger';
+import { loadBoard, needsYouFacts } from '@/app/_lib/board';
+import { needsYouItems } from '@/lib/needs-you';
+import { dismissBankFlag } from '@/app/_actions/bank-flags';
 import { account, owner, person, ptxn, removal, row, split, sync, type TestAccount } from './test/fixtures';
 import { adoptAccount, answerHeldRow, declineReissued, finishBoundaryReview, recordStatementCheck, setUpAccountSync } from '@/app/_actions/ledger';
 import { setAccountSync } from '@/app/_actions/bank';
@@ -623,6 +626,10 @@ describe('a re-import that overlaps an earlier one', () => {
       [true, 1],
       [false, 3],
     ]);
+    // Both belong to the Chase ledger account, the one that left no import
+    // included: its account's page lists them.
+    const [chase] = await db.select({ id: ledgerAccounts.id }).from(ledgerAccounts).where(and(eq(ledgerAccounts.csvSource, 'chase'), sql`${ledgerAccounts.csvAccountLabel} is null`));
+    expect(groups.map((g) => g.ledgerAccountId)).toEqual([chase.id, chase.id]);
   });
 });
 
@@ -637,5 +644,61 @@ describe('nothing here touches people or balances', () => {
     await sync(acc, { added: [ptxn(acc, { date: '2026-09-02', authorizedDate: null }), ptxn(acc, { date: '2026-09-25', authorizedDate: null })] });
     expect(await counts()).toEqual(before);
     expect(await db.select().from(syncSkippedRows).where(eq(syncSkippedRows.bankAccountId, acc.accountId))).toHaveLength(1);
+  });
+});
+
+describe('the Needs you band', () => {
+  const band = async () => needsYouItems(needsYouFacts(await loadBoard()), { day: (iso) => iso, money: (n) => String(n) });
+
+  it('raises each fact while the data says it is open, and drops it once resolved', async () => {
+    const { ledgerId, tag } = await csvLedger([{ date: '2026-09-10', amountCents: 5_430 }]);
+    const acc = await newAccount();
+    await setUpAccountSync(acc.accountId, { kind: 'existing', ledgerAccountId: ledgerId, cutoverDate: null });
+    const held = ptxn(acc, { date: '2026-09-11', authorizedDate: null, amountCents: 5_430 });
+    const later = ptxn(acc, { date: '2026-09-25', authorizedDate: null, amountCents: 1_220 });
+    await sync(acc, { added: [held, later] });
+    // This test's lines only: the database holds other files' accounts too.
+    const mine = async () => (await band()).map((i) => i.key).filter((k) => k.includes(ledgerId) || k.includes(acc.accountId));
+
+    expect(await mine()).toEqual([`held:${ledgerId}`, `verify:${acc.accountId}`, `nostatement:${ledgerId}`]);
+
+    await answerHeldRow(acc.accountId, held.providerTransactionId, 'same');
+    await db.update(bankAccounts).set({ verifiedAt: new Date() }).where(eq(bankAccounts.id, acc.accountId));
+    // A statement whose charges disagree with its rows ($5.430 + $1.220).
+    // Its printed next closing keeps the current cycle exact on any day.
+    await recordStatements(ledgerId, [{ closingDate: '2026-09-30', periodStart: '2026-09-01', nextClosingDate: '2099-01-01', chargesCents: 9_999, creditsCents: 0 }], 'owner');
+    expect(await mine()).toEqual([`differs:${ledgerId}:2026-09-30`]);
+
+    await db.update(ledgerStatements).set({ chargesCents: 6_650 }).where(eq(ledgerStatements.ledgerAccountId, ledgerId));
+    expect(await mine()).toEqual([]);
+
+    // Split rows the bank changes, and raised rows offering Move: counted
+    // across the ledger, so by how this test moves the count.
+    const counts = async () => {
+      const f = needsYouFacts(await loadBoard());
+      return { flagged: f.flaggedRows, raised: f.raisedRows };
+    };
+    const before = await counts();
+    const o = await owner();
+    const friend = await person('Band friend');
+    const synced = await row(acc, later.providerTransactionId);
+    await split(synced.id, 1_220, [
+      { personId: o, amountCents: 610 },
+      { personId: friend, amountCents: 610 },
+    ]);
+    await sync(acc, { modified: [{ ...later, amountCents: 1_480 }] });
+    expect(await counts()).toEqual({ ...before, flagged: before.flagged + 1 });
+    await dismissBankFlag(synced.id, 'amount');
+    expect(await counts()).toEqual(before);
+
+    const [csv] = await db.select().from(transactions).where(eq(transactions.descriptionRaw, `${tag} CSV 0`));
+    await split(csv.id, 5_430, [
+      { personId: o, amountCents: 2_715 },
+      { personId: friend, amountCents: 2_715 },
+    ]);
+    await db.update(transactions).set({ amountCents: 6_430 }).where(eq(transactions.id, csv.id));
+    expect(await counts()).toEqual({ ...before, raised: before.raised + 1 });
+    await db.update(transactions).set({ amountCents: 5_430 }).where(eq(transactions.id, csv.id));
+    expect(await counts()).toEqual(before);
   });
 });

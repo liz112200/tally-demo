@@ -49,6 +49,10 @@ export type PeriodGroup<T> = {
   // purchase date falls outside the period they are counted in.
   purchaseDatedCsvRows: number;
   postedOutsideRows: number;
+  // Rows of the period not among the visible ones, by why: in a hidden
+  // import, or left out by the filters (notShownText).
+  notShownHidden: number;
+  notShownFiltered: number;
 };
 
 const SYNCED = 'plaid';
@@ -60,6 +64,8 @@ export function groupByPeriod<T extends PeriodRow>(input: {
   statements: readonly PeriodStatement[];
   // The account's CSV records the purchase date, not the posting date.
   purchaseDatedCsv: boolean;
+  // A row of a hidden import: not visible for that reason, not a filter's.
+  inHiddenImport?: (row: T) => boolean;
 }): PeriodGroup<T>[] {
   const byId = new Map(input.all.map((r) => [r.id, r]));
   const placement = (r: T): string => {
@@ -69,7 +75,10 @@ export function groupByPeriod<T extends PeriodRow>(input: {
 
   // Periods oldest first; each has an inclusive date range.
   const sorted = [...input.statements].sort((a, b) => a.closingDate.localeCompare(b.closingDate));
-  type Slot = Omit<PeriodGroup<T>, 'rows' | 'count' | 'chargesCents' | 'creditsCents' | 'pendingCount' | 'alongsideCount' | 'unverifiedCount' | 'purchaseDatedCsvRows' | 'postedOutsideRows'>;
+  type Slot = Omit<
+    PeriodGroup<T>,
+    'rows' | 'count' | 'chargesCents' | 'creditsCents' | 'pendingCount' | 'alongsideCount' | 'unverifiedCount' | 'purchaseDatedCsvRows' | 'postedOutsideRows' | 'notShownHidden' | 'notShownFiltered'
+  >;
   const slots: Slot[] = [];
   sorted.forEach((s, i) => {
     const prev = sorted[i - 1];
@@ -104,6 +113,8 @@ export function groupByPeriod<T extends PeriodRow>(input: {
         unverifiedCount: 0,
         purchaseDatedCsvRows: 0,
         postedOutsideRows: 0,
+        notShownHidden: 0,
+        notShownFiltered: 0,
       },
     ]),
   );
@@ -124,7 +135,14 @@ export function groupByPeriod<T extends PeriodRow>(input: {
     if (r.source !== SYNCED && r.source !== MANUAL && input.purchaseDatedCsv) g.purchaseDatedCsvRows += 1;
     if (r.source === SYNCED && ((g.from !== null && r.date < g.from) || (g.to !== null && r.date > g.to))) g.postedOutsideRows += 1;
   }
+  const shown = new Set(input.visible.map((r) => r.id));
   for (const r of input.visible) groups.get(slotOf(placement(r)).key)!.rows.push(r);
+  for (const r of input.all) {
+    if (shown.has(r.id)) continue;
+    const g = groups.get(slotOf(placement(r)).key)!;
+    if (input.inHiddenImport?.(r)) g.notShownHidden += 1;
+    else g.notShownFiltered += 1;
+  }
 
   // Newest first, and only periods that hold a row or a recorded statement.
   return [...groups.values()].reverse().filter((g) => g.count > 0 || g.kind === 'statement' || g.kind === 'current');
@@ -136,4 +154,34 @@ export function statementComparison(g: PeriodGroup<unknown>): { chargesDiff: num
   const s = g.statement;
   if (!s || s.chargesCents === null || s.creditsCents === null) return null;
   return { chargesDiff: g.chargesCents - s.chargesCents, creditsDiff: g.creditsCents - s.creditsCents };
+}
+
+// Recorded statements with no row and no totals, folded into one line per run
+// ("3 statements with no rows, May 22 – Aug 21"): a row of nothing each, but
+// never dropped, since a statement with no rows can mean a missing import. A
+// statement with totals recorded is never folded: zero rows against a
+// statement's figures is a difference to show.
+export type FoldedPeriods = { kind: 'folded'; key: string; from: string; to: string; statements: number };
+
+export function foldEmptyPeriods<T>(groups: readonly PeriodGroup<T>[]): (PeriodGroup<T> | FoldedPeriods)[] {
+  const out: (PeriodGroup<T> | FoldedPeriods)[] = [];
+  for (const g of groups) {
+    const empty = g.kind === 'statement' && g.count === 0 && statementComparison(g) === null;
+    const last = out[out.length - 1];
+    if (!empty) out.push(g);
+    else if (last && 'statements' in last) out[out.length - 1] = { ...last, from: g.from!, statements: last.statements + 1 };
+    else out.push({ kind: 'folded', key: `folded:${g.key}`, from: g.from!, to: g.to!, statements: 1 });
+  }
+  return out;
+}
+
+// Why a period's rows are not all shown, named: "4 rows not shown: they are in
+// a hidden import", never a bare "(0 shown)".
+export function notShownText(hidden: number, filtered: number): string | null {
+  const total = hidden + filtered;
+  if (total === 0) return null;
+  const rows = `${total} ${total === 1 ? 'row' : 'rows'} not shown`;
+  if (filtered === 0) return `${rows}: ${total === 1 ? 'it is' : 'they are'} in a hidden import`;
+  if (hidden === 0) return `${rows}: left out by the filters`;
+  return `${rows}: ${hidden} in a hidden import, ${filtered} left out by the filters`;
 }

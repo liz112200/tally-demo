@@ -7,7 +7,7 @@ import { LogOut } from 'lucide-react';
 import { signOut } from '@/app/_actions/auth';
 import { cn } from '@/lib/utils';
 import { ThemeToggle } from '@/app/_components/theme-toggle';
-import { navFor } from '@/lib/nav';
+import { navActive, navFor } from '@/lib/nav';
 
 // Wordmark glyph: four tally strokes and the diagonal fifth, in brass.
 function TallyMark() {
@@ -40,21 +40,23 @@ export function SiteHeader({ demo }: { demo: boolean }) {
   if (pathname === '/sign-in') return null;
   return (
     <header className="sticky top-0 z-40 border-b bg-background/90 backdrop-blur">
-      <div className="mx-auto flex h-12 max-w-6xl items-center gap-6 px-6">
-        <Link href="/" className="flex items-center gap-2">
+      <div className="mx-auto flex h-12 max-w-6xl items-center gap-3 px-4 sm:gap-6 sm:px-6">
+        <Link href="/" aria-label="tally, home" className="flex shrink-0 items-center gap-2">
           <TallyMark />
-          <span className="text-[15px] font-semibold tracking-tight">
+          <span className="hidden text-[15px] font-semibold tracking-tight sm:inline">
             tally
           </span>
         </Link>
-        <nav className="flex items-center gap-1 text-sm">
+        {/* One row always (the table's sticky headers sit under it): on a
+            phone the items scroll sideways rather than wrap. */}
+        <nav className="flex min-w-0 items-center gap-1 overflow-x-auto text-sm [scrollbar-width:none]">
           {navFor(demo).map(({ href, label }) => (
             <Link
               key={href}
               href={href}
               className={cn(
-                'rounded-md px-2.5 py-1 transition-colors',
-                pathname === href
+                'shrink-0 rounded-md px-2.5 py-1 transition-colors',
+                navActive(href, pathname)
                   ? 'bg-muted font-medium text-foreground'
                   : 'text-muted-foreground hover:text-foreground',
               )}
@@ -63,18 +65,7 @@ export function SiteHeader({ demo }: { demo: boolean }) {
             </Link>
           ))}
         </nav>
-        <div className="ml-auto flex items-center gap-1">
-          {!demo && (
-            <Link
-              href="/devices"
-              className={cn(
-                'rounded-md px-2.5 py-1 text-sm transition-colors',
-                pathname === '/devices' ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground hover:text-foreground',
-              )}
-            >
-              Devices
-            </Link>
-          )}
+        <div className="ml-auto flex shrink-0 items-center gap-1">
           {!demo && <SignOutButton />}
           <ThemeToggle />
         </div>

@@ -27,10 +27,13 @@ import { parseClosingDates, type StatementRecord } from '@/lib/statement-cycles'
 import { formatUSD, toCents } from '@/lib/money';
 import type { ActionResult } from '@/lib/action-result';
 import { resultMessage } from './action-message';
-import { useLoginResult } from './login-result';
+import { useOptionalLoginResult } from './login-result';
+import { useAction } from './page-result';
 
-// Controls for one account's ledger account, cutover and boundary review on
-// /accounts (REAL-ACCOUNTS.md). Results go to the login's result slot.
+// Controls for one account's ledger account, cutover, statements and boundary
+// review (REAL-ACCOUNTS.md). On Bank logins results go to the login's result
+// slot; on an account's own page, which has no login, to the page result
+// line (2026-11-05: the account page threw for want of a login slot).
 
 export type LedgerOption = {
   id: string;
@@ -44,8 +47,11 @@ export type LedgerOption = {
 };
 
 function useRun() {
-  const report = useLoginResult();
+  const slot = useOptionalLoginResult();
+  const page = useAction();
   const [pending, startTransition] = useTransition();
+  if (!slot) return page;
+  const report = slot;
   const run = (action: () => Promise<ActionResult>, after?: (r: ActionResult) => void) =>
     startTransition(async () => {
       report(null);
@@ -202,8 +208,42 @@ export function ReissuedChoice({ accountId, replaces }: { accountId: string; rep
   );
 }
 
-export function HeldRowAnswer({ accountId, providerTransactionId }: { accountId: string; providerTransactionId: string }) {
+// A held row's answer. Unanswered: the two answers. Answered "same purchase":
+// not the same two buttons again (2026-11-06: an answered row still offered
+// both, as though nothing had happened), but a way to change the answer, the
+// one change the server allows, worded for what it does. Answered "different"
+// offers nothing: the row is in the ledger, and is deleted there if wrong.
+export function HeldRowAnswer({
+  accountId,
+  providerTransactionId,
+  answered,
+}: {
+  accountId: string;
+  providerTransactionId: string;
+  answered: 'same' | null;
+}) {
   const { run, pending } = useRun();
+  const [changing, setChanging] = useState(false);
+  if (answered === 'same' && !changing) {
+    return (
+      <Button size="sm" variant="ghost" className="h-6 px-2 text-[11px] text-muted-foreground" onClick={() => setChanging(true)}>
+        Change this answer
+      </Button>
+    );
+  }
+  if (answered === 'same') {
+    return (
+      <span className="flex flex-wrap items-center gap-1">
+        <span className="text-muted-foreground">It is a different purchase after all: the bank row is added as its own.</span>
+        <Button size="sm" variant="outline" className="h-6 px-2 text-[11px]" disabled={pending} onClick={() => run(() => answerHeldRow(accountId, providerTransactionId, 'released'))}>
+          Add it as a different purchase
+        </Button>
+        <Button size="sm" variant="ghost" className="h-6 px-2 text-[11px]" disabled={pending} onClick={() => setChanging(false)}>
+          Cancel
+        </Button>
+      </span>
+    );
+  }
   return (
     <span className="flex gap-1">
       <Button size="sm" variant="outline" className="h-6 px-2 text-[11px]" disabled={pending} onClick={() => run(() => answerHeldRow(accountId, providerTransactionId, 'same'))}>

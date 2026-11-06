@@ -30,8 +30,8 @@ const uuid = z.string().uuid();
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
 function refresh() {
-  revalidatePath('/accounts');
-  revalidatePath('/');
+  revalidatePath('/', 'layout');
+  revalidatePath('/', 'layout');
   revalidatePath('/insights');
 }
 

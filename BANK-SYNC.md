@@ -214,8 +214,9 @@ surfaced while building go to PHASE11.md, as before.
     says nothing about another.
 - **Staleness is visible.** Each account stores `last_synced_at` and
   `last_sync_error` (the connection stores Plaid's Item status, slice 4);
-  /accounts and the Expenses group headers show "last synced" per account
-  and any error.
+  each account's card and page show "synced 5h ago" and Bank logins any
+  error (the Expenses group headers did until the accounts board,
+  ACCOUNTS-BOARD.md).
 - **Scheduling.** A daily Vercel Cron (Hobby: once a day, up to 59 minutes
   of jitter) plus "Sync now". Webhooks are deferred: the app sits behind
   Vercel Authentication, so Plaid's calls would need the protection-bypass
@@ -373,7 +374,7 @@ surfaced while building go to PHASE11.md, as before.
 
 Plaid gives each synced row its own category (personal finance category,
 primary level, e.g. FOOD_AND_DRINK). The owner maps the few that matter to
-their categories on /rules (`bank_category_map`, migration 0028; it starts
+their categories on Settings (`bank_category_map`, migration 0028; it starts
 as approved on 2026-10-28: food and drink to Dining, general merchandise to
 Shopping, transportation to Transport, travel to Travel, entertainment to
 Entertainment). A synced row that no rule matches takes the mapped category

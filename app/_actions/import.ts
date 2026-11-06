@@ -319,7 +319,7 @@ export async function confirmImport(
     skips,
   );
 
-  revalidatePath('/');
+  revalidatePath('/', 'layout');
   return { ok: true, result: { inserted, skipped, forced, covered } };
 }
 
@@ -333,7 +333,7 @@ export async function undoImport(formData: FormData): Promise<ActionResult> {
   return attempt('undoImport', async () => {
     const undone = await softDeleteImportById(importId.data);
     if (!undone) return { error: 'That import is already undone.' };
-    revalidatePath('/');
+    revalidatePath('/', 'layout');
     revalidatePath('/people');
     const n = undone.rows;
     return { ok: true, message: `Import undone: ${n} row${n === 1 ? '' : 's'} deleted. Restore brings them back.` };
@@ -352,7 +352,7 @@ export async function restoreImport(importId: string): Promise<ActionResult> {
   return attempt('restoreImport', async () => {
     const restored = await restoreImportById(parsed.data);
     if (!restored) return { error: 'That import is not undone; there is nothing to restore.' };
-    revalidatePath('/');
+    revalidatePath('/', 'layout');
     revalidatePath('/people');
     const n = restored.rows;
     return { ok: true, message: `Restored ${n} row${n === 1 ? '' : 's'}.` };
@@ -373,7 +373,7 @@ export async function renameImport(
     return { error: parsed.error.issues[0]?.message ?? 'Invalid name' };
   }
   await updateImportDisplayName(parsed.data.importId, parsed.data.displayName);
-  revalidatePath('/');
+  revalidatePath('/', 'layout');
   return { ok: true };
 }
 
@@ -388,7 +388,7 @@ export async function setImportHidden(
   if (!parsed.success || typeof hidden !== 'boolean') return { error: 'Invalid import.' };
   return attempt('setImportHidden', async () => {
     if (!(await setImportHiddenById(parsed.data, hidden))) return { error: 'That import was not found.' };
-    revalidatePath('/');
+    revalidatePath('/', 'layout');
     // The group moving in or out of the hidden strip is the confirmation.
     return { ok: true };
   });
@@ -399,7 +399,7 @@ export async function showAllImports(): Promise<ActionResult> {
   await requireUser();
   return attempt('showAllImports', async () => {
     await showAllImportsQuery();
-    revalidatePath('/');
+    revalidatePath('/', 'layout');
     return { ok: true };
   });
 }
