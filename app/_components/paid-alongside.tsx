@@ -10,6 +10,7 @@ import { formatUSD, toCents } from '@/lib/money';
 import type { TransactionRow } from '@/db/queries';
 import type { ConversionPlan } from '@/db/alongside';
 import { addPaidAlongside, convertToPaidAlongside, previewConversion } from '@/app/_actions/alongside';
+import { recordRaisedRowReview } from '@/app/_actions/reviews';
 import { useAction } from './page-result';
 
 // Paid alongside (PAID-ALONGSIDE.md) in a transaction's detail: what was paid
@@ -25,6 +26,7 @@ export function PaidAlongsideBlock({
   alongsideOf,
   alongside,
   conversion,
+  kept = null,
 }: {
   row: TransactionRow;
   // The charge this row was paid alongside, when it is such a purchase.
@@ -35,6 +37,9 @@ export function PaidAlongsideBlock({
   // (Move is offered), else why not (said, with no button); undefined for
   // any other row. The same check as the band and the raised filter.
   conversion: string | null | undefined;
+  // Kept raised by a review that still applies (the row still has the
+  // amount it was kept at).
+  kept?: { note: string; reviewedAt: string } | null;
 }) {
   return (
     <div className="space-y-1 text-xs">
@@ -53,12 +58,19 @@ export function PaidAlongsideBlock({
           ))}
         </ul>
       )}
+      {conversion === null && kept && (
+        <p className="text-muted-foreground">
+          <span className="font-medium text-foreground">Kept raised {kept.reviewedAt.slice(0, 10)}:</span> {kept.note} Move is still here if
+          you change your mind; a change to its amount raises it again.
+        </p>
+      )}
       {typeof conversion === 'string' && (
         <p className="text-muted-foreground">Raised after it came in. Moving the extra is not offered: {conversion}</p>
       )}
       <div className="flex flex-wrap gap-2">
         {!alongsideOf && <AddAlongsideButton row={row} />}
         {conversion === null && <ConvertButton row={row} />}
+        {conversion === null && !kept && <KeepRaisedButton row={row} />}
       </div>
     </div>
   );
@@ -263,5 +275,41 @@ function ConvertButton({ row }: { row: TransactionRow }) {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// Keep a raised row raised rather than move its extra out (migration 0037):
+// a review held at the row's current amount, with the owner's reason. It ends
+// the band's line for the row while the amount stays; Move stays offered.
+function KeepRaisedButton({ row }: { row: TransactionRow }) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState('');
+  const { run, pending } = useAction();
+  if (!open) {
+    return (
+      <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground" onClick={() => setOpen(true)}>
+        Keep it raised
+      </Button>
+    );
+  }
+  return (
+    <span className="flex w-full flex-wrap items-end gap-2">
+      <label className="grid min-w-0 flex-1 basis-56 gap-1">
+        <span className="text-muted-foreground">Why keep {usd(row.amountCents)}? It is kept with this amount.</span>
+        <input value={text} onChange={(e) => setText(e.target.value)} maxLength={500} className="h-8 rounded-md border bg-background px-2 text-xs" />
+      </label>
+      <Button
+        size="sm"
+        variant="outline"
+        className="h-8 text-xs"
+        disabled={pending || text.trim().length === 0}
+        onClick={() => run(() => recordRaisedRowReview({ transactionId: row.id, amountCents: row.amountCents, note: text }), (r) => !('error' in r) && setOpen(false))}
+      >
+        Keep raised
+      </Button>
+      <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setOpen(false)}>
+        Cancel
+      </Button>
+    </span>
   );
 }

@@ -1,5 +1,5 @@
 import { Suspense } from 'react';
-import { getRules, getCategories } from '@/db/queries';
+import { getAllRules, getCategories } from '@/db/queries';
 import { RulesManager, ApplyRulesButton } from '@/app/_components/rules-manager';
 import { CategoriesManager } from '@/app/_components/categories-manager';
 import { BankCategories } from '@/app/_components/bank-categories';
@@ -25,7 +25,7 @@ export default async function SettingsPage() {
   const user = await requireUser();
   const demo = isDemoMode();
   const [rules, categories, bankRows, passkeys, sessions] = await Promise.all([
-    getRules(),
+    getAllRules(),
     getCategories(),
     bankCategoryRows(),
     demo ? Promise.resolve([]) : getUserPasskeys(user.id),
@@ -45,6 +45,7 @@ export default async function SettingsPage() {
     categoryId: r.categoryId,
     categoryName: r.categoryName,
     priority: r.priority,
+    mode: r.mode,
     createdAt: r.createdAt.toISOString(),
   }));
 

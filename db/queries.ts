@@ -37,7 +37,7 @@ import {
 } from './schema';
 import { dedupHash, type DedupFields } from '@/lib/parsers/dedup';
 import { normalizeMerchant } from '@/lib/parsers/normalize';
-import { categorize, ruleOutcome, type CategoryRule } from '@/lib/categorize';
+import { categorize, matchesRule, ruleOutcome, type CategoryRule } from '@/lib/categorize';
 import { allocateFifo } from '@/lib/allocations';
 import { planNetting, type Alloc } from '@/lib/netting';
 import { formatUSD, toCents } from '@/lib/money';
@@ -57,12 +57,11 @@ export type RuleRow = {
   categoryId: string;
   categoryName: string;
   priority: number;
+  mode: 'apply' | 'point_out';
   createdAt: Date;
 };
 
-// Rules with their category name, ordered the way the engine resolves them
-// (priority ascending, then created_at ascending).
-export async function getRules(): Promise<RuleRow[]> {
+function selectRules() {
   return db
     .select({
       id: categorizationRules.id,
@@ -71,10 +70,53 @@ export async function getRules(): Promise<RuleRow[]> {
       categoryId: categorizationRules.categoryId,
       categoryName: categories.name,
       priority: categorizationRules.priority,
+      mode: categorizationRules.mode,
       createdAt: categorizationRules.createdAt,
     })
     .from(categorizationRules)
     .innerJoin(categories, eq(categorizationRules.categoryId, categories.id))
+    .$dynamic();
+}
+
+// The rules that set a category, ordered the way the engine resolves them
+// (priority ascending, then created_at ascending). Every path that
+// categorizes reads this: import, sync, releasing a held row, Apply to
+// existing. A point-out rule is never among them, so it can never write a
+// category (migration 0037).
+export async function getRules(): Promise<RuleRow[]> {
+  return selectRules()
+    .where(eq(categorizationRules.mode, 'apply'))
+    .orderBy(categorizationRules.priority, categorizationRules.createdAt);
+}
+
+// Every rule, both modes, for Settings.
+export async function getAllRules(): Promise<RuleRow[]> {
+  return selectRules().orderBy(categorizationRules.priority, categorizationRules.createdAt);
+}
+
+// What each point-out rule points out: the live rows with no category that it
+// matches, by the same matcher a categorizing rule uses. A row with any
+// category, the owner's or a rule's, is never pointed out: it is decided.
+export type PointedOut = { ruleId: string; pattern: string; categoryName: string; rowIds: string[] };
+export async function pointedOut(): Promise<PointedOut[]> {
+  const rules = await getPointOutRules();
+  if (rules.length === 0) return [];
+  const rows = await db
+    .select({ id: transactions.id, merchant: transactions.merchantNormalized })
+    .from(transactions)
+    .where(and(isNull(transactions.deletedAt), isNull(transactions.categoryId)));
+  return rules.map((r) => ({
+    ruleId: r.id,
+    pattern: r.matchPattern,
+    categoryName: r.categoryName,
+    rowIds: rows.filter((row) => matchesRule(row.merchant, r)).map((row) => row.id),
+  }));
+}
+
+// The point-out rules, for the Needs you band.
+export async function getPointOutRules(): Promise<RuleRow[]> {
+  return selectRules()
+    .where(eq(categorizationRules.mode, 'point_out'))
     .orderBy(categorizationRules.priority, categorizationRules.createdAt);
 }
 
@@ -209,8 +251,10 @@ export async function insertRule(input: {
   matchType: MatchType;
   categoryId: string;
   priority: number;
+  // 'apply' unless said: what every rule did before point-out existed.
+  mode?: 'apply' | 'point_out';
 }): Promise<void> {
-  await db.insert(categorizationRules).values(input);
+  await db.insert(categorizationRules).values({ ...input, mode: input.mode ?? 'apply' });
 }
 
 export async function updateRuleById(
@@ -220,6 +264,7 @@ export async function updateRuleById(
     matchType: MatchType;
     categoryId: string;
     priority: number;
+    mode: 'apply' | 'point_out';
   },
 ): Promise<void> {
   await db

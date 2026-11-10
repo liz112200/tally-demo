@@ -7,6 +7,7 @@ import { accountCard, isUnverified } from '@/lib/account-card';
 import { formatUSD, toCents } from '@/lib/money';
 import type { BoardCard } from '@/app/_components/account-board';
 import { ledgerFacts } from '@/lib/needs-you-facts';
+import { reviewApplies } from '@/lib/review';
 import type { NeedsYouFacts } from '@/lib/needs-you';
 import { classifyItemError, consentState, healthSentence } from '@/lib/bank-sync/item-health';
 import { staleLines } from '@/lib/bank-sync/staleness';
@@ -56,6 +57,7 @@ export async function loadBoard() {
       ...accountCard({
         ledger,
         rows,
+        reviewed: (closingDate, diff) => reviewApplies(view.statementReviews[`${ledger.id}:${closingDate}`], diff),
         linked: mine.length > 0,
         held: mine.reduce((n, x) => n + (x.state?.heldCount ?? 0), 0),
         unverified: mine.some((x) => isUnverified(x.bank, x.state)),
@@ -94,14 +96,26 @@ export function needsYouFacts(board: Board): NeedsYouFacts {
     flaggedRows: view.transactions.filter((t) => needsReview(t)).length,
     // Only those the conversion would accept: a line nobody can resolve
     // would sit there for good.
-    raisedRows: Object.values(view.conversions).filter((refusal) => refusal === null).length,
+    // Kept raised (a review that still applies) is decided, not open.
+    raisedRows: Object.entries(view.conversions).filter(([id, refusal]) => refusal === null && !(id in view.keptRaised)).length,
+    pointOut: view.pointOut.map((p) => ({ ruleId: p.ruleId, pattern: p.pattern, categoryName: p.categoryName, count: p.rowIds.length })),
   };
   for (const ledger of view.ledgers) {
     const mine = board.banksOf(ledger.id);
     const held = mine.reduce((n, x) => n + (x.state?.heldCount ?? 0), 0);
     if (held > 0) facts.held.push({ ledgerId: ledger.id, name: ledger.label, count: held });
     const f = ledgerFacts({ ledger, rows: filterByTab(view.transactions, { kind: 'ledger', id: ledger.id }), today });
-    facts.disagreements.push(...f.disagreements);
+    // A difference a review accepted, as it now is, is not raised; one whose
+    // figures moved since is (reviewApplies).
+    facts.disagreements.push(
+      ...f.disagreements.filter(
+        (d) =>
+          !reviewApplies(view.statementReviews[`${ledger.id}:${d.closingDate}`], {
+            chargesDiff: (d.charges?.listedCents ?? 0) - (d.charges?.statedCents ?? 0),
+            creditsDiff: (d.credits?.listedCents ?? 0) - (d.credits?.statedCents ?? 0),
+          }),
+      ),
+    );
     facts.withoutTotals.push(...f.withoutTotals);
     facts.missingStatements.push(...f.missingStatements);
     facts.noStatements.push(...f.noStatements);

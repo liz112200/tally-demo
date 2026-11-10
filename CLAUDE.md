@@ -378,7 +378,12 @@ These are decided. Do not reintroduce the alternatives.
   beside it, never only in a hover, and the account's page always shows the
   reasoning sentence. A band line must be something the owner can act on
   that the data shows is still open, and leaves only when the data says it
-  is resolved: no dismissing, no counts for their own sake.
+  is resolved: no dismissing, no counts for their own sake. A review (a
+  difference or raised row the owner accepted, with a note) is a record,
+  not a dismissal, because it applies only while the figures are exactly
+  those it accepted and lapses the moment they move (lib/review.ts); never
+  relax that. A point-out rule never writes a category: every categorizing
+  path reads apply-mode rules only (getRules).
 
 ## Architecture
 

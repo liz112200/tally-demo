@@ -50,6 +50,8 @@ export type NeedsYouFacts = {
   flaggedRows: number;
   // Rows raised to fold in what someone owed, still offering Move.
   raisedRows: number;
+  // Point-out rules and the uncategorized rows each matches (migration 0037).
+  pointOut: { ruleId: string; pattern: string; categoryName: string; count: number }[];
 };
 
 const ORDER: NeedsYouKind[] = ['question', 'problem', 'trust', 'task'];
@@ -150,6 +152,17 @@ export function needsYouItems(
       text: `${rows(facts.raisedRows)} raised to fold in what someone owed can move that part into an owes-me line.`,
       action: 'Review',
       href: '/expenses?review=raised',
+    });
+  }
+  for (const p of facts.pointOut) {
+    if (p.count === 0) continue;
+    items.push({
+      key: `point:${p.ruleId}`,
+      kind: 'task',
+      subject: p.categoryName,
+      text: `${rows(p.count)} ${p.count === 1 ? 'matches' : 'match'} your "${p.pattern}" rule and ${p.count === 1 ? 'has' : 'have'} no category.`,
+      action: 'Sort',
+      href: `/expenses?point=${p.ruleId}`,
     });
   }
   return items.sort((a, b) => ORDER.indexOf(a.kind) - ORDER.indexOf(b.kind));

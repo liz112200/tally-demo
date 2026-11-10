@@ -57,6 +57,7 @@ describe('readFilters / filterPatch round-trip', () => {
       catSource: 'rule',
       receipt: 'has',
       review: 'flagged',
+      pointOut: 'rule-1',
     };
     const params = applyPatch(new URLSearchParams(), filterPatch(filters));
     expect(readFilters(params)).toEqual(filters);

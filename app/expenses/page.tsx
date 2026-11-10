@@ -27,6 +27,8 @@ export default async function ExpensesPage() {
     importGroups,
     ledgers,
     conversions,
+    pointOut,
+    keptRaised,
   } = await loadLedgerView();
   return (
     <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
@@ -54,6 +56,8 @@ export default async function ExpensesPage() {
           imports={importGroups}
           ledgers={ledgers}
           conversions={conversions}
+          pointOut={pointOut}
+          keptRaised={keptRaised}
         />
       </Suspense>
     </main>

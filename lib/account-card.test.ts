@@ -66,6 +66,28 @@ describe('accountCard', () => {
   });
 });
 
+describe('accountCard, reviewed and closed', () => {
+  const statements = [statement('2026-05-11'), statement('2026-06-11'), statement('2026-07-11', { periodStart: '2026-06-12', chargesCents: 9_000, creditsCents: 2_000 })];
+  const base = {
+    rows: [row('2026-06-20', 8_000), row('2026-06-21', -2_000)],
+    linked: true,
+    held: 0,
+    unverified: false,
+    today: '2026-07-20',
+    formatDay: day,
+    formatMoney: money,
+  };
+  it('keeps a reviewed difference on the card, saying it was reviewed', () => {
+    const c = accountCard({ ...base, ledger: { id: 'l', label: 'Card', kind: 'card', purchaseDatedCsv: false, statements }, reviewed: () => true });
+    expect(c.chips).toEqual([{ label: 'Jul 11: $1.00 under · reviewed', tone: 'quiet' }]);
+  });
+  it('shows a closed account as closed, with no cycle', () => {
+    const c = accountCard({ ...base, ledger: { id: 'l', label: 'Card', kind: 'card', purchaseDatedCsv: false, statements, closedOn: '2026-07-15' } });
+    expect(c.cycle).toBeNull();
+    expect(c.chips.map((x) => x.label)).toContain('Closed Jul 15');
+  });
+});
+
 describe('isUnverified', () => {
   const state = (over: Partial<{ verifiedAt: Date | null; heldCount: number; ledgerAccountId: string | null }> = {}) => ({
     verifiedAt: null,

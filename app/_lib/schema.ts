@@ -419,6 +419,9 @@ export const ruleSchema = z
       .number()
       .int('Priority must be a whole number')
       .min(0, 'Priority must be 0 or more'),
+    // 'apply' sets the category; 'point_out' only points out uncategorized
+    // rows it matches (migration 0037). A form without the field is 'apply'.
+    mode: z.enum(['apply', 'point_out']).default('apply'),
   })
   .refine((d) => d.matchType !== 'regex' || isValidRegex(d.matchPattern), {
     message: 'Invalid regular expression',

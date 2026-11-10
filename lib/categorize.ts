@@ -14,7 +14,11 @@ function toTime(value: string | Date): number {
   return value instanceof Date ? value.getTime() : new Date(value).getTime();
 }
 
-function matches(merchantNormalized: string, rule: CategoryRule): boolean {
+export function matchesRule(merchantNormalized: string, rule: Pick<CategoryRule, 'matchPattern' | 'matchType'>): boolean {
+  return matches(merchantNormalized, rule);
+}
+
+function matches(merchantNormalized: string, rule: Pick<CategoryRule, 'matchPattern' | 'matchType'>): boolean {
   if (rule.matchType === 'substring') {
     return merchantNormalized
       .toLowerCase()

@@ -40,7 +40,7 @@ import {
 } from '@/lib/expense-filters';
 import { foldEmptyPeriods, groupByPeriod, type PeriodStatement } from '@/lib/statement-periods';
 import { groupByMonth } from '@/lib/month-groups';
-import { FoldedPeriodsRow, PeriodHeader } from '@/app/_components/period-header';
+import { FoldedPeriodsRow, PeriodHeader, type PeriodNote } from '@/app/_components/period-header';
 import type { ImportGroupMeta } from '@/lib/import-groups';
 import { useTableState } from '@/app/_lib/use-table-state';
 import { SortHeaderButton } from '@/app/_components/sort-controls';
@@ -343,6 +343,9 @@ export function TransactionTable({
   ledgers,
   account,
   conversions,
+  pointOut = [],
+  keptRaised = {},
+  periodNotes = {},
 }: {
   data: TransactionRow[];
   categories: Category[];
@@ -364,6 +367,13 @@ export function TransactionTable({
   // Raised rows with a split: null when the conversion would accept it, else
   // why not (lib/conversion.ts).
   conversions: Record<string, string | null>;
+  // What each point-out rule points out (lib/categorize matcher, server-side).
+  pointOut?: { ruleId: string; pattern: string; categoryName: string; rowIds: string[] }[];
+  // Raised rows kept raised by a review that still applies.
+  keptRaised?: Record<string, { note: string; reviewedAt: string }>;
+  // On an account's page, by statement closing date: what explains a
+  // statement's difference, and its latest review (PeriodHeader).
+  periodNotes?: Record<string, PeriodNote>;
 }) {
   const { params, apply } = useTableState();
   const sort = readSort(params, EXPENSES_SORT);
@@ -401,7 +411,9 @@ export function TransactionTable({
       today,
       hasSplit: (id) => id in splitsByTransaction,
       hasReceipt: (id) => id in receiptsByTransaction,
-      convertible: (id) => conversions[id] === null,
+      // Offered Move and not kept raised: what the band's line counts.
+      convertible: (id) => conversions[id] === null && !(id in keptRaised),
+      pointedOut: (id) => pointOut.find((p) => p.ruleId === filters.pointOut)?.rowIds.includes(id) ?? false,
     })
       // Rows of a hidden import drop out of the view (and thus the summary
       // and selection), not just its group header.
@@ -635,6 +647,7 @@ export function TransactionTable({
                 alongsideOf={alongsideLinks.byId.get(row.original.alongsideOfId ?? '') ?? null}
                 alongside={alongsideLinks.byAnchor.get(row.original.id) ?? []}
                 conversion={conversions[row.original.id]}
+                kept={keptRaised[row.original.id] ?? null}
               />
             </td>
           </tr>
@@ -656,6 +669,21 @@ export function TransactionTable({
           labels={Object.fromEntries(ledgers.map((l) => [l.id, l.label]))}
           onChange={(next) => apply(tabPatch(next))}
         />
+      )}
+      {filters.pointOut !== null && (
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-xs text-muted-foreground">
+          <span>
+            {(() => {
+              const rule = pointOut.find((p) => p.ruleId === filters.pointOut);
+              return rule
+                ? `Rows your "${rule.pattern}" rule points out for ${rule.categoryName}: they have no category. Select them and set one, or another category where it is something else.`
+                : 'That rule no longer points anything out.';
+            })()}
+          </span>
+          <button type="button" onClick={() => apply({ point: null })} className="min-h-8 text-blue-700 underline-offset-2 hover:underline dark:text-blue-400">
+            Show all rows
+          </button>
+        </p>
       )}
       {!account && tabLedger && (
         <p className="px-1 text-xs">
@@ -750,6 +778,8 @@ export function TransactionTable({
                       kind={ledger!.kind}
                       statements={ledger!.statements}
                       today={today}
+                      ledgerId={ledger!.id}
+                      note={period.statement ? periodNotes[period.statement.closingDate] : undefined}
                     />
                     {!isCollapsed(period.key) && period.rows.length === 0 && (
                       <tr className="border-b last:border-0">

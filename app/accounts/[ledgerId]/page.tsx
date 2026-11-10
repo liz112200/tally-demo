@@ -5,6 +5,13 @@ import { loadLedgerView } from '@/app/_lib/ledger-view';
 import { boundaryReview, ledgerStateFor } from '@/db/ledger';
 import { currentCycle } from '@/lib/statement-cycles';
 import { cycleSummary } from '@/lib/cycle-summary';
+import { filterByTab } from '@/lib/expense-filters';
+import { groupByPeriod, statementComparison } from '@/lib/statement-periods';
+import { explainDifference } from '@/lib/difference-explain';
+import { formatUSD, toCents } from '@/lib/money';
+import { differenceFacts } from '@/db/reviews';
+import { AccountClosed } from '@/app/_components/account-closed';
+import type { PeriodNote } from '@/app/_components/period-header';
 import { TransactionTable } from '@/app/_components/transaction-table';
 import { StatementsControl } from '@/app/_components/ledger-controls';
 import { BoundaryReviewBlock } from '@/app/_components/boundary-review';
@@ -51,7 +58,32 @@ export default async function AccountPage({ params }: { params: Promise<{ ledger
     ),
   );
 
-  const cycle = currentCycle(ledger.statements, today);
+  // A closed account expects nothing more: no cycle.
+  const cycle = ledger.closedOn ? null : currentCycle(ledger.statements, today);
+  // For each statement that differs from its rows: the facts that account
+  // for it, and its latest review (PeriodHeader shows both).
+  const ledgerRows = filterByTab(view.transactions, { kind: 'ledger', id: ledgerId });
+  const groups = groupByPeriod({ all: ledgerRows, visible: ledgerRows, statements: ledger.statements, purchaseDatedCsv: ledger.purchaseDatedCsv });
+  const differing = groups.filter((g) => {
+    const c = statementComparison(g);
+    return c !== null && (c.chargesDiff !== 0 || c.creditsDiff !== 0);
+  });
+  const facts = differing.length > 0 ? await differenceFacts(ledgerId) : { held: [], raised: [] };
+  const periodNotes: Record<string, PeriodNote> = {};
+  for (const g of differing) {
+    const c = statementComparison(g)!;
+    const e = explainDifference({
+      from: g.from!,
+      to: g.to!,
+      chargesDiff: c.chargesDiff,
+      creditsDiff: c.creditsDiff,
+      held: facts.held,
+      raised: facts.raised,
+      day,
+      money: (n) => formatUSD(toCents(n)),
+    });
+    periodNotes[g.statement!.closingDate] = { ...e, review: view.statementReviews[`${ledgerId}:${g.statement!.closingDate}`] ?? null };
+  }
   const summary = cycle ? cycleSummary({ cycle, statements: ledger.statements, today, formatDay: day }) : null;
   const rows = view.transactions.filter((t) => t.ledgerAccountId === ledgerId);
   const hasCsvRows = rows.some((t) => t.source !== 'plaid' && t.source !== 'manual');
@@ -85,7 +117,12 @@ export default async function AccountPage({ params }: { params: Promise<{ ledger
             ) : null}
           </div>
         </div>
-        {summary ? (
+        {ledger.closedOn ? (
+          <p className="text-sm">
+            <span className="font-semibold">Closed on {day(ledger.closedOn)}.</span>{' '}
+            <span className="text-muted-foreground">No statement is expected after it.</span>
+          </p>
+        ) : summary ? (
           <>
             <div aria-hidden className="h-2 max-w-xl overflow-hidden rounded-full bg-muted">
               <div className="h-full rounded-full bg-foreground" style={{ width: `${summary.progress}%` }} />
@@ -158,6 +195,8 @@ export default async function AccountPage({ params }: { params: Promise<{ ledger
             imports={view.importGroups}
             ledgers={[ledger]}
             conversions={view.conversions}
+            keptRaised={view.keptRaised}
+            periodNotes={periodNotes}
             account={ledgerId}
           />
         </Suspense>
@@ -166,6 +205,7 @@ export default async function AccountPage({ params }: { params: Promise<{ ledger
       <section id="statements" className="scroll-mt-16 space-y-2 text-xs">
         <h2 className="text-base font-semibold">Statements</h2>
         <StatementsControl ledgerAccountId={ledgerId} statements={ledger.statements} today={today} kind={ledger.kind} />
+        <AccountClosed ledgerAccountId={ledgerId} closedOn={ledger.closedOn} today={today} />
       </section>
 
       <section id="imports" className="scroll-mt-16 space-y-2">

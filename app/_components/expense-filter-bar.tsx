@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/select';
 import { formatUSD, toCents } from '@/lib/money';
 import {
+  DEFAULT_FILTERS,
   UNCATEGORIZED_FILTER,
   hasActiveFilters,
   type CategorySourceKey,
@@ -282,17 +283,7 @@ export function ExpenseFilterBar({
             size="sm"
             className="h-7 px-2 text-xs text-muted-foreground"
             onClick={() =>
-              onChange({
-                q: '',
-                range: 'all',
-                from: null,
-                to: null,
-                categories: [],
-                split: 'all',
-                catSource: 'all',
-                receipt: 'all',
-                review: 'all',
-              })
+              onChange(DEFAULT_FILTERS)
             }
           >
             <X data-icon="inline-start" />

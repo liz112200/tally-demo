@@ -11,11 +11,13 @@ import {
   getReplacementCandidates,
   getSettlements,
   getImportSkipGroups,
+  pointedOut,
   type ReceiptView,
   type ReplacementCandidate,
 } from '@/db/queries';
 import { getLedgerTabs } from '@/db/statement-cycles';
 import { conversionChecks } from '@/db/alongside';
+import { latestRaisedReviews, latestStatementReviews } from '@/db/reviews';
 import type { SplitSummary } from '@/app/_components/split-editor';
 
 // Everything the transaction table needs, loaded once, for Expenses and for
@@ -37,6 +39,24 @@ export async function loadLedgerView() {
     ]);
   // Each raised row with a split: null when converting it would be accepted,
   // else why not (lib/conversion.ts). Move is offered on the null ones only.
+  // What each point-out rule points out (the Zelle rule): rows with no
+  // category it matches.
+  const pointOut = await pointedOut();
+  // The latest review of each statement, keyed `${ledgerId}:${closingDate}`;
+  // whether it still applies is decided against the current figures.
+  const statementReviews = Object.fromEntries(
+    [...(await latestStatementReviews())].map(([key, r]) => [
+      key,
+      { chargesDiffCents: r.chargesDiffCents, creditsDiffCents: r.creditsDiffCents, note: r.note, reviewedAt: r.reviewedAt.toISOString() },
+    ]),
+  );
+  // Raised rows kept raised, where the review still applies: the row still
+  // has the amount it was kept at.
+  const amountOf = new Map(transactions.map((t) => [t.id, t.amountCents]));
+  const keptRaised: Record<string, { note: string; reviewedAt: string }> = {};
+  for (const [id, r] of await latestRaisedReviews()) {
+    if (amountOf.get(id) === r.amountCents) keptRaised[id] = { note: r.note, reviewedAt: r.reviewedAt.toISOString() };
+  }
   const conversions: Record<string, string | null> = Object.fromEntries(
     [...(await conversionChecks())].map(([id, check]) => [id, 'error' in check ? check.error : null]),
   );
@@ -104,5 +124,8 @@ export async function loadLedgerView() {
     ledgers,
     importSkips,
     conversions,
+    pointOut,
+    statementReviews,
+    keptRaised,
   };
 }

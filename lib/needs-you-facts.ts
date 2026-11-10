@@ -7,14 +7,17 @@ import type { NeedsYouFacts } from './needs-you';
 type LedgerFacts = Pick<NeedsYouFacts, 'disagreements' | 'withoutTotals' | 'missingStatements' | 'noStatements'>;
 
 export function ledgerFacts(input: {
-  ledger: { id: string; label: string; kind: 'card' | 'checking'; purchaseDatedCsv: boolean; statements: PeriodStatement[] };
+  ledger: { id: string; label: string; kind: 'card' | 'checking'; purchaseDatedCsv: boolean; statements: PeriodStatement[]; closedOn?: string | null };
   rows: readonly PeriodRow[];
   today: string;
 }): LedgerFacts {
   const { ledger, rows, today } = input;
   const facts: LedgerFacts = { disagreements: [], withoutTotals: [], missingStatements: [], noStatements: [] };
   if (rows.length === 0) return facts;
+  // A closed account issues no more statements: none is asked for.
+  const closed = Boolean(ledger.closedOn);
   if (ledger.statements.length === 0) {
+    if (closed) return facts;
     facts.noStatements.push({ ledgerId: ledger.id, name: ledger.label });
     return facts;
   }
@@ -41,6 +44,6 @@ export function ledgerFacts(input: {
     facts.withoutTotals.push({ ledgerId: ledger.id, name: ledger.label, closingDate: latest.closingDate });
   }
   const cycle = currentCycle(ledger.statements, today);
-  if (cycle?.missingSince) facts.missingStatements.push({ ledgerId: ledger.id, name: ledger.label, since: cycle.missingSince });
+  if (!closed && cycle?.missingSince) facts.missingStatements.push({ ledgerId: ledger.id, name: ledger.label, since: cycle.missingSince });
   return facts;
 }

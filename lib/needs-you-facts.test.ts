@@ -57,4 +57,13 @@ describe('ledgerFacts', () => {
     expect(facts([], [row('2026-07-20', 1_000)]).noStatements).toEqual([{ ledgerId: 'l', name: 'Card One' }]);
     expect(facts([], [])).toEqual({ disagreements: [], withoutTotals: [], missingStatements: [], noStatements: [] });
   });
+
+  it('expects nothing more of a closed account, and still raises a difference on a statement it issued', () => {
+    const closed = (statements: PeriodStatement[], rows: PeriodRow[]) =>
+      ledgerFacts({ ledger: { id: 'l', label: 'Card One', kind: 'card', purchaseDatedCsv: false, statements, closedOn: '2026-07-15' }, rows, today: '2026-08-20' });
+    expect(closed([statement('2026-05-11'), statement('2026-06-11'), statement('2026-07-11')], [row('2026-07-20', 1_000)]).missingStatements).toEqual([]);
+    expect(closed([], [row('2026-07-20', 1_000)]).noStatements).toEqual([]);
+    const f = closed([statement('2026-06-11'), statement('2026-07-11', { chargesCents: 5_000, creditsCents: 0 })], [row('2026-06-20', 4_000)]);
+    expect(f.disagreements.map((d) => d.closingDate)).toEqual(['2026-07-11']);
+  });
 });

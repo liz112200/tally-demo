@@ -12,6 +12,7 @@ const none: NeedsYouFacts = {
   noStatements: [],
   flaggedRows: 0,
   raisedRows: 0,
+  pointOut: [],
 };
 const format = {
   day: (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }),
@@ -84,5 +85,21 @@ describe('needsYouItems', () => {
     expect(item.text).toBe(
       'the Aug 31 statement says $10.00 in withdrawals; its rows here total $12.00, $2.00 more; and says $5.00 in deposits; its rows here total $4.00, $1.00 less.',
     );
+  });
+
+  it('points out uncategorized rows a point-out rule matches, by its category, and nothing at zero', () => {
+    const items = needsYouItems(
+      {
+        ...none,
+        pointOut: [
+          { ruleId: 'r1', pattern: 'PAYMENT APP', categoryName: 'Settling up', count: 3 },
+          { ruleId: 'r2', pattern: 'NOTHING', categoryName: 'Gifts', count: 0 },
+        ],
+      },
+      format,
+    );
+    expect(items.map((i) => [i.subject, i.text, i.action, i.href])).toEqual([
+      ['Settling up', '3 rows match your "PAYMENT APP" rule and have no category.', 'Sort', '/expenses?point=r1'],
+    ]);
   });
 });

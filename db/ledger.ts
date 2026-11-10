@@ -279,6 +279,11 @@ export type BoundaryRow = {
   // the same merchant at another amount. Stated as a fact; the cause is the
   // owner's to know (an edit, a hold, a tip).
   differsFrom: { date: string; amountCents: number } | null;
+  // On a bank row: the date its statement counts it on, and the date of the
+  // CSV row it pairs with, if any. A difference between a statement and its
+  // period's rows is explained from these (lib/difference-explain.ts).
+  postedDate: string | null;
+  twinDate: string | null;
 };
 
 // The rows either side of the cutover: the ledger account's CSV rows from the
@@ -342,6 +347,8 @@ export async function boundaryReview(accountId: string): Promise<{ cutover: stri
         resolution: null,
         resolvedAt: null,
         differsFrom: null,
+        postedDate: null,
+        twinDate: null,
       })),
     ...setAside.flatMap((s, i) => {
       if (s.reason !== 'possible_duplicate' && s.shownDate < shownFrom) return [];
@@ -356,6 +363,8 @@ export async function boundaryReview(accountId: string): Promise<{ cutover: stri
           resolution: s.resolution,
           resolvedAt: s.resolvedAt,
           differsFrom: twin && twin.amountCents !== s.amountCents ? { date: twin.date, amountCents: twin.amountCents } : null,
+          postedDate: s.postedDate,
+          twinDate: twin ? twin.date : null,
         },
       ];
     }),

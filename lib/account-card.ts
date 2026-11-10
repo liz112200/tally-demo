@@ -21,7 +21,10 @@ export type AccountCard = {
 };
 
 export function accountCard(input: {
-  ledger: { id: string; label: string; kind: 'card' | 'checking'; purchaseDatedCsv: boolean; statements: PeriodStatement[] };
+  ledger: { id: string; label: string; kind: 'card' | 'checking'; purchaseDatedCsv: boolean; statements: PeriodStatement[]; closedOn?: string | null };
+  // Whether a review accepted this statement's difference as it now is
+  // (db/reviews.ts reviewApplies): the chip keeps the difference and says so.
+  reviewed?: (closingDate: string, diff: { chargesDiff: number; creditsDiff: number }) => boolean;
   rows: readonly PeriodRow[];
   linked: boolean;
   // Unanswered held rows across its bank accounts.
@@ -33,7 +36,8 @@ export function accountCard(input: {
   formatMoney: (mills: number) => string;
 }): AccountCard {
   const { ledger, today, formatDay: day, formatMoney: money } = input;
-  const cycle = currentCycle(ledger.statements, today);
+  // A closed account has no cycle: nothing more is expected of it.
+  const cycle = ledger.closedOn ? null : currentCycle(ledger.statements, today);
   const groups = groupByPeriod({ all: input.rows, visible: input.rows, statements: ledger.statements, purchaseDatedCsv: ledger.purchaseDatedCsv });
   const current = groups.find((g) => g.kind === 'current');
   const [out, back] = ledger.kind === 'card' ? ['Charges', 'Payments and credits'] : ['Withdrawals', 'Deposits'];
@@ -47,15 +51,18 @@ export function accountCard(input: {
     if (c.chargesDiff === 0 && c.creditsDiff === 0) chips.push({ label: `${closing} statement matches`, tone: 'ok' });
     else {
       const diffs = [c.chargesDiff, c.creditsDiff].filter((d) => d !== 0);
+      const reviewed = input.reviewed?.(compared.to!, c) ?? false;
+      // A reviewed difference is still shown, with the fact that it was.
       chips.push({
-        label: `${closing}: ${diffs.map((d) => `${money(Math.abs(d))} ${d < 0 ? 'under' : 'over'}`).join(', ')}`,
-        tone: 'warn',
+        label: `${closing}: ${diffs.map((d) => `${money(Math.abs(d))} ${d < 0 ? 'under' : 'over'}`).join(', ')}${reviewed ? ' · reviewed' : ''}`,
+        tone: reviewed ? 'quiet' : 'warn',
       });
     }
   }
   if (input.held > 0) chips.push({ label: input.held === 1 ? '1 question' : `${input.held} questions`, tone: 'warn' });
   if (input.unverified) chips.push({ label: 'Not verified yet', tone: 'info' });
-  if (ledger.statements.length === 0) chips.push({ label: 'No statements', tone: 'quiet' });
+  if (ledger.closedOn) chips.push({ label: `Closed ${day(ledger.closedOn)}`, tone: 'quiet' });
+  else if (ledger.statements.length === 0) chips.push({ label: 'No statements', tone: 'quiet' });
 
   return {
     id: ledger.id,

@@ -12,6 +12,12 @@ const GLYPH: Record<NeedsYouKind, string> = {
 // noticed about its own state that is still open, one line each, subject
 // first, with the action that resolves it. Only resolving it removes a line.
 // Empty, it is one line: All clear.
+//
+// Past SCROLL_AFTER lines the list scrolls inside the band, under its heading
+// and count, so the accounts below stay in reach (2026-11-09). Its height is a
+// little under five rows, so a cut-off row shows there is more.
+const SCROLL_AFTER = 5;
+
 export function NeedsYouBand({ items }: { items: NeedsYouItem[] }) {
   if (items.length === 0) {
     return (
@@ -31,7 +37,15 @@ export function NeedsYouBand({ items }: { items: NeedsYouItem[] }) {
         </h2>
         <span className="text-xs text-muted-foreground">What Tally has noticed and can tell is still open</span>
       </div>
-      <ul>
+      <ul
+        {...(items.length > SCROLL_AFTER
+          ? {
+              tabIndex: 0,
+              'aria-label': `${items.length} lines, scrollable`,
+              className: 'max-h-[min(17rem,45vh)] overflow-y-auto overscroll-contain focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring',
+            }
+          : {})}
+      >
         {items.map((item) => (
           <li key={item.key} className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t px-4 py-2.5 sm:px-5">
             <span

@@ -260,6 +260,13 @@
       "when": 1793823129856,
       "tag": "0036_skip_and_flag_records",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1793996003610,
+      "tag": "0037_reviews_point_out_closed",
+      "breakpoints": true
     }
   ]
 }

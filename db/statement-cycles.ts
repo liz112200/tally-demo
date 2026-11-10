@@ -91,6 +91,8 @@ export type LedgerTab = {
   kind: 'card' | 'checking';
   purchaseDatedCsv: boolean;
   statements: RecordedStatement[];
+  // The day the account closed, when recorded: no statement expected after.
+  closedOn: string | null;
 };
 
 export async function getLedgerTabs(): Promise<LedgerTab[]> {
@@ -100,6 +102,7 @@ export async function getLedgerTabs(): Promise<LedgerTab[]> {
       label: ledgerAccounts.displayName,
       csvSource: ledgerAccounts.csvSource,
       basis: ledgerAccounts.cutoverBasis,
+      closedOn: ledgerAccounts.closedOn,
       // Written out with table names: in a single-table select Drizzle renders
       // its columns unqualified, and a bare "id" inside this subquery would be
       // the bank account's (CLAUDE.md, Working style).
@@ -119,5 +122,17 @@ export async function getLedgerTabs(): Promise<LedgerTab[]> {
     // the purchase date (Amex, Discover); the posted basis records posting.
     purchaseDatedCsv: r.basis === 'transaction',
     statements: statements.get(r.id) ?? [],
+    closedOn: r.closedOn,
   }));
+}
+
+// Record the day a ledger account closed, or clear it (null) when recorded by
+// mistake. False when the account does not exist.
+export async function setLedgerClosed(ledgerAccountId: string, closedOn: string | null): Promise<boolean> {
+  const updated = await db
+    .update(ledgerAccounts)
+    .set({ closedOn })
+    .where(eq(ledgerAccounts.id, ledgerAccountId))
+    .returning({ id: ledgerAccounts.id });
+  return updated.length > 0;
 }

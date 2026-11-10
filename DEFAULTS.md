@@ -16,6 +16,7 @@ review with nothing stored.
 | A held possible duplicate | `sync_skipped_rows.resolution` and `resolved_at`. The boundary review refuses to close while one is unanswered, and a review closed over one before that rule comes back on /accounts. |
 | A row an import leaves out | `import_skipped_rows`, with why (duplicate of a live row, of a deleted row, covered by a bank, index collision). Listed under Expenses as "Rows not imported". |
 | A bank flag cleared | `bank_flag_resolutions`: the bank's earlier amount or removal date, the row's amount, what was done, and when. Shown on the row as its bank changes. |
+| A difference accepted, or a raised row kept | `statement_reviews`, `raised_row_reviews`: the note, the time, the exact figures accepted. Applies only while the figures are unchanged (ACCOUNTS-BOARD.md). |
 | A row excluded from a statement check | `bank_accounts.verification.excluded`. An unticked row cannot pass by default: the totals must match to the cent. |
 
 ## Stored, but not whether it was the default

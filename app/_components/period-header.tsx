@@ -1,10 +1,25 @@
 'use client';
 
+import { useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { recordStatementReview } from '@/app/_actions/reviews';
+import { reviewApplies } from '@/lib/review';
+import { useAction } from './page-result';
 import { formatUSD, toCents } from '@/lib/money';
 import { currentCycle, statementWords } from '@/lib/statement-cycles';
 import { cycleSummary } from '@/lib/cycle-summary';
 import { notShownText, statementComparison, type FoldedPeriods, type PeriodGroup, type PeriodStatement } from '@/lib/statement-periods';
+
+// What the account's page knows about a statement's difference: the facts
+// that account for it (lib/difference-explain.ts), what they leave over, and
+// the statement's latest review, applying or not.
+export type PeriodNote = {
+  lines: string[];
+  leftCharges: number;
+  leftCredits: number;
+  review: { chargesDiffCents: number; creditsDiffCents: number; note: string; reviewedAt: string } | null;
+};
 
 // One statement period on an account's page (STATEMENT-CYCLES.md): its dates
 // first and largest, its rows counted as the statement counts them, and
@@ -19,7 +34,11 @@ export function PeriodHeader({
   kind,
   statements,
   today,
+  ledgerId,
+  note,
 }: {
+  ledgerId: string;
+  note?: PeriodNote;
   group: PeriodGroup<unknown>;
   collapsed: boolean;
   onToggle: () => void;
@@ -114,6 +133,17 @@ export function PeriodHeader({
           {chip && <span className={`whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-medium ${chipTone[chip.tone]}`}>{chip.text}</span>}
         </div>
         {explained && <p className="pl-7 pt-0.5 text-xs text-amber-800 dark:text-amber-300">{explained}</p>}
+        {differs && s && (
+          <DifferenceReview
+            ledgerId={ledgerId}
+            closingDate={s.closingDate}
+            diff={comparison!}
+            note={note}
+            usd={usd}
+            day={(iso) => day(iso.slice(0, 10))}
+            words={[out, back]}
+          />
+        )}
         {notes.length > 0 && <p className="pl-7 pt-0.5 text-xs text-muted-foreground">{notes.join(' · ')}</p>}
       </td>
     </tr>
@@ -135,5 +165,95 @@ export function FoldedPeriodsRow({ folded, colSpan, today }: { folded: FoldedPer
         {folded.statements === 1 ? '1 statement' : `${folded.statements} statements`} with no rows · {day(folded.from)} – {day(folded.to)}
       </td>
     </tr>
+  );
+}
+
+// Why a statement differs, and the owner's review of it (ACCOUNTS-BOARD.md).
+// The facts first, so the review is agree-or-disagree with stated evidence,
+// not a justification from memory; then the review: applying (its note,
+// beside the difference, which stays shown), lapsed (its figures moved), or
+// none yet, with the form. A review holds the figures shown here and is
+// refused if they changed before it was sent.
+function DifferenceReview({
+  ledgerId,
+  closingDate,
+  diff,
+  note,
+  usd,
+  day,
+  words,
+}: {
+  ledgerId: string;
+  closingDate: string;
+  diff: { chargesDiff: number; creditsDiff: number };
+  note?: PeriodNote;
+  usd: (mills: number) => string;
+  day: (iso: string) => string;
+  words: [string, string];
+}) {
+  const { run, pending } = useAction();
+  const [text, setText] = useState('');
+  const review = note?.review ?? null;
+  const applies = reviewApplies(review ?? undefined, diff);
+  const side = (d: number, word: string) => (d === 0 ? null : `${usd(Math.abs(d))} ${d < 0 ? 'less' : 'more'} in ${word}`);
+  const left = note ? [side(note.leftCharges, words[0]), side(note.leftCredits, words[1])].filter(Boolean) : [];
+  return (
+    <div className="space-y-1 pl-7 pt-1 text-xs">
+      {note && note.lines.length > 0 && (
+        <div className="text-muted-foreground">
+          <p className="font-medium text-foreground">What accounts for it</p>
+          <ul className="list-disc space-y-0.5 pl-4">
+            {note.lines.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+          <p>{left.length === 0 ? 'These account for the whole difference.' : `Not accounted for by these: ${left.join(' and ')}.`}</p>
+        </div>
+      )}
+      {note && note.lines.length === 0 && <p className="text-muted-foreground">Nothing Tally records accounts for this difference.</p>}
+      {applies && review ? (
+        <p className="text-foreground">
+          <span className="font-medium">Reviewed {day(review.reviewedAt)}:</span> {review.note}
+        </p>
+      ) : (
+        <>
+          {review && (
+            <p className="text-amber-800 dark:text-amber-300">
+              An earlier review ({day(review.reviewedAt)}, accepting {[side(review.chargesDiffCents, words[0]), side(review.creditsDiffCents, words[1])].filter(Boolean).join(' and ')}) no
+              longer applies: the difference has changed since.
+            </p>
+          )}
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="grid min-w-0 flex-1 basis-64 gap-1">
+              <span className="text-muted-foreground">If this difference is right, say why. It is kept with these figures.</span>
+              <textarea
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                rows={2}
+                maxLength={500}
+                className="rounded-md border bg-background px-2 py-1 text-xs"
+              />
+            </label>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs"
+              disabled={pending || text.trim().length === 0}
+              onClick={() =>
+                run(
+                  () => recordStatementReview({ ledgerAccountId: ledgerId, closingDate, chargesDiff: diff.chargesDiff, creditsDiff: diff.creditsDiff, note: text }),
+                  (r) => {
+                    if (!('error' in r)) setText('');
+                  },
+                )
+              }
+            >
+              Accept this difference
+            </Button>
+          </div>
+        </>
+      )}
+    </div>
   );
 }

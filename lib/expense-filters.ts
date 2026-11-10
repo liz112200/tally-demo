@@ -47,6 +47,8 @@ export type ExpenseFilters = {
   catSource: CategorySourceKey;
   receipt: ReceiptFilterKey;
   review: ReviewFilterKey;
+  // A point-out rule's id: only the rows it points out (migration 0037).
+  pointOut: string | null;
 };
 
 export const DEFAULT_FILTERS: ExpenseFilters = {
@@ -59,6 +61,7 @@ export const DEFAULT_FILTERS: ExpenseFilters = {
   catSource: 'all',
   receipt: 'all',
   review: 'all',
+  pointOut: null,
 };
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -88,6 +91,7 @@ export function readFilters(params: URLSearchParams): ExpenseFilters {
     catSource: pick(params.get('catsrc'), CATEGORY_SOURCES, 'all'),
     receipt: pick(params.get('rcpt'), RECEIPT_FILTERS, 'all'),
     review: pick(params.get('review'), REVIEW_FILTERS, 'all'),
+    pointOut: params.get('point'),
   };
 }
 
@@ -104,6 +108,7 @@ export function filterPatch(filters: ExpenseFilters): ParamPatch {
     catsrc: filters.catSource === 'all' ? null : filters.catSource,
     rcpt: filters.receipt === 'all' ? null : filters.receipt,
     review: filters.review === 'all' ? null : filters.review,
+    point: filters.pointOut,
   };
 }
 
@@ -195,6 +200,8 @@ export type FilterContext = {
   hasReceipt: (transactionId: string) => boolean;
   // A raised row the conversion would accept (the server's check).
   convertible?: (transactionId: string) => boolean;
+  // A row the chosen point-out rule points out (the server's match).
+  pointedOut?: (transactionId: string) => boolean;
 };
 
 export function applyExpenseFilters<T extends FilterableTransaction>(
@@ -235,6 +242,7 @@ export function applyExpenseFilters<T extends FilterableTransaction>(
     if (filters.receipt === 'none' && ctx.hasReceipt(row.id)) return false;
     if (filters.review === 'flagged' && !needsReview(row)) return false;
     if (filters.review === 'raised' && !ctx.convertible?.(row.id)) return false;
+    if (filters.pointOut !== null && !ctx.pointedOut?.(row.id)) return false;
     return true;
   });
 }

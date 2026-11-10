@@ -31,7 +31,7 @@ export const TABLES = [
   'transactions', 'imports', 'categorization_rules', 'categories', 'persons',
   'share_links', 'ledger_accounts', 'bank_category_map', 'sync_skipped_rows',
   'bank_accounts', 'bank_connections', 'ledger_statements', 'bank_flag_resolutions',
-  'import_skipped_rows',
+  'import_skipped_rows', 'statement_reviews', 'raised_row_reviews',
 ];
 // Not named in the wipe: the sign-in tables, which the demo never writes.
 // They are emptied anyway: users link to persons, so TRUNCATE ... CASCADE

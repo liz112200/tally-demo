@@ -33,8 +33,19 @@ type Rule = {
   categoryId: string;
   categoryName: string;
   priority: number;
+  mode: 'apply' | 'point_out';
   createdAt: string;
 };
+
+// What a rule does with a match (migration 0037).
+function ModeSelect({ id, defaultValue }: { id: string; defaultValue: 'apply' | 'point_out' }) {
+  return (
+    <select id={id} name="mode" className={selectClass} defaultValue={defaultValue}>
+      <option value="apply">sets the category</option>
+      <option value="point_out">points out rows with no category</option>
+    </select>
+  );
+}
 
 // Default order mirrors how the engine resolves rules: priority ascending,
 // created_at breaking ties (the server already delivers that order, and
@@ -161,7 +172,7 @@ function AddRuleForm({ categories }: { categories: Category[] }) {
     <form
       ref={formRef}
       action={formAction}
-      className="grid items-end gap-2 rounded-xl border border-dashed p-3 sm:grid-cols-[1fr_7rem_10rem_4.5rem_auto]"
+      className="grid items-end gap-2 rounded-xl border border-dashed p-3 sm:grid-cols-[1fr_7rem_10rem_13rem_4.5rem_auto]"
     >
       <div className="grid gap-1">
         <Label htmlFor="add-pattern" className="text-xs text-muted-foreground">
@@ -204,6 +215,12 @@ function AddRuleForm({ categories }: { categories: Category[] }) {
         )}
       </div>
       <div className="grid gap-1">
+        <Label htmlFor="add-mode" className="text-xs text-muted-foreground">
+          A match
+        </Label>
+        <ModeSelect id="add-mode" defaultValue="apply" />
+      </div>
+      <div className="grid gap-1">
         <Label htmlFor="add-priority" className="text-xs text-muted-foreground">
           Priority
         </Label>
@@ -221,7 +238,7 @@ function AddRuleForm({ categories }: { categories: Category[] }) {
       <Button type="submit" disabled={pending}>
         {pending ? 'Adding…' : 'Add rule'}
       </Button>
-      <p className="text-[11px] text-muted-foreground sm:col-span-5">{RULE_SCOPE}</p>
+      <p className="text-[11px] text-muted-foreground sm:col-span-6">{RULE_SCOPE}</p>
     </form>
   );
 }
@@ -258,6 +275,11 @@ function RuleLine({ rule, categories }: { rule: Rule; categories: Category[] }) 
           <span className="rounded border px-1 py-px text-[10px] uppercase tracking-wide text-muted-foreground">
             {rule.matchType}
           </span>
+          {rule.mode === 'point_out' && (
+            <span className="rounded border border-blue-500/30 bg-blue-500/10 px-1 py-px text-[10px] uppercase tracking-wide text-blue-800 dark:text-blue-300">
+              points out
+            </span>
+          )}
           <Pencil
             className="ml-auto size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
             aria-hidden
@@ -271,7 +293,7 @@ function RuleLine({ rule, categories }: { rule: Rule; categories: Category[] }) 
     <li className="bg-muted/30 p-3">
       <form
         action={formAction}
-        className="grid items-end gap-2 sm:grid-cols-[1fr_7rem_10rem_4.5rem]"
+        className="grid items-end gap-2 sm:grid-cols-[1fr_7rem_10rem_13rem_4.5rem]"
       >
         <input type="hidden" name="id" value={rule.id} />
         <div className="grid gap-1">
@@ -328,6 +350,12 @@ function RuleLine({ rule, categories }: { rule: Rule; categories: Category[] }) 
           </select>
         </div>
         <div className="grid gap-1">
+          <Label htmlFor={`mode-${rule.id}`} className="text-xs text-muted-foreground">
+            A match
+          </Label>
+          <ModeSelect id={`mode-${rule.id}`} defaultValue={rule.mode} />
+        </div>
+        <div className="grid gap-1">
           <Label
             htmlFor={`priority-${rule.id}`}
             className="text-xs text-muted-foreground"
@@ -342,7 +370,7 @@ function RuleLine({ rule, categories }: { rule: Rule; categories: Category[] }) 
             className="font-mono"
           />
         </div>
-        <div className="flex items-center gap-2 sm:col-span-4">
+        <div className="flex items-center gap-2 sm:col-span-5">
           <Button type="submit" size="sm" disabled={pending}>
             {pending ? 'Saving…' : 'Save'}
           </Button>

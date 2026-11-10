@@ -346,6 +346,9 @@ export const ledgerAccounts = pgTable(
     cutoverBasis: ledgerCutoverBasis('cutover_basis').notNull().default('transaction'),
     cutoverDate: date('cutover_date', { mode: 'string' }),
     cutoverConfirmedAt: timestamp('cutover_confirmed_at', { withTimezone: true }),
+    // The day the account closed, as the owner records it (migration 0037):
+    // no statement is expected after it, so no line asks for one.
+    closedOn: date('closed_on', { mode: 'string' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
@@ -563,11 +566,17 @@ export const categorizationRules = pgTable(
       .references(() => categories.id, { onDelete: 'cascade' }),
     // Lower priority wins; ties break by created_at ascending.
     priority: integer('priority').notNull().default(100),
+    // 'apply' sets the category, as rules always have. 'point_out' never
+    // writes a category: it raises a Needs you line for live rows it matches
+    // that have none (migration 0037; Zelle payments not in Settling up), so
+    // a category the owner wants to apply by hand stays theirs to apply.
+    mode: text('mode').$type<'apply' | 'point_out'>().notNull().default('apply'),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
   },
   (table) => [
+    check('categorization_rules_mode', sql`${table.mode} in ('apply', 'point_out')`),
     // A given pattern+type is one rule; editing changes its category/priority.
     uniqueIndex('categorization_rules_pattern_type_unique').on(
       table.matchPattern,
@@ -940,5 +949,53 @@ export const bankFlagResolutions = pgTable(
       sql`${table.resolution} in ('kept', 'split_resaved', 'split_removed', 'row_deleted', 'moved_to_replacement', 'bank_reverted', 'unlabelled')`,
     ),
     index('bank_flag_resolutions_transaction').on(table.transactionId),
+  ],
+);
+
+// A difference between a recorded statement and its period's rows that the
+// owner has looked at and accepted, with their note (migration 0037,
+// ACCOUNTS-BOARD.md). A record, never a dismissal: it holds the exact
+// figures accepted and applies only while the difference is still those
+// figures; once either side moves, it lapses and the difference is raised
+// again. Append-only: the latest for a statement is the one that counts,
+// earlier ones stay as history.
+export const statementReviews = pgTable(
+  'statement_reviews',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ledgerAccountId: uuid('ledger_account_id')
+      .notNull()
+      .references(() => ledgerAccounts.id),
+    closingDate: date('closing_date', { mode: 'string' }).notNull(),
+    // Rows minus statement, each side, as shown when reviewed.
+    chargesDiffCents: bigint('charges_diff_cents', { mode: 'number' }).notNull(),
+    creditsDiffCents: bigint('credits_diff_cents', { mode: 'number' }).notNull(),
+    note: text('note').notNull(),
+    reviewedAt: timestamp('reviewed_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    check('statement_reviews_note', sql`length(trim(${table.note})) > 0`),
+    check('statement_reviews_differs', sql`${table.chargesDiffCents} <> 0 or ${table.creditsDiffCents} <> 0`),
+    index('statement_reviews_statement').on(table.ledgerAccountId, table.closingDate),
+  ],
+);
+
+// A raised row the owner has decided to keep raised rather than convert,
+// with their note (migration 0037). Holds the amount it was kept at, and
+// applies only while the row still has it. Append-only, as above.
+export const raisedRowReviews = pgTable(
+  'raised_row_reviews',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    transactionId: uuid('transaction_id')
+      .notNull()
+      .references(() => transactions.id),
+    amountCents: bigint('amount_cents', { mode: 'number' }).notNull(),
+    note: text('note').notNull(),
+    reviewedAt: timestamp('reviewed_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    check('raised_row_reviews_note', sql`length(trim(${table.note})) > 0`),
+    index('raised_row_reviews_transaction').on(table.transactionId),
   ],
 );

@@ -39,6 +39,7 @@ function parseRuleForm(formData: FormData) {
     matchType: formData.get('matchType'),
     categoryId: formData.get('categoryId'),
     priority: formData.get('priority'),
+    mode: formData.get('mode') ?? undefined,
   });
 }
 
@@ -46,6 +47,8 @@ function parseRuleForm(formData: FormData) {
 // rows change when rules are applied to them (applyRules). Said on the form
 // and after every save, since nothing else would show it.
 const RULE_SCOPE = 'Applies to new rows; existing rows change when you apply rules.';
+// A point-out rule writes nothing; what it matches shows in Needs you.
+const POINT_OUT_SCOPE = 'It sets no category: rows it matches that have none are pointed out on the home page.';
 
 export async function createRule(
   _prev: RuleFormState,
@@ -66,7 +69,7 @@ export async function createRule(
 
   revalidatePath('/settings');
   revalidatePath('/', 'layout');
-  return { ok: true, message: `Rule ${parsed.data.matchPattern} added. ${RULE_SCOPE}` };
+  return { ok: true, message: `Rule ${parsed.data.matchPattern} added. ${parsed.data.mode === 'point_out' ? POINT_OUT_SCOPE : RULE_SCOPE}` };
 }
 
 export async function updateRule(
@@ -93,7 +96,7 @@ export async function updateRule(
 
   revalidatePath('/settings');
   revalidatePath('/', 'layout');
-  return { ok: true, message: `Rule ${parsed.data.matchPattern} saved. ${RULE_SCOPE}` };
+  return { ok: true, message: `Rule ${parsed.data.matchPattern} saved. ${parsed.data.mode === 'point_out' ? POINT_OUT_SCOPE : RULE_SCOPE}` };
 }
 
 // Retroactively apply the rules to existing transactions. Never overwrites a
