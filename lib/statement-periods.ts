@@ -175,12 +175,14 @@ export function foldEmptyPeriods<T>(groups: readonly PeriodGroup<T>[]): (PeriodG
   return out;
 }
 
-// Why a period's rows are not all shown, named: "4 rows not shown: they are in
-// a hidden import", never a bare "(0 shown)".
+// Why a period's rows are not all listed, named, never a bare "(0 shown)";
+// and that they still count, since the period's figures are every row of it
+// (2026-11-12: "not shown" beside the totals read as "not counted", which
+// made a correct difference look wrong).
 export function notShownText(hidden: number, filtered: number): string | null {
   const total = hidden + filtered;
   if (total === 0) return null;
-  const rows = `${total} ${total === 1 ? 'row' : 'rows'} not shown`;
+  const rows = `${total} ${total === 1 ? 'row' : 'rows'} not listed here, still counted in these figures`;
   if (filtered === 0) return `${rows}: ${total === 1 ? 'it is' : 'they are'} in a hidden import`;
   if (hidden === 0) return `${rows}: left out by the filters`;
   return `${rows}: ${hidden} in a hidden import, ${filtered} left out by the filters`;

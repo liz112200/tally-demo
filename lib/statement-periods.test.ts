@@ -107,21 +107,21 @@ describe('statementComparison', () => {
 });
 
 describe('rows not shown', () => {
-  it('are counted by why: a hidden import, or the filters', () => {
+  it('are counted by why, a hidden import or the filters, and still in the figures', () => {
     const statements = [statement('2026-09-06', { periodStart: '2026-08-07' })];
     const a = row('2026-08-10', 1_000);
     const b = row('2026-08-11', 2_000);
     const c = row('2026-08-12', 3_000);
     const [, period] = groupByPeriod({ all: [a, b, c], visible: [c], statements, purchaseDatedCsv: false, inHiddenImport: (r) => r.id === a.id });
     expect(period).toMatchObject({ count: 3, notShownHidden: 1, notShownFiltered: 1 });
-    expect(notShownText(period.notShownHidden, period.notShownFiltered)).toBe('2 rows not shown: 1 in a hidden import, 1 left out by the filters');
+    expect(notShownText(period.notShownHidden, period.notShownFiltered)).toBe('2 rows not listed here, still counted in these figures: 1 in a hidden import, 1 left out by the filters');
   });
 
   it('are named, never a bare count', () => {
     expect(notShownText(0, 0)).toBeNull();
-    expect(notShownText(4, 0)).toBe('4 rows not shown: they are in a hidden import');
-    expect(notShownText(1, 0)).toBe('1 row not shown: it is in a hidden import');
-    expect(notShownText(0, 3)).toBe('3 rows not shown: left out by the filters');
+    expect(notShownText(4, 0)).toBe('4 rows not listed here, still counted in these figures: they are in a hidden import');
+    expect(notShownText(1, 0)).toBe('1 row not listed here, still counted in these figures: it is in a hidden import');
+    expect(notShownText(0, 3)).toBe('3 rows not listed here, still counted in these figures: left out by the filters');
   });
 });
 

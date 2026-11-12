@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { navActive, navFor } from '../nav';
-import { isOrientationDismissed, orientationSteps, setOrientationDismissed } from './orientation';
+import { dismissedByCookie, isOrientationDismissed, orientationSteps, setOrientationDismissed } from './orientation';
 
 // The path a link lands on, without its query.
 const path = (href: string) => href.split('?')[0];
@@ -41,5 +41,11 @@ describe('the demo strip', () => {
     expect(isOrientationDismissed(refusing)).toBe(true);
     setOrientationDismissed(false, refusing);
     expect(isOrientationDismissed(refusing)).toBe(false);
+  });
+
+  it('is known to the server from its cookie, so it renders in its final state', () => {
+    expect(dismissedByCookie('1')).toBe(true);
+    expect(dismissedByCookie(undefined)).toBe(false);
+    expect(dismissedByCookie('0')).toBe(false);
   });
 });

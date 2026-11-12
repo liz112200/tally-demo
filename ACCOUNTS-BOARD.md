@@ -22,8 +22,14 @@ holds an unanswered question.
   switches, Manage: what was /accounts, minus the cycle line, statement entry
   and boundary review, which moved to each account's page.
 - **`/expenses`.** One list by calendar month, with an account filter. A
-  hidden import's rows are named above the table ("12 rows not shown: they
-  are in 2 hidden imports · Show them"). An account chosen in the filter
+  hidden import's rows that match the view are named above the table ("12
+  rows not shown or counted here: they are in 2 hidden imports · Show
+  them"); on an account's page a period says its hidden rows are not listed
+  and still counted in its figures. A view the band
+  opens (Bank changes, Raised rows, a point-out rule) shows its rows of
+  hidden imports and says so: the band counts every live row, and on
+  2026-11-11 it counted 20 Zelle rows and 4 raised rows that its own links
+  could not show, all in hidden imports. An account chosen in the filter
   links to its page.
 - **`/settings`.** Categories, rules, the bank's categories, and devices.
 - `/accounts`, `/rules` and `/devices` redirect. `/` with any query string
@@ -71,7 +77,10 @@ omission that looks resolved (DEFAULTS.md). Empty, the band is one line,
   statement ever pasted would be a line); split rows the bank changed or
   removed; raised rows still offering Move.
 
-Each line opens with its subject in bold, then the fact, then one action.
+Each line opens with its subject in bold, then the fact, then one action,
+which lands on the control that resolves it, not on the section holding it
+(2026-11-11: "Add totals" opened a collapsed list offering only Remove), and
+on every row the line counts.
 The band replaced the stale lines on Expenses (SCHEDULED-SYNC.md). Counts
 are not lines.
 Past five lines the list scrolls inside the band, under its heading and

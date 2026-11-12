@@ -30,6 +30,53 @@ export async function statementsFor(ledgerAccountIds: string[]): Promise<Map<str
   return out;
 }
 
+// One recorded statement, or null.
+export async function statementOf(ledgerAccountId: string, closingDate: string): Promise<RecordedStatement | null> {
+  const [row] = await db
+    .select({
+      closingDate: ledgerStatements.closingDate,
+      periodStart: ledgerStatements.periodStart,
+      nextClosingDate: ledgerStatements.nextClosingDate,
+      startsNewCycle: ledgerStatements.startsNewCycle,
+      source: ledgerStatements.source,
+      chargesCents: ledgerStatements.chargesCents,
+      creditsCents: ledgerStatements.creditsCents,
+    })
+    .from(ledgerStatements)
+    .where(and(eq(ledgerStatements.ledgerAccountId, ledgerAccountId), eq(ledgerStatements.closingDate, closingDate)));
+  return row ?? null;
+}
+
+// Edit a recorded statement in place (2026-11-11): every field as given, a
+// blank clearing it, unlike recording, which only adds what was not known.
+// The closing date is the statement and is not edited. A statement from a
+// statement check keeps the check's period and totals: the check passed with
+// its rows matching them to the cent, so they are the evidence it rests on,
+// and an edit changing them is refused rather than applied or ignored.
+export async function editStatement(
+  ledgerAccountId: string,
+  closingDate: string,
+  next: { periodStart: string | null; nextClosingDate: string | null; startsNewCycle: boolean; chargesCents: number | null; creditsCents: number | null },
+): Promise<'edited' | 'missing' | 'from-check'> {
+  return db.transaction(async (tx) => {
+    const where = and(eq(ledgerStatements.ledgerAccountId, ledgerAccountId), eq(ledgerStatements.closingDate, closingDate));
+    const [current] = await tx
+      .select({ source: ledgerStatements.source, periodStart: ledgerStatements.periodStart, chargesCents: ledgerStatements.chargesCents, creditsCents: ledgerStatements.creditsCents })
+      .from(ledgerStatements)
+      .where(where)
+      .for('update');
+    if (!current) return 'missing';
+    if (
+      current.source === 'verification' &&
+      (current.periodStart !== next.periodStart || current.chargesCents !== next.chargesCents || current.creditsCents !== next.creditsCents)
+    ) {
+      return 'from-check';
+    }
+    await tx.update(ledgerStatements).set(next).where(where);
+    return 'edited';
+  });
+}
+
 // Remove one recorded statement (a mistake). False when already gone.
 export async function deleteStatement(ledgerAccountId: string, closingDate: string): Promise<boolean> {
   const removed = await db

@@ -545,6 +545,13 @@ These are decided. Do not reintroduce the alternatives.
   refuses any database without its `tally-test` marker. No Neon branch or
   Neon key is used for tests: a key that can branch inside the production
   project can read production data.
+- A release's checklist is run as browser checks, not handed to the owner
+  (E2E.md): `npm run e2e` builds the committed HEAD in the local demo's
+  worktree, resets the local demo and runs e2e/*.e2e.ts against it with
+  Playwright, localhost only. A push to master is refused unless they passed
+  on exactly that commit (.githooks/pre-push, installed by `npm install`;
+  never `--no-verify`). What the checks cannot judge (wording, whether a page
+  reads clearly, a real phone) goes to the owner as a short list.
 - Drizzle migrations are explicit SQL. Schema changes ship as migrations,
   not as implicit sync.
 - shadcn/ui components are generated into the repo and owned here; edit

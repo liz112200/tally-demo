@@ -12,11 +12,11 @@ import { useOrientationDismissed } from '@/app/_lib/use-orientation';
 // Shown only on the public demo deployment (the layout gates it on
 // DEMO_MODE). Says what this is, how long changes last, and where the source
 // lives, and lets anyone put the data back the way it started.
-export function DemoBanner({ sourceUrl }: { sourceUrl: string }) {
+export function DemoBanner({ sourceUrl, orientationDismissed: fromServer }: { sourceUrl: string; orientationDismissed: boolean }) {
   const pathname = usePathname();
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
-  const orientationDismissed = useOrientationDismissed();
+  const orientationDismissed = useOrientationDismissed(fromServer);
   // Share snapshots are read by someone outside the app; no chrome there.
   if (pathname.startsWith('/s/')) return null;
 

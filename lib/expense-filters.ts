@@ -116,6 +116,55 @@ export function hasActiveFilters(filters: ExpenseFilters): boolean {
   return Object.values(filterPatch(filters)).some((v) => v !== null);
 }
 
+// A filter the Needs you band opens (lib/needs-you.ts): Bank changes, Raised
+// rows, a point-out rule. The band counts every live row, so its view must
+// show every row it counts.
+export function asksBandQuestion(filters: ExpenseFilters): boolean {
+  return filters.review !== 'all' || filters.pointOut !== null;
+}
+
+// Hiding an import takes its rows out of browsing, never out of a question
+// the band is still asking (2026-11-11: the band counted 20 Zelle rows and 4
+// raised rows that its own links could not show, because all of them were in
+// hidden imports). Under a band question the matching rows of hidden imports
+// are shown and said; otherwise they are left out and said, with a count of
+// the rows that match, not of every row the imports hold.
+// The line above a view whose rows include some in hidden imports. Under a
+// band question they are shown and said; worded for how many of the view
+// they are (2026-11-12: "1 of these rows" read oddly when the view held one).
+export function hiddenImportText(hidden: { rows: number; imports: number; shown: boolean }, viewRows: number): string | null {
+  if (hidden.rows === 0) return null;
+  const where = hidden.imports === 1 ? 'a hidden import' : `${hidden.imports} hidden imports`;
+  if (!hidden.shown) {
+    // Browsing: the summary above the table counts the rows shown, so these
+    // are neither listed nor counted there.
+    return `${hidden.rows} ${hidden.rows === 1 ? 'row' : 'rows'} not shown or counted here: ${hidden.rows === 1 ? 'it is' : 'they are'} in ${where}.`;
+  }
+  const stays = hidden.imports === 1 ? 'The import stays hidden.' : 'The imports stay hidden.';
+  const subject =
+    hidden.rows === viewRows
+      ? hidden.rows === 1
+        ? 'This row is'
+        : `All ${hidden.rows} rows are`
+      : hidden.rows === 1
+        ? '1 of these rows is'
+        : `${hidden.rows} of these rows are`;
+  return `${subject} in ${where}, shown here because the band asks about ${hidden.rows === 1 ? 'it' : 'them'}. ${stays}`;
+}
+
+export function withHiddenImports<T extends { importId: string | null }>(
+  matched: readonly T[],
+  filters: ExpenseFilters,
+  isHidden: (importId: string) => boolean,
+): { rows: T[]; hidden: { rows: number; imports: number; shown: boolean } } {
+  const inHidden = matched.filter((r) => r.importId !== null && isHidden(r.importId));
+  const shown = asksBandQuestion(filters);
+  return {
+    rows: shown ? [...matched] : matched.filter((r) => !(r.importId !== null && isHidden(r.importId))),
+    hidden: { rows: inHidden.length, imports: new Set(inHidden.map((r) => r.importId)).size, shown },
+  };
+}
+
 // ---- Account tabs ----
 // The segmented control above the table picks an account with its own URL
 // param (?tab=<ledger account id>), separate from the filter bar: switching

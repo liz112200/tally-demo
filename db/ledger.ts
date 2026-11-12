@@ -539,7 +539,9 @@ export async function recordVerification(
 // Record statements. A closing already recorded keeps what it knew and gains
 // what it did not: a period start or a printed next closing is never cleared
 // by a later entry that lacks it (a pasted list carries only closing dates),
-// a change-of-cycle mark is never cleared, and the first source stays.
+// a change-of-cycle mark is never cleared, and the source stays unless a
+// statement check writes its figures over it. Changing a statement is Edit
+// (editStatement, db/statement-cycles.ts), not recording it again.
 export async function recordStatements(
   ledgerAccountId: string,
   statements: {
@@ -576,6 +578,11 @@ export async function recordStatements(
         startsNewCycle: sql`${ledgerStatements.startsNewCycle} or excluded.starts_new_cycle`,
         chargesCents: sql`coalesce(excluded.charges_cents, ${ledgerStatements.chargesCents})`,
         creditsCents: sql`coalesce(excluded.credits_cents, ${ledgerStatements.creditsCents})`,
+        // A check that passes over a statement the owner recorded writes its
+        // own period and totals, so the statement is now the check's: saying
+        // otherwise would credit the owner with figures the check wrote. The
+        // owner never takes a statement away from a check this way.
+        source: sql`case when excluded.source = 'verification' then 'verification' else ${ledgerStatements.source} end`,
       },
     });
 }

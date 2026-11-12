@@ -19,3 +19,7 @@ tests/fixtures/screenshots/
 
 # neonctl context file (org id).
 .neon
+
+# Playwright release checks (E2E.md)
+/test-results/
+/playwright-report/

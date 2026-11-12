@@ -17,7 +17,7 @@ import { compareToStatement, type VerificationResult } from '@/lib/bank-sync/ver
 import { isDemoMode } from '@/lib/demo-mode';
 import { parseDollars } from '@/lib/money';
 import { parseClosingDates } from '@/lib/statement-cycles';
-import { deleteStatement } from '@/db/statement-cycles';
+import { deleteStatement, editStatement, statementOf as recordedStatement } from '@/db/statement-cycles';
 import { requireUser } from '@/app/_lib/session';
 import { attempt } from './attempt';
 
@@ -208,21 +208,33 @@ const recordedStatementSchema = z
 
 const today = () => new Date().toISOString().slice(0, 10);
 
+// The two totals as typed: blank is none.
+function readTotals(s: { charges?: string; credits?: string }): { chargesCents: number | null; creditsCents: number | null } | null {
+  try {
+    return {
+      chargesCents: s.charges?.trim() ? Math.abs(parseDollars(s.charges)) : null,
+      creditsCents: s.credits?.trim() ? Math.abs(parseDollars(s.credits)) : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function recordStatement(input: unknown): Promise<ActionResult> {
   await requireUser();
   const parsed = recordedStatementSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Invalid request.' };
   const s = parsed.data;
   if (s.closingDate > today()) return { error: 'That closing date is still to come; record a statement once it has closed.' };
-  let chargesCents: number | null = null;
-  let creditsCents: number | null = null;
-  try {
-    chargesCents = s.charges?.trim() ? Math.abs(parseDollars(s.charges)) : null;
-    creditsCents = s.credits?.trim() ? Math.abs(parseDollars(s.credits)) : null;
-  } catch {
-    return { error: 'Enter the totals as amounts, like 1,234.56.' };
-  }
+  const totals = readTotals(s);
+  if (!totals) return { error: 'Enter the totals as amounts, like 1,234.56.' };
+  const { chargesCents, creditsCents } = totals;
   return attempt('recordStatement', async () => {
+    // One way to change a statement, which says it changes one: recording a
+    // closing date already recorded used to merge into it silently.
+    if (await recordedStatement(s.ledgerAccountId, s.closingDate)) {
+      return { error: `A statement closing ${s.closingDate} is already recorded. Use Edit beside it in the list to change it.` };
+    }
     await recordStatements(
       s.ledgerAccountId,
       [{ closingDate: s.closingDate, periodStart: s.periodStart || null, nextClosingDate: s.nextClosingDate || null, startsNewCycle: s.startsNewCycle, chargesCents, creditsCents }],
@@ -230,6 +242,30 @@ export async function recordStatement(input: unknown): Promise<ActionResult> {
     );
     refresh();
     return { ok: true, message: `Statement closing ${s.closingDate} recorded.` };
+  });
+}
+
+// A recorded statement edited in place (db/statement-cycles.ts, editStatement).
+export async function editRecordedStatement(input: unknown): Promise<ActionResult> {
+  await requireUser();
+  const parsed = recordedStatementSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Invalid request.' };
+  const s = parsed.data;
+  const totals = readTotals(s);
+  if (!totals) return { error: 'Enter the totals as amounts, like 1,234.56.' };
+  return attempt('editRecordedStatement', async () => {
+    const outcome = await editStatement(s.ledgerAccountId, s.closingDate, {
+      periodStart: s.periodStart || null,
+      nextClosingDate: s.nextClosingDate || null,
+      startsNewCycle: s.startsNewCycle,
+      ...totals,
+    });
+    if (outcome === 'missing') return { error: `The statement closing ${s.closingDate} is no longer recorded.` };
+    if (outcome === 'from-check') {
+      return { error: 'Its period and totals are the statement check’s, which matched them to the rows to the cent, so they are not edited.' };
+    }
+    refresh();
+    return { ok: true, message: `Statement closing ${s.closingDate} updated.` };
   });
 }
 

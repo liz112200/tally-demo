@@ -17,6 +17,7 @@ import {
   adoptAccount,
   answerHeldRow,
   declineReissued,
+  editRecordedStatement,
   finishBoundaryReview,
   recordClosingDates,
   recordStatement,
@@ -24,7 +25,7 @@ import {
   setUpAccountSync,
 } from '@/app/_actions/ledger';
 import { parseClosingDates, type StatementRecord } from '@/lib/statement-cycles';
-import { formatUSD, toCents } from '@/lib/money';
+import { formatCents, formatUSD, toCents } from '@/lib/money';
 import type { ActionResult } from '@/lib/action-result';
 import { resultMessage } from './action-message';
 import { useOptionalLoginResult } from './login-result';
@@ -268,20 +269,145 @@ export function FinishReviewButton({ accountId }: { accountId: string }) {
 // The statements recorded for a ledger account (STATEMENT-CYCLES.md), and the
 // two ways to add one: a single statement with its printed dates, or a list of
 // closing dates pasted from the bank, read back before anything is saved.
+type RecordedStatementView = StatementRecord & { source: 'verification' | 'owner'; chargesCents: number | null; creditsCents: number | null };
+
+const totalLabels = (kind: 'card' | 'checking') =>
+  kind === 'card' ? (['Purchases + fees + interest', 'Payments + credits'] as const) : (['Withdrawals', 'Deposits'] as const);
+
+// One recorded statement, edited in place (2026-11-11). The closing date is
+// the statement and stays; to move it, remove the statement and record it.
+// From a statement check, the period and totals are the check's and are shown,
+// not offered: the check matched them to the rows to the cent.
+function StatementEditForm({
+  ledgerAccountId,
+  statement: st,
+  kind,
+  onClose,
+}: {
+  ledgerAccountId: string;
+  statement: RecordedStatementView;
+  kind: 'card' | 'checking';
+  onClose: () => void;
+}) {
+  const { run, pending } = useRun();
+  const fromCheck = st.source === 'verification';
+  const [start, setStart] = useState(st.periodStart ?? '');
+  const [next, setNext] = useState(st.nextClosingDate ?? '');
+  const [changed, setChanged] = useState(st.startsNewCycle);
+  const [charges, setCharges] = useState(st.chargesCents === null ? '' : formatCents(toCents(st.chargesCents)));
+  const [credits, setCredits] = useState(st.creditsCents === null ? '' : formatCents(toCents(st.creditsCents)));
+  const [chargesLabel, creditsLabel] = totalLabels(kind);
+  const id = `${ledgerAccountId}-${st.closingDate}`;
+  return (
+    <div className="mt-1 w-full space-y-2 rounded-lg border px-3 py-2 text-foreground">
+      <p className="font-medium">Statement closing {st.closingDate}</p>
+      <div className="flex flex-wrap items-end gap-2">
+        {!fromCheck && (
+          <div className="grid gap-1">
+            <Label htmlFor={`edit-start-${id}`} className="text-xs">
+              Period from (optional)
+            </Label>
+            <Input id={`edit-start-${id}`} type="date" className="h-7" value={start} onChange={(e) => setStart(e.target.value)} />
+          </div>
+        )}
+        <div className="grid gap-1">
+          <Label htmlFor={`edit-next-${id}`} className="text-xs">
+            Next closing date, if printed
+          </Label>
+          <Input id={`edit-next-${id}`} type="date" className="h-7" value={next} onChange={(e) => setNext(e.target.value)} />
+        </div>
+        {!fromCheck && (
+          <>
+            <div className="grid gap-1">
+              <Label htmlFor={`edit-charges-${id}`} className="text-xs">
+                {chargesLabel}
+              </Label>
+              <Input id={`edit-charges-${id}`} inputMode="decimal" className="h-7 w-28" placeholder="0.00" value={charges} onChange={(e) => setCharges(e.target.value)} />
+            </div>
+            <div className="grid gap-1">
+              <Label htmlFor={`edit-credits-${id}`} className="text-xs">
+                {creditsLabel}
+              </Label>
+              <Input id={`edit-credits-${id}`} inputMode="decimal" className="h-7 w-28" placeholder="0.00" value={credits} onChange={(e) => setCredits(e.target.value)} />
+            </div>
+          </>
+        )}
+      </div>
+      <p className="text-muted-foreground">
+        {fromCheck
+          ? `From a statement check: its period (${st.periodStart ?? 'not recorded'} to ${st.closingDate}) and totals (${
+              st.chargesCents === null || st.creditsCents === null ? 'none' : `${formatUSD(toCents(st.chargesCents))} / ${formatUSD(toCents(st.creditsCents))}`
+            }) matched the rows to the cent, so they are not edited here.`
+          : 'A blank total is cleared. With both totals, the statement is compared with its period’s rows; a review of an earlier difference lapses if the difference moves.'}
+      </p>
+      <label className="flex items-center gap-2">
+        <input type="checkbox" checked={changed} onChange={(e) => setChanged(e.target.checked)} />
+        The closing day changed with this statement (earlier ones stop counting toward the next date)
+      </label>
+      <div className="flex gap-2">
+        <Button
+          size="sm"
+          className="h-7"
+          disabled={pending}
+          onClick={() =>
+            run(
+              () =>
+                editRecordedStatement({
+                  ledgerAccountId,
+                  closingDate: st.closingDate,
+                  // From a check, the stored period and totals go back as they are.
+                  periodStart: fromCheck ? (st.periodStart ?? '') : start,
+                  nextClosingDate: next,
+                  startsNewCycle: changed,
+                  charges: fromCheck ? (st.chargesCents === null ? '' : formatCents(toCents(st.chargesCents))) : charges,
+                  credits: fromCheck ? (st.creditsCents === null ? '' : formatCents(toCents(st.creditsCents))) : credits,
+                }),
+              (r) => {
+                if (!('ok' in r)) return;
+                onClose();
+                // Opened from the band (?statement=): drop it, so a reload
+                // does not open the form again.
+                if (new URLSearchParams(window.location.search).has('statement')) {
+                  window.history.replaceState(null, '', `${window.location.pathname}#statements`);
+                }
+              },
+            )
+          }
+        >
+          Save
+        </Button>
+        <Button size="sm" variant="ghost" className="h-7" disabled={pending} onClick={onClose}>
+          Cancel
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function StatementsControl({
   ledgerAccountId,
   statements,
   today,
   kind,
+  editDate = null,
+  recordOpen = false,
 }: {
   ledgerAccountId: string;
-  statements: (StatementRecord & { source: 'verification' | 'owner'; chargesCents: number | null; creditsCents: number | null })[];
+  statements: RecordedStatementView[];
   today: string;
   // The statement's own words for its two totals.
   kind: 'card' | 'checking';
+  // A statement to open for editing: the band's "Add totals" lands on it.
+  editDate?: string | null;
+  // The record form open: the band's "Record it" and "Record one" land on it.
+  recordOpen?: boolean;
 }) {
   const { run, pending } = useRun();
-  const [mode, setMode] = useState<'closed' | 'one' | 'list'>('closed');
+  const [editing, setEditing] = useState<string | null>(statements.some((st) => st.closingDate === editDate) ? editDate : null);
+  // Opened for the band's statement: the list starts open and stays so after
+  // the save, to show the statement as it now is.
+  const [openForEdit] = useState(editing !== null);
+  const [mode, setMode] = useState<'closed' | 'one' | 'list'>(recordOpen ? 'one' : 'closed');
   const [closing, setClosing] = useState('');
   const [start, setStart] = useState('');
   const [next, setNext] = useState('');
@@ -289,7 +415,7 @@ export function StatementsControl({
   const [charges, setCharges] = useState('');
   const [credits, setCredits] = useState('');
   const [text, setText] = useState('');
-  const [chargesLabel, creditsLabel] = kind === 'card' ? ['Purchases + fees + interest', 'Payments + credits'] : ['Withdrawals', 'Deposits'];
+  const [chargesLabel, creditsLabel] = totalLabels(kind);
   const read = text.trim() === '' ? null : parseClosingDates(text, today);
   const done = (r: ActionResult) => {
     if ('ok' in r) {
@@ -301,13 +427,18 @@ export function StatementsControl({
       setCharges('');
       setCredits('');
       setText('');
+      // Opened from the band (?record=): drop it, so a reload does not open
+      // the form again.
+      if (new URLSearchParams(window.location.search).has('record')) {
+        window.history.replaceState(null, '', `${window.location.pathname}#statements`);
+      }
     }
   };
   const newest = [...statements].reverse();
   return (
     <div className="space-y-1">
       {statements.length > 0 && (
-        <details>
+        <details open={openForEdit || undefined}>
           <summary className="cursor-pointer text-muted-foreground">
             {statements.length} statement{statements.length === 1 ? '' : 's'} recorded
           </summary>
@@ -325,7 +456,16 @@ export function StatementsControl({
                   </span>
                 )}
                 {st.startsNewCycle && <span>new closing day from here</span>}
+                {st.chargesCents === null && st.creditsCents === null && <span>no totals</span>}
                 <span>{st.source === 'verification' ? 'from a statement check' : ''}</span>
+                <button
+                  type="button"
+                  className="underline underline-offset-2 disabled:opacity-50"
+                  disabled={pending || editing === st.closingDate}
+                  onClick={() => setEditing(st.closingDate)}
+                >
+                  Edit
+                </button>
                 <button
                   type="button"
                   className="underline underline-offset-2 disabled:opacity-50"
@@ -334,6 +474,9 @@ export function StatementsControl({
                 >
                   Remove
                 </button>
+                {editing === st.closingDate && (
+                  <StatementEditForm key={st.closingDate} ledgerAccountId={ledgerAccountId} statement={st} kind={kind} onClose={() => setEditing(null)} />
+                )}
               </li>
             ))}
           </ul>

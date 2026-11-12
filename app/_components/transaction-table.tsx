@@ -27,6 +27,8 @@ import {
 } from '@/lib/table-state';
 import {
   applyExpenseFilters,
+  hiddenImportText,
+  withHiddenImports,
   availableTabs,
   filterByTab,
   filterPatch,
@@ -406,18 +408,19 @@ export function TransactionTable({
 
   // Filtering and sorting happen here, outside TanStack, so the URL stays
   // the single source of truth and column defs never need rebuilding.
-  const visible = useMemo(() => {
-    const filtered = applyExpenseFilters(filterByTab(data, tab), filters, {
+  const { visible, hiddenMatch } = useMemo(() => {
+    const matched = applyExpenseFilters(filterByTab(data, tab), filters, {
       today,
       hasSplit: (id) => id in splitsByTransaction,
       hasReceipt: (id) => id in receiptsByTransaction,
       // Offered Move and not kept raised: what the band's line counts.
       convertible: (id) => conversions[id] === null && !(id in keptRaised),
       pointedOut: (id) => pointOut.find((p) => p.ruleId === filters.pointOut)?.rowIds.includes(id) ?? false,
-    })
-      // Rows of a hidden import drop out of the view (and thus the summary
-      // and selection), not just its group header.
-      .filter((row) => !(row.importId && hidden.has(row.importId)));
+    });
+    // Rows of a hidden import drop out of the view (and thus the summary and
+    // selection), not just its group header; under a question the band asks,
+    // they stay (withHiddenImports).
+    const { rows: filtered, hidden: hiddenMatch } = withHiddenImports(matched, filters, (id) => hidden.has(id));
     const accessors: Record<string, (row: TransactionRow) => unknown> = {
       date: (row) => row.date,
       descriptionRaw: (row) => row.descriptionRaw,
@@ -426,7 +429,7 @@ export function TransactionTable({
       split: (row) => splitsByTransaction[row.id]?.shares.length ?? 0,
       amountCents: (row) => row.amountCents,
     };
-    return sortRows(filtered, accessors[sort.sort] ?? accessors.date, sort.dir);
+    return { visible: sortRows(filtered, accessors[sort.sort] ?? accessors.date, sort.dir), hiddenMatch };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     data,
@@ -476,13 +479,6 @@ export function TransactionTable({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [data, visible, ledger, tabKey, hidden],
   );
-  // Rows of the current tab held out by a hidden import, said above the
-  // table with a way to show them: a hidden row is never silently absent.
-  const hiddenInTab = useMemo(() => {
-    const rows = filterByTab(data, tab).filter((r) => r.importId !== null && hidden.has(r.importId));
-    return { rows: rows.length, imports: new Set(rows.map((r) => r.importId)).size };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, hidden, tabKey]);
 
   // Groups open or closed. All opens with every group closed, an account's
   // tab with only its current period open, and with a filter or search
@@ -692,12 +688,12 @@ export function TransactionTable({
           </a>
         </p>
       )}
-      {!account && hiddenInTab.rows > 0 && (
+      {/* Rows held in a hidden import that match the view, said above the
+          table: a hidden row is never silently absent. */}
+      {!account && hiddenMatch.rows > 0 && hiddenMatch.shown && <p className="px-1 text-xs text-muted-foreground">{hiddenImportText(hiddenMatch, visible.length)}</p>}
+      {!account && hiddenMatch.rows > 0 && !hiddenMatch.shown && (
         <p className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-xs text-muted-foreground">
-          <span>
-            {hiddenInTab.rows} {hiddenInTab.rows === 1 ? 'row' : 'rows'} not shown: {hiddenInTab.rows === 1 ? 'it is' : 'they are'} in{' '}
-            {hiddenInTab.imports === 1 ? 'a hidden import' : `${hiddenInTab.imports} hidden imports`}.
-          </span>
+          <span>{hiddenImportText(hiddenMatch, visible.length)}</span>
           <button type="button" onClick={() => run(showAllImports)} className="min-h-8 text-blue-700 underline-offset-2 hover:underline dark:text-blue-400">
             Show them
           </button>

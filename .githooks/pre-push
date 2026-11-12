@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# The browser checks gate a push to master (E2E.md). Master deploys, and the
+# checks cannot run in CI (they need Docker and the local demo's Blob store),
+# so the push refuses unless `npm run e2e` passed on exactly the commit being
+# pushed. `npm run e2e` records that commit in the git directory after an
+# unfiltered run passes. Other branches deploy nothing and pass.
+set -euo pipefail
+RECORD="$(git rev-parse --git-path e2e-passed)"
+passed="$(head -n1 "$RECORD" 2>/dev/null || true)"
+status=0
+while read -r local_ref local_sha remote_ref remote_sha; do
+  case "$remote_ref" in
+    refs/heads/master | refs/heads/main) ;;
+    *) continue ;;
+  esac
+  # Deleting the branch pushes no commit.
+  if [[ "$local_sha" =~ ^0+$ ]]; then continue; fi
+  if [ "$local_sha" != "$passed" ]; then
+    echo "Push refused: the browser checks have not passed on $(git log --oneline -1 "$local_sha" 2>/dev/null || echo "$local_sha")." >&2
+    if [ -n "$passed" ]; then
+      echo "Last passing run: $(git log --oneline -1 "$passed" 2>/dev/null || echo "$passed") ($(sed -n 2p "$RECORD"))." >&2
+    else
+      echo "No passing run is recorded." >&2
+    fi
+    echo "Run npm run e2e on this commit, then push again." >&2
+    status=1
+  fi
+done
+exit $status

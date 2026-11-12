@@ -36,9 +36,19 @@ const shortDay = (iso: string, today: string) =>
 // with their rows, the statements recorded for it, and the uploads that fed
 // it. The reasoning sentence under the cycle is the page's anchor: it says how
 // sure the close is, in one line.
-export default async function AccountPage({ params }: { params: Promise<{ ledgerId: string }> }) {
+export default async function AccountPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ ledgerId: string }>;
+  // ?statement=<closing date>: open that statement for editing (the band's
+  // "Add totals").
+  // ?record=statement: open the form to record one ("Record it", "Record one").
+  searchParams: Promise<{ statement?: string | string[]; record?: string | string[] }>;
+}) {
   await requireUser();
   const { ledgerId } = await params;
+  const { statement: editParam, record: recordParam } = await searchParams;
   const view = await loadLedgerView();
   const ledger = view.ledgers.find((l) => l.id === ledgerId);
   if (!ledger) notFound();
@@ -204,7 +214,14 @@ export default async function AccountPage({ params }: { params: Promise<{ ledger
 
       <section id="statements" className="scroll-mt-16 space-y-2 text-xs">
         <h2 className="text-base font-semibold">Statements</h2>
-        <StatementsControl ledgerAccountId={ledgerId} statements={ledger.statements} today={today} kind={ledger.kind} />
+        <StatementsControl
+          ledgerAccountId={ledgerId}
+          statements={ledger.statements}
+          today={today}
+          kind={ledger.kind}
+          editDate={typeof editParam === 'string' ? editParam : null}
+          recordOpen={recordParam === 'statement'}
+        />
         <AccountClosed ledgerAccountId={ledgerId} closedOn={ledger.closedOn} today={today} />
       </section>
 

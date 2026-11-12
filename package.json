@@ -8,6 +8,7 @@
     "start": "next start",
     "test": "vitest run",
     "test:db": "scripts/test-db.sh",
+    "e2e": "scripts/e2e-local.sh",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:migrate:dev": "DRIZZLE_ENV_FILE=.env.development.local drizzle-kit migrate",
@@ -17,7 +18,8 @@
     "demo:migrate": "tsx db/demo-migrate.ts",
     "demo:reset": "tsx db/demo-reset-cli.ts",
     "guard:fingerprint": "tsx db/fingerprint-env.ts",
-    "auth:reset": "tsx db/auth-reset.ts"
+    "auth:reset": "tsx db/auth-reset.ts",
+    "prepare": "git rev-parse --is-inside-work-tree >/dev/null 2>&1 && git config core.hooksPath .githooks || true"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
@@ -43,6 +45,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.0",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^26.1.1",
     "@types/react": "^19.2.17",

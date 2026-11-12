@@ -3,6 +3,7 @@ import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import unit from '../vitest.config';
 import database from '../vitest.db.config';
+import browser from '../playwright.e2e.config';
 
 // A test file outside the directories a runner covers does not fail, it
 // never runs (CLAUDE.md, Architecture): a helper's test written under db/ as
@@ -12,7 +13,7 @@ import database from '../vitest.db.config';
 
 const ROOT = join(__dirname, '..');
 const SKIP = new Set(['node_modules', '.next', '.git', '.vercel', '.cursor']);
-const TEST_FILE = /\.(test|dbtest|spec)\.[cm]?[jt]sx?$/;
+const TEST_FILE = /\.(test|dbtest|spec|e2e)\.[cm]?[jt]sx?$/;
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -34,7 +35,9 @@ function globToRegExp(glob: string): RegExp {
 }
 
 describe('test file locations', () => {
-  const patterns = [...(unit.test?.include ?? []), ...(database.test?.include ?? [])].map(globToRegExp);
+  // The browser checks (E2E.md): testMatch under testDir.
+  const e2e = [browser.testMatch].flat().map((m) => `${browser.testDir}/${String(m)}`);
+  const patterns = [...(unit.test?.include ?? []), ...(database.test?.include ?? []), ...e2e].map(globToRegExp);
   const files = walk(ROOT);
 
   it('finds the test files, so a pass is not vacuous', () => {
@@ -42,7 +45,12 @@ describe('test file locations', () => {
     expect(files).toContain('lib/test-locations.test.ts');
   });
 
-  it('every test file is run by the unit or the database suite', () => {
+  it('finds the browser checks too', () => {
+    expect(files).toContain('e2e/release.e2e.ts');
+    expect(patterns.some((p) => p.test('e2e/release.e2e.ts'))).toBe(true);
+  });
+
+  it('every test file is run by the unit, database or browser suite', () => {
     expect(files.filter((f) => !patterns.some((p) => p.test(f)))).toEqual([]);
   });
 

@@ -9,10 +9,10 @@ import { useOrientationDismissed } from '@/app/_lib/use-orientation';
 
 // First-visit pointers for the public demo (lib/demo/orientation.ts). Once
 // dismissed, the banner's "Things to try" and Reset demo bring it back.
-export function DemoOrientation({ verifyHref }: { verifyHref: string }) {
+export function DemoOrientation({ verifyHref, dismissed: fromServer }: { verifyHref: string; dismissed: boolean }) {
   const pathname = usePathname();
-  const dismissed = useOrientationDismissed();
-  if (dismissed !== false || pathname.startsWith('/s/')) return null;
+  const dismissed = useOrientationDismissed(fromServer);
+  if (dismissed || pathname.startsWith('/s/')) return null;
 
   const dismiss = () => setOrientationDismissed(true);
 

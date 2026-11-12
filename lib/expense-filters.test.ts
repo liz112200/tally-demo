@@ -15,6 +15,9 @@ import {
   summarizeView,
   type ExpenseFilters,
   type FilterableTransaction,
+  asksBandQuestion,
+  hiddenImportText,
+  withHiddenImports,
 } from './expense-filters';
 
 const TODAY = '2026-07-17';
@@ -361,5 +364,63 @@ describe('the raised filter', () => {
     // Without the check, nothing is offered.
     expect(applyExpenseFilters(rows, filters, ctx())).toEqual([]);
     expect(readFilters(new URLSearchParams('review=raised')).review).toBe('raised');
+  });
+});
+
+describe('hidden imports under a band question', () => {
+  // Invented rows: two in a hidden import, one in a shown import, one typed by hand.
+  const rows = [
+    { id: 'a', importId: 'hidden-1' },
+    { id: 'b', importId: 'hidden-1' },
+    { id: 'c', importId: 'shown' },
+    { id: 'd', importId: null },
+  ];
+  const isHidden = (id: string) => id === 'hidden-1';
+
+  it('knows which filters the band opens', () => {
+    expect(asksBandQuestion(DEFAULT_FILTERS)).toBe(false);
+    expect(asksBandQuestion({ ...DEFAULT_FILTERS, q: 'zelle' })).toBe(false);
+    expect(asksBandQuestion({ ...DEFAULT_FILTERS, review: 'raised' })).toBe(true);
+    expect(asksBandQuestion({ ...DEFAULT_FILTERS, review: 'flagged' })).toBe(true);
+    expect(asksBandQuestion({ ...DEFAULT_FILTERS, pointOut: 'rule-1' })).toBe(true);
+  });
+
+  it('shows every row a band question matches, hidden imports included, and says how many', () => {
+    for (const filters of [{ ...DEFAULT_FILTERS, pointOut: 'rule-1' }, { ...DEFAULT_FILTERS, review: 'raised' as const }]) {
+      const v = withHiddenImports(rows, filters, isHidden);
+      expect(v.rows.map((r) => r.id)).toEqual(['a', 'b', 'c', 'd']);
+      expect(v.hidden).toEqual({ rows: 2, imports: 1, shown: true });
+    }
+  });
+
+  it('leaves hidden rows out of browsing, counting only those that match the view', () => {
+    const v = withHiddenImports(rows, DEFAULT_FILTERS, isHidden);
+    expect(v.rows.map((r) => r.id)).toEqual(['c', 'd']);
+    expect(v.hidden).toEqual({ rows: 2, imports: 1, shown: false });
+    // A search that matches none of the hidden rows says none are held back.
+    expect(withHiddenImports([rows[2]], { ...DEFAULT_FILTERS, q: 'x' }, isHidden).hidden).toEqual({ rows: 0, imports: 0, shown: false });
+  });
+});
+
+describe('the line about rows in hidden imports', () => {
+  it('under a band question, is worded for how many of the view they are', () => {
+    expect(hiddenImportText({ rows: 1, imports: 1, shown: true }, 1)).toBe(
+      'This row is in a hidden import, shown here because the band asks about it. The import stays hidden.',
+    );
+    expect(hiddenImportText({ rows: 7, imports: 3, shown: true }, 7)).toBe(
+      'All 7 rows are in 3 hidden imports, shown here because the band asks about them. The imports stay hidden.',
+    );
+    expect(hiddenImportText({ rows: 1, imports: 1, shown: true }, 4)).toBe(
+      '1 of these rows is in a hidden import, shown here because the band asks about it. The import stays hidden.',
+    );
+    expect(hiddenImportText({ rows: 2, imports: 1, shown: true }, 5)).toBe(
+      '2 of these rows are in a hidden import, shown here because the band asks about them. The import stays hidden.',
+    );
+  });
+
+  it('while browsing, says they are neither listed nor counted', () => {
+    expect(hiddenImportText({ rows: 12, imports: 2, shown: false }, 40)).toBe('12 rows not shown or counted here: they are in 2 hidden imports.');
+    expect(hiddenImportText({ rows: 1, imports: 1, shown: false }, 40)).toBe('1 row not shown or counted here: it is in a hidden import.');
+    expect(hiddenImportText({ rows: 0, imports: 0, shown: false }, 40)).toBeNull();
   });
 });

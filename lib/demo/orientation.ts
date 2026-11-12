@@ -32,19 +32,51 @@ export function orientationSteps(verifyHref: string): { href: string; title: str
   ];
 }
 
-const KEY = 'demo-orientation-dismissed';
+// The dismissal is a cookie, so the server renders the strip already in its
+// final state: kept in localStorage, it was unknown to the server, and the
+// strip appeared after load, pushing the band and cards down (2026-11-12).
+export const ORIENTATION_COOKIE = 'demo-orientation-dismissed';
+const KEY = ORIENTATION_COOKIE;
 const EVENT = 'demo-orientation-change';
 type Store = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
 // What this page view knows when storage refuses.
 let remembered: boolean | null = null;
 
+// Read by the server from the request's cookie.
+export function dismissedByCookie(value: string | undefined): boolean {
+  return value === '1';
+}
+
+const cookieStore: Store = {
+  getItem: (k) => {
+    const pair = document.cookie.split('; ').find((c) => c.startsWith(`${k}=`));
+    return pair ? decodeURIComponent(pair.slice(k.length + 1)) : null;
+  },
+  setItem: (k, v) => {
+    document.cookie = `${k}=${encodeURIComponent(v)}; path=/; max-age=31536000; samesite=lax`;
+  },
+  removeItem: (k) => {
+    document.cookie = `${k}=; path=/; max-age=0; samesite=lax`;
+  },
+};
+
+let adopted = false;
 function storage(): Store | null {
-  try {
-    return typeof window === 'undefined' ? null : window.localStorage;
-  } catch {
-    return null;
+  if (typeof window === 'undefined') return null;
+  // A dismissal kept in localStorage before the cookie, carried over once.
+  if (!adopted) {
+    adopted = true;
+    try {
+      if (window.localStorage.getItem(KEY) === '1') {
+        cookieStore.setItem(KEY, '1');
+        window.localStorage.removeItem(KEY);
+      }
+    } catch {
+      // Storage refused: nothing to carry over.
+    }
   }
+  return cookieStore;
 }
 
 export function isOrientationDismissed(store: Store | null = storage()): boolean {

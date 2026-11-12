@@ -111,7 +111,7 @@ export function needsYouItems(
       subject: m.name,
       text: `a statement has closed since the one of ${day(m.since)} and is not recorded.`,
       action: 'Record it',
-      href: account(m.ledgerId, 'statements'),
+      href: `/accounts/${m.ledgerId}?record=statement#statements`,
     });
   }
   for (const n of facts.noStatements) {
@@ -121,7 +121,7 @@ export function needsYouItems(
       subject: n.name,
       text: 'no statement recorded, so its rows have no cycle to sit in.',
       action: 'Record one',
-      href: account(n.ledgerId, 'statements'),
+      href: `/accounts/${n.ledgerId}?record=statement#statements`,
     });
   }
   for (const w of facts.withoutTotals) {
@@ -131,7 +131,8 @@ export function needsYouItems(
       subject: w.name,
       text: `the ${day(w.closingDate)} statement has no totals recorded, so nothing compares it with its rows.`,
       action: 'Add totals',
-      href: account(w.ledgerId, 'statements'),
+      // Opens that statement's form, not the list it sits in (2026-11-11).
+      href: `/accounts/${w.ledgerId}?statement=${w.closingDate}#statements`,
     });
   }
   if (facts.flaggedRows > 0) {

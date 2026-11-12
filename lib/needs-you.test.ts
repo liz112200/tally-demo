@@ -52,6 +52,19 @@ describe('needsYouItems', () => {
     ]);
   });
 
+  it('lands Add totals on that statement’s form, not on the list it sits in', () => {
+    const [item] = needsYouItems({ ...none, withoutTotals: [{ ledgerId: 'l2', name: 'Checking', closingDate: '2026-08-27' }] }, format);
+    expect([item.action, item.href]).toEqual(['Add totals', '/accounts/l2?statement=2026-08-27#statements']);
+  });
+
+  it('lands Record it and Record one on the form that records a statement', () => {
+    const items = needsYouItems({ ...none, missingStatements: [{ ledgerId: 'l4', name: 'Card', since: '2026-07-11' }], noStatements: [{ ledgerId: 'l5', name: 'Savings' }] }, format);
+    expect(items.map((i) => [i.action, i.href])).toEqual([
+      ['Record it', '/accounts/l4?record=statement#statements'],
+      ['Record one', '/accounts/l5?record=statement#statements'],
+    ]);
+  });
+
   it('a statement whose totals agree with its rows raises nothing', () => {
     const agrees = needsYouItems(
       {

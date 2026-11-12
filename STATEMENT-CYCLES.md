@@ -89,6 +89,22 @@ back (dates without a year are their latest occurrence) and records nothing
 while any part of it is unreadable. The owner's dates live only in the
 database, never in the repository.
 
+A recorded statement is changed with Edit beside it (2026-11-11), in place:
+every field as entered, a blank total cleared and "closing day changed"
+undone, unlike recording, which only adds what was not known. The closing
+date is the statement and is not edited; to move it, remove it and record
+it. "Record a statement" refuses a closing date already recorded and points
+to Edit: it used to merge into the existing statement while saying
+"recorded", a second, silent way to change one. A pasted list still merges,
+since it carries closing dates only and adds nothing to a known one. A
+statement from a statement check keeps the check's period and totals, which
+its rows matched to the cent; an edit changing them is refused, and its next
+closing date and closing-day change remain editable. A check that passes over
+a statement recorded by hand writes its own figures and the statement becomes
+the check's ("from a statement check"); before 2026-11-11 the label stayed
+the owner's over the check's figures. The band's "Add totals" opens that
+statement's form (`?statement=<closing date>`).
+
 ## The period view (decided and built 2026-11-03)
 
 Superseded on 2026-11-05 by the accounts board (ACCOUNTS-BOARD.md): the
