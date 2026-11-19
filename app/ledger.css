@@ -202,3 +202,15 @@ html.dark[data-demo] .ledger-nav nav a:is([aria-current], :hover),
 html.dark[data-demo] .ledger-identity > span { background: var(--accent); color: var(--accent-foreground) }
 html.dark[data-demo] .ledger-identity { border-color: var(--border) }
 html.dark[data-demo] [data-slot="dialog-portal"]:has(.ledger-drawer) [data-slot="dialog-overlay"] { background: #0004 }
+
+html.dark[data-demo]:is(:not([data-dark-palette]), [data-dark-palette="carbon"]) {
+  @media (min-width: 850px) {
+    & .ledger-nav { border-right: 1px solid #686868 }
+  }
+  @media (width > 28rem) {
+    & .ledger-drawer[data-slot="dialog-content"] {
+      border-left: 2px solid #858585;
+      box-shadow: -8px 0 24px rgb(0 0 0 / 40%);
+    }
+  }
+}
