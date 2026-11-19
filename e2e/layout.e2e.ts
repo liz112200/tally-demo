@@ -58,6 +58,16 @@ test('the tips strip is in the server’s page in its final state, and dismissin
 
 test('demo palettes change the drawer and survive reload and light mode', async ({ page }) => {
   await page.goto('/settings#appearance');
+  const carbon = page.getByRole('button', { name: /Carbon/ });
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.reload();
+  await expect(carbon).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(16, 16, 16)');
+  await page.goto('/expenses/receipt/sample-dinner');
+  const carbonDrawer = page.getByRole('dialog', { name: 'Dinner at Alba' });
+  await expect(carbonDrawer).toHaveCSS('background-color', 'rgb(32, 32, 32)');
+  await expect(carbonDrawer.getByRole('button', { name: 'Save split' })).toHaveCSS('background-color', 'rgb(219, 219, 219)');
+  await page.goto('/settings#appearance');
   const palette = page.getByRole('button', { name: /Graphite/ });
   await palette.click();
   await expect(palette).toHaveAttribute('aria-pressed', 'true');

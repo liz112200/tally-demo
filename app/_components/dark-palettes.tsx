@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Check } from 'lucide-react';
 
 const palettes = [
+  ['carbon', 'Carbon', 'Black & silver · default'],
   ['graphite', 'Graphite', 'Neutral charcoal · silver'],
   ['ink', 'Ink', 'Near-black · white'],
   ['slate', 'Slate', 'Cool gray · ice blue'],
@@ -15,7 +16,10 @@ export function DarkPalettes() {
   const [active, setActive] = useState('');
   useEffect(() => {
     const root = document.documentElement;
-    const sync = () => setActive(root.classList.contains('dark') ? root.dataset.darkPalette || 'pine' : '');
+    const sync = () => {
+      const saved = palettes.find(([id]) => id === root.dataset.darkPalette);
+      setActive(root.classList.contains('dark') ? (saved ?? palettes[0])[0] : '');
+    };
     sync();
     const observer = new MutationObserver(sync);
     observer.observe(root, { attributes: true, attributeFilter: ['class', 'data-dark-palette'] });

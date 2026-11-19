@@ -24,6 +24,21 @@ html[data-demo] {
 }
 html.dark[data-demo], .palette-preview {
   color-scheme: dark;
+  --background: #101010;
+  --foreground: #f0f0f0;
+  --card: #202020;
+  --popover: #202020;
+  --primary: #dbdbdb;
+  --primary-foreground: #101010;
+  --muted: #292929;
+  --muted-foreground: #bcbcbc;
+  --accent: #333333;
+  --accent-foreground: #f0f0f0;
+  --border: #434343;
+  --input: #646464;
+  --ledger-rail: #101010;
+}
+html.dark[data-demo][data-dark-palette="pine"], .palette-preview[data-dark-palette="pine"] {
   --background: #151c20;
   --foreground: #e9efee;
   --card: #1e292d;
