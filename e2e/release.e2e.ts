@@ -199,6 +199,8 @@ test('a difference is accepted only with a typed reason', async ({ page }) => {
   const differs = (await band(page)).find((l) => l.action === 'Compare');
   expect(differs, 'the demo opens with a statement difference').toBeTruthy();
   await settled(page, differs!.href);
+  await expect(page.getByRole('button', { name: 'Accept this difference' })).toHaveCount(0);
+  await page.getByRole('button', { name: /Review difference/ }).first().click();
   const accept = page.getByRole('button', { name: 'Accept this difference' }).first();
   await expect(accept).toBeDisabled();
   const note = page.locator('textarea').first();

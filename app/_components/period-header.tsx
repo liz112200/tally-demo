@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useIsDemo } from '@/app/_lib/use-demo';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { recordStatementReview } from '@/app/_actions/reviews';
@@ -48,6 +49,8 @@ export function PeriodHeader({
   today: string;
 }) {
   const Chevron = collapsed ? ChevronRight : ChevronDown;
+  const demo = useIsDemo();
+  const [showDifference, setShowDifference] = useState(false);
   const day = (iso: string) => {
     const d = new Date(`${iso}T00:00:00Z`);
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(iso.slice(0, 4) === today.slice(0, 4) ? {} : { year: 'numeric' }), timeZone: 'UTC' });
@@ -130,19 +133,27 @@ export function PeriodHeader({
             <span className="font-mono tabular-nums">{usd(group.chargesCents)}</span> {out} ·{' '}
             <span className="font-mono tabular-nums">{usd(group.creditsCents)}</span> {back}
           </span>
-          {chip && <span className={`whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-medium ${chipTone[chip.tone]}`}>{chip.text}</span>}
+          {demo && differs && chip ? (
+            <button type="button" aria-expanded={showDifference} onClick={() => setShowDifference(!showDifference)}
+              className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs ${chipTone.warn}`}>
+              {chip.text} · {reviewApplies(note?.review ?? undefined, comparison!) ? 'Reviewed' : 'Review difference'}
+              <ChevronDown className={`size-3 ${showDifference ? 'rotate-180' : ''}`} aria-hidden />
+            </button>
+          ) : chip && <span className={`whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-medium ${chipTone[chip.tone]}`}>{chip.text}</span>}
         </div>
-        {explained && <p className="pl-7 pt-0.5 text-xs text-amber-800 dark:text-amber-300">{explained}</p>}
         {differs && s && (
-          <DifferenceReview
-            ledgerId={ledgerId}
-            closingDate={s.closingDate}
-            diff={comparison!}
-            note={note}
-            usd={usd}
-            day={(iso) => day(iso.slice(0, 10))}
-            words={[out, back]}
-          />
+          <div hidden={demo && !showDifference}>
+            {explained && <p className="pl-7 pt-1 text-xs text-amber-800 dark:text-amber-300">{explained}</p>}
+            <DifferenceReview
+              ledgerId={ledgerId}
+              closingDate={s.closingDate}
+              diff={comparison!}
+              note={note}
+              usd={usd}
+              day={(iso) => day(iso.slice(0, 10))}
+              words={[out, back]}
+            />
+          </div>
         )}
         {notes.length > 0 && <p className="pl-7 pt-0.5 text-xs text-muted-foreground">{notes.join(' · ')}</p>}
       </td>

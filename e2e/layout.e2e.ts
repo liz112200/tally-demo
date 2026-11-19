@@ -63,11 +63,12 @@ test('demo palettes change the drawer and survive reload and light mode', async 
   await page.reload();
   await expect(carbon).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(16, 16, 16)');
-  await expect(page.locator('.ledger-nav')).toHaveCSS('border-right', '1px solid rgb(104, 104, 104)');
+  await expect(page.locator('.ledger-nav')).toHaveCSS('border-right', '1px solid rgb(65, 65, 65)');
   await page.goto('/expenses/receipt/sample-dinner');
   const carbonDrawer = page.getByRole('dialog', { name: 'Dinner at Alba' });
   await expect(carbonDrawer).toHaveCSS('background-color', 'rgb(32, 32, 32)');
-  await expect(carbonDrawer).toHaveCSS('border-left', '2px solid rgb(133, 133, 133)');
+  await expect(carbonDrawer).toHaveCSS('border-left', '1px solid rgb(84, 84, 84)');
+  await expect(carbonDrawer).toHaveCSS('border-top', '1px solid rgb(67, 67, 67)');
   await expect(carbonDrawer.getByRole('button', { name: 'Save split' })).toHaveCSS('background-color', 'rgb(219, 219, 219)');
   await page.goto('/settings#appearance');
   const palette = page.getByRole('button', { name: /Graphite/ });
@@ -84,6 +85,18 @@ test('demo palettes change the drawer and survive reload and light mode', async 
   const drawer = page.getByRole('dialog', { name: 'Dinner at Alba' });
   await expect(drawer).toBeVisible();
   expect(await drawer.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe('rgb(39, 39, 43)');
+});
+
+test('bank import review shows decisions before history', async ({ page }) => {
+  const ids = await accounts(page);
+  await page.goto(`/accounts/${ids.Amex}#review`);
+  const review = page.locator('#review');
+  await expect(review.getByRole('button', { name: 'Same purchase' })).toBeVisible();
+  const history = review.locator('details');
+  await expect(history.locator('ul')).toBeHidden();
+  await history.locator('summary').click();
+  await expect(history.locator('ul')).toBeVisible();
+  await expect(review.getByRole('button', { name: 'Same purchase' })).toHaveCount(1);
 });
 
 test('bank history is collapsed while next actions stay visible', async ({ page }) => {

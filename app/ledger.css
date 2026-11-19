@@ -205,12 +205,13 @@ html.dark[data-demo] [data-slot="dialog-portal"]:has(.ledger-drawer) [data-slot=
 
 html.dark[data-demo]:is(:not([data-dark-palette]), [data-dark-palette="carbon"]) {
   @media (min-width: 850px) {
-    & .ledger-nav { border-right: 1px solid #686868 }
+    & .ledger-nav { border-right: 1px solid #414141 }
   }
+  & .ledger-drawer[data-slot="dialog-content"] { border-top: 1px solid var(--border) }
   @media (width > 28rem) {
     & .ledger-drawer[data-slot="dialog-content"] {
-      border-left: 2px solid #858585;
-      box-shadow: -8px 0 24px rgb(0 0 0 / 40%);
+      border-left: 1px solid #545454;
+      box-shadow: -6px 0 20px rgb(0 0 0 / 22%);
     }
   }
 }
