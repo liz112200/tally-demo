@@ -10,19 +10,24 @@ import { explainItemShares } from '@/lib/split';
 import { saveItemSplit } from '@/app/_actions/splits';
 import type { ItemSplitState } from '@/app/_lib/schema';
 import type { PersonOption } from './split-editor';
+import { useIsDemo } from '@/app/_lib/use-demo';
+import { ItemAssignees, assignmentLabel } from './item-assignees';
 import { useReportSuccess } from './page-result';
 
 const money = (value: number) => formatUSD(toCents(value));
 const initial: ItemSplitState = {};
 
-export function ReceiptSplit({ receipt, persons, amountCents, sample = false, onBack, onSaved }: {
+export function ReceiptSplit({ receipt, persons, amountCents, sample = false, embedded = false, onBack, onSaved }: {
   receipt: ReceiptView;
   persons: PersonOption[];
   amountCents: number;
   sample?: boolean;
+  embedded?: boolean;
   onBack?: () => void;
   onSaved?: () => void;
 }) {
+  const demo = useIsDemo();
+  const [beforeBulk, setBeforeBulk] = useState<Map<string, string[]> | null>(null);
   const owner = persons.find((p) => p.isOwner);
   const [assignments, setAssignments] = useState(() => new Map(receipt.items.map((item) =>
     [item.id, item.assignedPersonIds.length ? item.assignedPersonIds : owner ? [owner.id] : []],
@@ -33,7 +38,7 @@ export function ReceiptSplit({ receipt, persons, amountCents, sample = false, on
   const [state, dispatch, pending] = useActionState(saveItemSplit, initial);
   // The wizard closes on success and reports to its parent page. The standalone
   // editor stays here with a persistent confirmation and navigation.
-  useReportSuccess(onSaved ? state : initial);
+  useReportSuccess(onSaved ? state : initial, demo ? '/people' : undefined);
   const savedHeading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     if (!state.ok) return;
@@ -51,6 +56,9 @@ export function ReceiptSplit({ receipt, persons, amountCents, sample = false, on
   let problem: string | undefined;
   try {
     if (!owner) throw new Error('Owner person missing');
+    if (demo && receipt.items.some((item) => !assignments.get(item.id)?.length)) {
+      throw new Error('Choose at least one person for each item.');
+    }
     if ([...assignments.values()].some((ids) => ids.some((id) => !names.has(id)))) {
       throw new Error('An item includes an inactive person. Reassign that item before saving.');
     }
@@ -62,10 +70,13 @@ export function ReceiptSplit({ receipt, persons, amountCents, sample = false, on
   } catch (error) {
     problem = error instanceof Error ? error.message : 'Check item assignments.';
   }
+  const otherDiners = new Set([...assignments].filter(([id]) => id !== editing).flatMap(([, ids]) => ids));
+  const mealGroup = persons.filter((p) => otherDiners.has(p.id)).map((p) => p.id);
   const guests = shares.filter((s) => s.personId !== owner?.id);
   const sharedTotal = guests.reduce((sum, s) => sum + s.amountCents, 0);
   function assign(itemId: string, ids: string[]) {
-    setAssignments((prev) => new Map(prev).set(itemId, ids.length ? ids : owner ? [owner.id] : []));
+    setBeforeBulk(null);
+    setAssignments((prev) => new Map(prev).set(itemId, demo || ids.length ? ids : owner ? [owner.id] : []));
   }
   function save() {
     const data = new FormData();
@@ -97,16 +108,17 @@ export function ReceiptSplit({ receipt, persons, amountCents, sample = false, on
 
   const pill = 'min-h-9 rounded-lg border border-input px-3 text-sm font-medium hover:bg-muted aria-pressed:border-primary aria-pressed:bg-primary/10 aria-pressed:text-primary pointer-coarse:min-h-11';
   return (
-    <div className="grid items-start gap-4 md:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
-      <section aria-label="Itemized receipt" className="min-w-0 rounded-xl border bg-card p-4 sm:p-5">
+    <div className={embedded ? "ledger-receipt" : "grid items-start gap-4 md:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]"}>
+      <section aria-label="Itemized receipt" className={embedded ? "min-w-0" : "min-w-0 rounded-xl border bg-card p-4 sm:p-5"}>
+        {embedded ? <h3 className="text-sm font-semibold">Receipt items</h3> : <>
         <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
           <ReceiptText className="size-4 text-primary" aria-hidden />
           {receipt.date && <><time dateTime={receipt.date}>{receipt.date}</time><span>·</span></>}
           You paid
         </div>
-        <h2 className="mt-2 break-words text-xl font-semibold tracking-tight">{receipt.merchant || 'Itemized receipt'}</h2>
+        <h2 className="mt-2 break-words text-xl font-semibold tracking-tight">{receipt.merchant || 'Itemized receipt'}</h2></>}
         <ul className="mt-4 divide-y border-y">
-          {receipt.items.map((item) => {
+          {receipt.items.map((item, index) => {
             const ids = assignments.get(item.id) ?? [];
             const selected = editing === item.id;
             const quickPair = owner && partner;
@@ -127,13 +139,15 @@ export function ReceiptSplit({ receipt, persons, amountCents, sample = false, on
                 <button type="button" className="flex w-full items-center gap-3 py-3 text-left" aria-expanded={selected}
                   onClick={() => setEditing(selected ? undefined : item.id)}>
                   <span className="min-w-0 flex-1 break-words font-medium">{item.quantity !== 1 && <span>{item.quantity} × </span>}{item.description}
-                    <span className="block text-xs font-normal text-muted-foreground">{ids.map(name).join(' · ') || 'You'}</span>
+                    <span className="block text-xs font-normal text-muted-foreground">{demo ? assignmentLabel(ids, persons) : ids.map(name).join(' · ') || 'You'}</span>
                   </span>
                   <span className="font-mono text-sm">{money(item.amountCents)}</span>
                   <ChevronDown className={'size-4 text-muted-foreground ' + (selected ? 'rotate-180' : '')} aria-hidden />
                 </button>
                 {selected && <div className="space-y-2 pb-3">
-                  {quickPair ? <>
+                  {demo ? <ItemAssignees mealGroup={mealGroup} persons={persons} ids={ids} item={item.description} pending={pending}
+                    previous={index > 0 ? { description: receipt.items[index - 1].description, ids: assignments.get(receipt.items[index - 1].id) ?? [] } : undefined}
+                    onChange={(next) => assign(item.id, next)} /> : quickPair ? <>
                     <div role="group" aria-label={'Assign ' + item.description} className="flex flex-wrap gap-1">
                       {[{ label: 'You', group: [owner.id] }, { label: 'Both', group: [owner.id, partner.id] },
                         { label: partner.name, group: [partner.id] }].map(({ label, group }) => {
@@ -145,7 +159,12 @@ export function ReceiptSplit({ receipt, persons, amountCents, sample = false, on
                     {persons.length > 2 && <details><summary className="cursor-pointer py-1 text-xs text-muted-foreground">More people</summary>{picker}</details>}
                   </> : picker}
                   <button type="button" className="text-xs text-muted-foreground underline underline-offset-2" disabled={pending}
-                    onClick={() => setAssignments(new Map(receipt.items.map((i) => [i.id, [...ids]])))}>Apply to all items</button>
+                    onClick={() => {
+                      if (demo) setBeforeBulk((previous) => previous ?? assignments);
+                      setAssignments(new Map(receipt.items.map((i) => [i.id, [...ids]])));
+                    }}>Apply to all items</button>
+                  {demo && beforeBulk && <button type="button" className="ml-3 text-xs font-medium text-primary underline" disabled={pending}
+                    onClick={() => { setAssignments(beforeBulk); setBeforeBulk(null); }}>Undo</button>}
                 </div>}
               </li>
             );
@@ -159,7 +178,7 @@ export function ReceiptSplit({ receipt, persons, amountCents, sample = false, on
         {amountCents !== receipt.totalCents && <p className="mt-2 text-xs">Transaction amount {money(amountCents)}{receipt.mismatchNote && ' · ' + receipt.mismatchNote}</p>}
         {itemTotal !== receipt.totalCents && <p className="mt-2 text-xs text-warning">Items, tax and tip add up to {money(itemTotal)}. The split uses that amount.</p>}
       </section>
-      <section aria-label="Split preview" className="min-w-0 rounded-xl border bg-card p-4 sm:p-5">
+      <section aria-label="Split preview" className={embedded ? "min-w-0" : "min-w-0 rounded-xl border bg-card p-4 sm:p-5"}>
         <h2 className="mb-3 text-base font-semibold">Split preview</h2>
         {problem ? <p role="alert" className="text-sm text-destructive">{problem}</p> : <>
           <div aria-live="polite" aria-atomic="true">

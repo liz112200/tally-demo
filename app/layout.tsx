@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import { cookies } from 'next/headers';
 import './globals.css';
+import './ledger.css';
+import { DemoProvider } from './_lib/use-demo';
 import { Geist, Geist_Mono } from 'next/font/google';
 import { cn } from '@/lib/utils';
 import { SiteHeader } from '@/app/_components/site-header';
@@ -43,10 +45,12 @@ export default async function RootLayout({
       {/* Browser extensions (Grammarly) add attributes to <body> before
           hydration; suppress the resulting mismatch warning, as on <html>. */}
       <body className="min-h-dvh" suppressHydrationWarning>
-        {isDemoMode() && <DemoBanner sourceUrl={DEMO_SOURCE_URL} orientationDismissed={orientationDismissed} />}
-        <SiteHeader demo={isDemoMode()} />
-        {isDemoMode() && <DemoOrientationStrip dismissed={orientationDismissed} />}
-        {children}
+        <DemoProvider demo={isDemoMode()}>
+          <SiteHeader demo={isDemoMode()} />
+          {isDemoMode() && <DemoBanner sourceUrl={DEMO_SOURCE_URL} orientationDismissed={orientationDismissed} />}
+          {isDemoMode() && <DemoOrientationStrip dismissed={orientationDismissed} />}
+          {children}
+        </DemoProvider>
       </body>
     </html>
   );

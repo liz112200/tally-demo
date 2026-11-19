@@ -1,43 +1,55 @@
 import { expect, test } from '@playwright/test';
 
-test('the dinner link opens the receipt, explains a reassignment, and saves it to Expenses', async ({ page }) => {
+test('sample and transaction share the Ledger editor and bulk assignments persist', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('link', { name: 'Split a sample dinner' }).click();
-  await expect(page.getByRole('heading', { name: 'Dinner at Alba' })).toBeVisible();
-  const preview = page.getByRole('region', { name: 'Split preview' });
-  const bread = page.getByRole('group', { name: 'Assign Garlic bread', exact: true });
-  await expect(bread.getByRole('button', { name: 'Both' })).toHaveAttribute('aria-pressed', 'true');
+  const drawer = page.getByRole('dialog', { name: 'Dinner at Alba' });
+  const method = drawer.getByLabel('Split method');
+  await expect(method).toHaveValue('item');
+  const bounds = (await drawer.boundingBox())!;
+  expect(bounds.y).toBe(0);
+  expect(bounds.x + bounds.width).toBe(page.viewportSize()!.width);
+  const bread = drawer.getByRole('group', { name: 'Assign Garlic bread', exact: true });
+  const preview = drawer.getByRole('region', { name: 'Split preview' });
   await expect(preview.locator('[aria-live]')).toContainText('$26.00');
+  await bread.getByRole('button', { name: /^Everyone/ }).click();
   await bread.getByRole('button', { name: 'Alex', exact: true }).click();
+  await expect(drawer.getByText('Everyone except Alex')).toBeVisible();
+  await drawer.getByRole('button', { name: 'Apply to all items' }).click();
+  await expect(drawer.getByText('Everyone except Alex', { exact: true })).toHaveCount(3);
+  await drawer.getByRole('button', { name: 'Undo' }).click();
+  await expect(drawer.getByText('Everyone except Alex', { exact: true })).toHaveCount(1);
+  await bread.getByRole('button', { name: 'Meal group (2)' }).click();
+  await expect(preview.locator('[aria-live]')).toContainText('$26.00');
+  await bread.getByRole('button', { name: 'Same as previous' }).click();
   await expect(preview.locator('[aria-live]')).toContainText('$30.00');
-  const alex = preview.locator('details').filter({ has: page.locator('summary', { hasText: 'Alex’s share' }) });
-  await alex.locator('summary').click();
-  await expect(alex.getByText('Rigatoni + Garlic bread')).toBeVisible();
-  await expect(alex.getByText('$24.00', { exact: true })).toBeVisible();
-  await expect(alex.getByText('$6.00', { exact: true })).toBeVisible();
-  await preview.getByRole('button', { name: 'Save split' }).click();
-  await expect(page.getByRole('heading', { name: 'Split saved' })).toBeFocused();
-  await expect(page.getByRole('button', { name: 'Save split' })).toHaveCount(0);
-  await expect(page.getByRole('link', { name: 'Try bank sync' })).toHaveAttribute('href', '/accounts/logins');
-  const expenseUrl = await page.getByRole('link', { name: 'View expense' }).getAttribute('href');
-  expect(expenseUrl).toMatch(/^\/expenses\?tx=/);
-  await page.getByRole('link', { name: 'View balances' }).click();
-  await expect(page).toHaveURL(/\/people\?person=/);
-  await page.goto(expenseUrl!);
-  await page.getByRole('link', { name: 'Split by item' }).click();
+  await method.selectOption('percent');
+  await expect(drawer.getByRole('group', { name: 'Participants' })).toBeVisible();
+  await method.selectOption('item');
   await expect(preview.locator('[aria-live]')).toContainText('$30.00');
-  // Restore the shared starter assignment for the phone check and the local demo.
-  await page.getByRole('button', { name: /Garlic bread/ }).click();
-  await bread.getByRole('button', { name: 'Both' }).click();
   await preview.getByRole('button', { name: 'Save split' }).click();
-  await expect(page.getByRole('heading', { name: 'Split saved' })).toBeFocused();
-  await page.getByRole('link', { name: 'Back to expense' }).click();
-  await expect(page.getByRole('link', { name: 'Split by item' })).toBeVisible();
+  await expect(drawer).toHaveCount(0);
+  await expect(page).not.toHaveURL(/split=item/);
+  await expect(page.getByRole('link', { name: 'View balances', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Edit split', exact: true }).click();
+  await expect(method).toHaveValue('item');
+  await expect(preview.locator('[aria-live]')).toContainText('$30.00');
+  // No dish is shared on reopen, so the first item starts expanded.
+  await drawer.getByRole('button', { name: /Garlic bread/ }).click();
+  await bread.getByRole('button', { name: 'You', exact: true }).click();
+  await preview.getByRole('button', { name: 'Save split' }).click();
+  await expect(drawer).toHaveCount(0);
+  await page.getByRole('link', { name: 'View balances', exact: true }).click();
+  await expect(page).toHaveURL(/\/people$/);
 });
 
-test('a visitor can close the sample dinner before saving', async ({ page }) => {
-  await page.goto('/expenses/receipt/sample-dinner');
-  await page.getByRole('link', { name: 'Back to demo', exact: true }).click();
-  await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole('link', { name: 'Split a sample dinner' })).toBeVisible();
+test('the ordinary split uses the same drawer and Escape returns to the ledger', async ({ page }) => {
+  await page.goto('/expenses');
+  await page.getByRole('button', { name: /^Split / }).filter({ hasText: 'Split' }).first().click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByLabel('Split method')).toHaveValue('equal');
+  await dialog.getByLabel('Split method').selectOption('amount');
+  await expect(dialog.getByRole('group', { name: 'Participants' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
 });

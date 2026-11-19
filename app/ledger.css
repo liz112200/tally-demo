@@ -1,0 +1,116 @@
+/* The Ledger review runs on the demo deployment. Keep its palette on the
+   document so portaled menus, dialogs and tooltips share the same tokens. */
+html[data-demo] {
+  --background: #f3f5f5;
+  --foreground: #1b2831;
+  --card: #fff;
+  --popover: #fff;
+  --primary: #215b52;
+  --primary-foreground: #fff;
+  --muted: #eaf0ee;
+  --muted-foreground: #53646b;
+  --accent: #e0eee9;
+  --accent-foreground: #194b44;
+  --secondary: var(--muted);
+  --secondary-foreground: var(--foreground);
+  --card-foreground: var(--foreground);
+  --popover-foreground: var(--foreground);
+  --border: #d2dcda;
+  --input: #b9c8c4;
+  --ring: var(--primary);
+  --chart-1: var(--primary);
+  --radius: .55rem;
+  --ledger-rail: #1d3533;
+}
+html.dark[data-demo] {
+  --background: #151c20;
+  --foreground: #e9efee;
+  --card: #1e292d;
+  --popover: #213035;
+  --primary: #a4e5d2;
+  --primary-foreground: #142c27;
+  --muted: #2b383c;
+  --muted-foreground: #afbfbe;
+  --accent: #304c44;
+  --accent-foreground: #cef4e7;
+  --border: #3b4a4d;
+  --input: #536965;
+  --ledger-rail: #132522;
+}
+.ledger-nav {
+  background: var(--ledger-rail);
+  color: #f0f7f1;
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  padding: .4rem .6rem;
+}
+.ledger-brand { display: inline-flex; align-items: center; gap: .6rem; font-weight: 650; letter-spacing: -.045em; font-size: 1.45rem }
+.ledger-brand svg { background: #a4e5d2; color: #214d41; width: 2rem; height: 2rem; padding: .35rem; border-radius: .5rem }
+.ledger-nav nav { display: flex; gap: .15rem; align-items: center }
+.ledger-nav nav a { display: flex; align-items: center; justify-content: center; gap: .7rem; border-radius: .45rem; font-size: .85rem; font-weight: 500; color: #ccdad5; padding: .45rem .7rem }
+.ledger-nav nav a[aria-current], .ledger-nav nav a:hover { background: #34534f; color: #fff }
+.ledger-nav nav svg { width: 1rem; height: 1rem }
+.ledger-identity { display: flex; align-items: center; gap: .6rem; font-size: .85rem }
+.ledger-identity > span { display: grid; place-items: center; width: 1.8rem; height: 1.8rem; border-radius: 50%; background: #31514a; color: #cee9db }
+.ledger-identity button { margin-left: auto }
+html[data-demo] main h1 { font-size: clamp(1.65rem, 3.5vw, 2.65rem); letter-spacing: -.05em; line-height: 1.12; font-weight: 625; overflow-wrap: anywhere }
+html[data-demo] main :is(a,button).text-blue-700 { color: var(--primary) }
+html[data-demo] main table th { color: var(--muted-foreground); font-weight: 600 }
+html[data-demo] .ledger-card { border-radius: .7rem; border-top: 3px solid var(--primary) }
+html[data-demo] .ledger-card [aria-hidden] > div { background: var(--primary) }
+html[data-demo] .ledger-card dl { background: var(--background); padding: .6rem .75rem; border-radius: .4rem }
+.ledger-drawer[data-slot="dialog-content"] {
+  max-width: min(100%, 28rem); height: 100dvh; max-height: 100dvh;
+  display: flex; flex-direction: column; gap: 1rem; border-radius: 0;
+  border-top: 3px solid var(--primary); overflow-y: auto; overscroll-behavior: contain;
+  padding: 1.25rem; box-shadow: -6px 0 30px #10262018; animation: none;
+}
+.ledger-drawer [data-slot="dialog-header"] { padding: .55rem 1rem .95rem 0; border-bottom: 1px solid var(--border) }
+.ledger-drawer [data-slot="dialog-title"] { font-size: 1.45rem; letter-spacing: -.04em; line-height: 1.15; overflow-wrap: anywhere }
+[data-slot="dialog-portal"]:has(.ledger-drawer) [data-slot="dialog-overlay"] { backdrop-filter: none; background: #101c1b24 }
+.ledger-receipt { display: grid; gap: 1rem; min-width: 0 }
+.ledger-receipt > section { min-width: 0 }
+.ledger-drawer .ledger-method { min-height: 2.5rem; width: 100%; border: 1px solid var(--input); border-radius: .4rem; background: var(--card); color: var(--foreground); padding: .4rem .6rem }
+html[data-demo] button[aria-label^="Split "] { opacity: 1 }
+@media (min-width: 850px) {
+  html[data-demo] body:has(.ledger-nav) { padding-left: 11rem }
+  .ledger-nav { position: fixed; inset: 0 auto 0 0; z-index: 40; width: 11rem; flex-direction: column; align-items: stretch; padding: 1.55rem .85rem; gap: 2rem }
+  .ledger-nav nav { flex-direction: column; align-items: stretch; gap: .25rem }
+  .ledger-nav nav a { justify-content: flex-start; padding: .65rem .75rem }
+  .ledger-identity { margin-top: auto; padding-top: 1rem; border-top: 1px solid #41615b }
+  html[data-demo] th.sticky.top-12 { top: 0 }
+}
+@media (max-width: 849px) {
+  .ledger-nav { flex-wrap: wrap; justify-content: space-between }
+  .ledger-nav nav { order: 2; width: 100%; justify-content: space-between }
+  .ledger-nav nav a { padding: .45rem .3rem; min-height: 2.45rem; font-size: .8rem }
+  .ledger-nav nav svg { display: none }
+  html[data-demo] th.sticky.top-12 { top: 0 }
+}
+.ledger-metrics {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
+  border: 1px solid var(--border); background: var(--card); border-radius: .7rem;
+  padding: .9rem 1.25rem; gap: 1rem;
+}
+.ledger-metrics dt { font-size: .8rem; color: var(--muted-foreground) }
+.ledger-metrics dd { margin-top: .15rem; font-size: clamp(1.55rem, 2.5vw, 2rem); font-weight: 600; letter-spacing: -.05em }
+html[data-demo] .ledger-summary { padding: .85rem 1rem; gap: .5rem 1rem; border: 1px solid var(--border); border-radius: .5rem; background: var(--card); font-size: .75rem }
+html[data-demo] main > section:has(> div > h1) { border-top: 3px solid var(--primary) }
+html[data-demo] main #rules, html[data-demo] main #devices { border-top: 1px solid var(--border); padding-top: 1.5rem }
+html[data-demo] main:has(> h1) { width: 100% }
+@media (min-width: 850px) {
+  html[data-demo] main:is(.max-w-4xl,.max-w-3xl) { max-width: 72rem; }
+}
+.ledger-columns, .ledger-row-date { display: none }
+@media (max-width: 849px) {
+  html[data-demo] .ledger-table { max-width: 100%; overflow-x: auto }
+  html[data-demo] .ledger-columns { display: inline-flex; align-items: center; min-height: 2.25rem; font-size: .8rem; color: var(--primary) }
+  html[data-demo] .ledger-table[data-full] > table { min-width: 48rem }
+  html[data-demo] .ledger-table:not([data-full]) [data-column]:is([data-column=date], [data-column=category], [data-column=source]) { display: none }
+  html[data-demo] .ledger-table:not([data-full]) [data-column] { padding-inline: .35rem }
+  html[data-demo] .ledger-table:not([data-full]) th[data-column=select] { width: 1.9rem }
+  html[data-demo] .ledger-table:not([data-full]) th[data-column=split] { width: 3.65rem }
+  html[data-demo] .ledger-table:not([data-full]) th[data-column=amountCents] { width: 5.5rem }
+  html[data-demo] .ledger-table:not([data-full]) .ledger-row-date { display: block; font-size: .7rem; color: var(--muted-foreground) }
+}

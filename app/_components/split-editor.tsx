@@ -33,6 +33,8 @@ import {
   type SplitMethodDisplay,
   type SplitFormState,
 } from '@/app/_lib/schema';
+import { useIsDemo } from '@/app/_lib/use-demo';
+import { ReceiptSplit } from './receipt-split';
 import { useReportSuccess } from './page-result';
 
 export type PersonOption = {
@@ -85,6 +87,8 @@ export function SplitDialog({
   defaultParticipantIds,
   receipt,
   trigger,
+  openReceipt,
+  onClosed,
 }: {
   transactionId: string;
   description: string;
@@ -94,13 +98,32 @@ export function SplitDialog({
   existing: SplitSummary | null;
   defaultParticipantIds: string[];
   receipt: ReceiptView | null;
-  trigger: React.ReactElement<Record<string, unknown>>;
+  trigger?: React.ReactElement<Record<string, unknown>>;
+  openReceipt?: boolean;
+  onClosed?: () => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const demo = useIsDemo();
+  const [open, setOpen] = useState(!!openReceipt);
+  function changeOpen(value: boolean) {
+    setOpen(value);
+    if (!value) onClosed?.();
+  }
+  const formProps = { transactionId, amountCents, persons, existing, defaultParticipantIds };
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={trigger} />
-      <DialogContent className="sm:max-w-lg">
+    <Dialog open={open} onOpenChange={changeOpen}>
+      {trigger && <DialogTrigger render={trigger} />}
+      <DialogContent placement={demo ? 'right' : 'center'} className={demo ? 'ledger-drawer' : 'sm:max-w-lg'}>
+        {demo ? <>
+          <DialogHeader>
+            <span className="flex items-center gap-2 text-xs font-semibold text-primary"><SplitIcon className="size-4" />Split expense</span>
+            <DialogTitle>{receipt?.merchant || description}</DialogTitle>
+            <DialogDescription className="flex items-baseline justify-between gap-3">
+              <time dateTime={date}>{date}</time>
+              <strong className="font-mono text-xl tracking-tight text-foreground">{formatUSD(toCents(amountCents))}</strong>
+            </DialogDescription>
+          </DialogHeader>
+          {open && <LedgerSplitEditor {...formProps} receipt={receipt} openReceipt={openReceipt} onSaved={() => changeOpen(false)} />}
+        </> : <>
         <DialogHeader>
           <DialogTitle>{existing ? 'Edit split' : 'Split transaction'}</DialogTitle>
           <DialogDescription className="flex items-start justify-between gap-3">
@@ -132,10 +155,47 @@ export function SplitDialog({
               onSaved={() => setOpen(false)}
             />
           ))}
+        </>}
       </DialogContent>
     </Dialog>
   );
 }
+
+function LedgerSplitEditor({ receipt, openReceipt, ...props }: SplitFormProps & {
+  receipt: ReceiptView | null;
+  openReceipt?: boolean;
+}) {
+  const [method, setMethod] = useState<SplitMethodDisplay>(
+    receipt && (openReceipt || props.existing?.method === 'item') ? 'item'
+      : props.existing?.method === 'item' ? 'equal' : props.existing?.method ?? 'equal',
+  );
+  return <>
+    <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+      Split method
+      <select className="ledger-method text-sm" value={method} onChange={(event) => setMethod(event.target.value as SplitMethodDisplay)}>
+        {SPLIT_METHODS.map((m) => <option key={m} value={m}>{METHOD_LABELS[m]}</option>)}
+        {receipt && <option value="item">By item</option>}
+      </select>
+    </label>
+    {receipt && <div hidden={method !== 'item'}>
+      <ReceiptSplit receipt={receipt} persons={props.persons} amountCents={props.amountCents} onSaved={props.onSaved} embedded />
+      <div className="mt-4 grid gap-3 border-t pt-3">
+        <ReceiptImages receipt={receipt} transactionId={props.transactionId} />
+        {props.existing && <RemoveSplitButton transactionId={props.transactionId} onRemoved={props.onSaved} />}
+      </div>
+    </div>}
+    <div hidden={method === 'item'}><SplitForm {...props} ledgerMethod={method === 'item' ? 'equal' : method} /></div>
+  </>;
+}
+
+type SplitFormProps = {
+  transactionId: string;
+  amountCents: number;
+  persons: PersonOption[];
+  existing: SplitSummary | null;
+  defaultParticipantIds: string[];
+  onSaved: () => void;
+};
 
 function SplitForm({
   transactionId,
@@ -144,21 +204,16 @@ function SplitForm({
   existing,
   defaultParticipantIds,
   onSaved,
-}: {
-  transactionId: string;
-  amountCents: number;
-  persons: PersonOption[];
-  existing: SplitSummary | null;
-  defaultParticipantIds: string[];
-  onSaved: () => void;
-}) {
+  ledgerMethod,
+}: SplitFormProps & { ledgerMethod?: SplitMethodInput }) {
   const [state, formAction, pending] = useActionState(saveSplit, initialState);
-  useReportSuccess(state);
+  useReportSuccess(state, ledgerMethod ? '/people' : undefined);
   // 'item' splits never reach this form (the dialog branches to the
   // itemized view first), but the type admits them, so guard anyway.
-  const [method, setMethod] = useState<SplitMethodInput>(
+  const [localMethod, setMethod] = useState<SplitMethodInput>(
     existing && existing.method !== 'item' ? existing.method : 'equal',
   );
+  const method = ledgerMethod ?? localMethod;
   const [selected, setSelected] = useState<Set<string>>(() => {
     const activeIds = new Set(persons.map((p) => p.id));
     const fromExisting = existing?.shares
@@ -334,7 +389,7 @@ function SplitForm({
       <input type="hidden" name="transactionId" value={transactionId} />
 
       {/* Method segmented control */}
-      <div className="grid grid-cols-3 gap-1 rounded-lg bg-muted p-1 text-[13px]">
+      {!ledgerMethod && <div className="grid grid-cols-3 gap-1 rounded-lg bg-muted p-1 text-[13px]">
         {SPLIT_METHODS.map((m) => (
           <button
             key={m}
@@ -351,7 +406,7 @@ function SplitForm({
             {METHOD_LABELS[m]}
           </button>
         ))}
-      </div>
+      </div>}
 
       {/* Participants, with per-person inputs for amount/percent methods */}
       <fieldset className="overflow-hidden rounded-lg border">
@@ -524,22 +579,9 @@ function ItemSplitView({
   receipt: ReceiptView;
   onRemoved: () => void;
 }) {
-  const [imageUrls, setImageUrls] = useState<string[]>([]);
-  const [imageProblem, setImageProblem] = useState<string | null>(null);
-  const [loadingImage, setLoadingImage] = useState(false);
-
   const nameByPerson = new Map(
     existing.shares.map((s) => [s.personId, displayShareName(s)]),
   );
-
-  async function viewReceipt() {
-    setLoadingImage(true);
-    setImageProblem(null);
-    const result = await getReceiptImageUrls(transactionId);
-    setLoadingImage(false);
-    if ('urls' in result) setImageUrls(result.urls);
-    else setImageProblem(result.error);
-  }
 
   return (
     <div className="grid gap-3">
@@ -584,7 +626,31 @@ function ItemSplitView({
         </ul>
       </div>
 
-      {imageUrls.length > 0 ? (
+      <ReceiptImages receipt={receipt} transactionId={transactionId} />
+
+      <div className="flex justify-between">
+        <RemoveSplitButton transactionId={transactionId} onRemoved={onRemoved} />
+        <Link className="self-center text-sm underline underline-offset-2" href={`/expenses/receipt/${transactionId}`}>Edit item assignments</Link>
+      </div>
+    </div>
+  );
+}
+
+function ReceiptImages({ receipt, transactionId }: { receipt: ReceiptView; transactionId: string }) {
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [imageProblem, setImageProblem] = useState<string | null>(null);
+  const [loadingImage, setLoadingImage] = useState(false);
+
+  async function viewReceipt() {
+    setLoadingImage(true);
+    setImageProblem(null);
+    const result = await getReceiptImageUrls(transactionId);
+    setLoadingImage(false);
+    if ('urls' in result) setImageUrls(result.urls);
+    else setImageProblem(result.error);
+  }
+
+  return <>{imageUrls.length > 0 ? (
         <div className="grid gap-2">
           {imageUrls.map((url, i) => (
             // eslint-disable-next-line @next/next/no-img-element
@@ -613,17 +679,9 @@ function ItemSplitView({
           </Button>
           {imageProblem && <p className="text-xs text-destructive">{imageProblem}</p>}
         </div>
-      )}
-
-      <div className="flex justify-between">
-        <RemoveSplitButton transactionId={transactionId} onRemoved={onRemoved} />
-        <Link className="self-center text-sm underline underline-offset-2" href={`/expenses/receipt/${transactionId}`}>Edit item assignments</Link>
-      </div>
-    </div>
-  );
+      )}</>;
 }
 
-// Removes the split from inside the split dialog, which closes on success.
 function RemoveSplitButton({ transactionId, onRemoved }: { transactionId: string; onRemoved: () => void }) {
   return (
     <InlineAction

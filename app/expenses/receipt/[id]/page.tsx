@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { z } from 'zod';
 import { requireUser } from '@/app/_lib/session';
 import { ReceiptSplit } from '@/app/_components/receipt-split';
@@ -21,10 +21,10 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
     return <main className="mx-auto max-w-6xl space-y-3 px-4 py-6 sm:px-6"><Link href="/" className="text-sm underline">Back to demo</Link><h1 className="text-xl font-semibold">Sample dinner unavailable</h1>
       <p className="mt-2">Use Reset demo in the banner to restore the sample receipt.</p></main>;
   }
-  const [row, receipt, persons] = await Promise.all([
-    getTransactionForSplit(transactionId), getReceiptByTransactionId(transactionId), getPersons(),
-  ]);
+  const [row, receipt] = await Promise.all([getTransactionForSplit(transactionId), getReceiptByTransactionId(transactionId)]);
   if (!row || !receipt || !row.isSplittable) notFound();
+  if (isDemoMode()) redirect(`/expenses?tx=${row.id}&split=item`);
+  const persons = await getPersons();
   return (
     <main className="mx-auto max-w-6xl space-y-4 px-4 py-6 sm:px-6 sm:py-8">
       <div>

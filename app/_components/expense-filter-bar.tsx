@@ -329,7 +329,7 @@ export function SummaryStrip({
   onToggleReview: () => void;
 }) {
   return (
-    <p className="flex flex-wrap items-baseline gap-x-4 gap-y-0.5 px-1 text-[11px] text-muted-foreground">
+    <p className="ledger-summary flex flex-wrap items-baseline gap-x-4 gap-y-0.5 px-1 text-[11px] text-muted-foreground">
       <span>
         <span className="font-mono">{summary.count}</span>{' '}
         {summary.count === 1 ? 'row' : 'rows'}

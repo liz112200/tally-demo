@@ -4,7 +4,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { accounts, settled } from './band';
 
 const noSideScroll = async (page: Page, where: string) => {
-  const { scroll, width } = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, width: window.innerWidth }));
+  const { scroll, width } = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, width: document.documentElement.clientWidth }));
   expect(scroll, `${where} scrolls sideways (${scroll}px wide in ${width}px)`).toBeLessThanOrEqual(width);
 };
 
@@ -24,6 +24,9 @@ test('the home page, every account page and Expenses fit a phone', async ({ page
   }
   await settled(page, '/expenses');
   await noSideScroll(page, 'Expenses');
+  await page.getByRole('button', { name: 'Show all columns' }).click();
+  await expect(page.locator('.ledger-table th[data-column="category"]')).toBeVisible();
+  await noSideScroll(page, 'Full ledger');
 });
 
 test('a statement’s edit form fits a phone', async ({ page }) => {
@@ -38,22 +41,17 @@ test('a statement’s edit form fits a phone', async ({ page }) => {
   await noSideScroll(page, 'The statement edit form');
 });
 
-test('the sample dinner opens directly and stacks its live preview on a phone', async ({ page }) => {
-  await page.goto('/');
-  await page.getByRole('link', { name: 'Split a sample dinner' }).click();
-  const receipt = page.getByRole('region', { name: 'Itemized receipt' });
-  const preview = page.getByRole('region', { name: 'Split preview' });
-  await expect(receipt.getByRole('heading', { name: 'Dinner at Alba' })).toBeVisible();
-  const bread = receipt.getByRole('group', { name: 'Assign Garlic bread', exact: true });
-  await bread.getByRole('button', { name: 'You', exact: true }).click();
-  await expect(preview.locator('[aria-live]')).toContainText('$22.00');
+test('the dinner drawer fits a phone and closes back to Expenses', async ({ page }) => {
+  await page.goto('/expenses/receipt/sample-dinner');
+  const drawer = page.getByRole('dialog', { name: 'Dinner at Alba' });
+  await expect(drawer.getByLabel('Split method')).toHaveValue('item');
+  const preview = drawer.getByRole('region', { name: 'Split preview' });
+  await expect(preview.locator('[aria-live]')).toContainText('$26.00');
   await noSideScroll(page, 'Itemized dinner');
-  const paper = (await receipt.boundingBox())!;
-  expect((await preview.boundingBox())!.y).toBeGreaterThanOrEqual(paper.y + paper.height - 1);
-  await bread.getByRole('button', { name: 'Both' }).click();
-  await preview.getByRole('button', { name: 'Save split' }).click();
-  await expect(page.getByRole('heading', { name: 'Split saved' })).toBeFocused();
-  await noSideScroll(page, 'Saved dinner');
-  await page.getByRole('link', { name: 'Try bank sync' }).click();
-  await expect(page.getByRole('heading', { name: 'Bank logins' })).toBeVisible();
+  const box = (await drawer.boundingBox())!;
+  expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width).toBeLessThanOrEqual(390);
+  await drawer.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(drawer).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Expenses', exact: true })).toBeVisible();
 });

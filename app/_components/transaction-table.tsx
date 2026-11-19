@@ -44,6 +44,7 @@ import { foldEmptyPeriods, groupByPeriod, type PeriodStatement } from '@/lib/sta
 import { groupByMonth } from '@/lib/month-groups';
 import { FoldedPeriodsRow, PeriodHeader, type PeriodNote } from '@/app/_components/period-header';
 import type { ImportGroupMeta } from '@/lib/import-groups';
+import { useIsDemo } from '@/app/_lib/use-demo';
 import { useTableState } from '@/app/_lib/use-table-state';
 import { SortHeaderButton } from '@/app/_components/sort-controls';
 import { showAllImports } from '@/app/_actions/import';
@@ -58,6 +59,7 @@ import { CategoryCell } from '@/app/_components/category-cell';
 import { TransactionDetailPanel } from '@/app/_components/transaction-detail';
 import {
   SplitCell,
+  SplitDialog,
   type PersonOption,
   type SplitSummary,
 } from '@/app/_components/split-editor';
@@ -183,7 +185,7 @@ function DescriptionColumnCell(ctx: CellContext<TransactionRow, unknown>) {
   const row = ctx.row.original;
   return (
     <div className="flex min-w-0 items-center gap-1.5">
-      <span className="truncate">{row.descriptionRaw}</span>
+      <span className="min-w-0 truncate">{row.descriptionRaw}<span className="ledger-row-date">{row.date}</span></span>
       {row.pending && (
         <span
           className="shrink-0 rounded border border-dashed px-1 py-px text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
@@ -534,6 +536,10 @@ export function TransactionTable({
   // bring it into view. Manual toggles clear the param so a later reload
   // reflects what is actually open.
   const txParam = params.get('tx');
+  const demo = useIsDemo();
+  const [allColumns, setAllColumns] = useState(false);
+  const directSplit = demo && params.get('split') === 'item' && txParam && receiptsByTransaction[txParam]
+    ? data.find((row) => row.id === txParam && row.isSplittable) : undefined;
   useEffect(() => {
     if (!txParam) return;
     setExpandedId(txParam);
@@ -620,6 +626,7 @@ export function TransactionTable({
           {row.getVisibleCells().map((cell) => (
             <td
               key={cell.id}
+              data-column={cell.column.id}
               className={cn(
                 'px-3 py-1.5 align-middle',
                 (cell.column.columnDef.meta as ColMeta | undefined)?.td,
@@ -658,6 +665,13 @@ export function TransactionTable({
 
   return (
     <div className="space-y-2">
+      {directSplit && <SplitDialog key={directSplit.id} openReceipt transactionId={directSplit.id}
+        description={directSplit.descriptionRaw} date={directSplit.date} amountCents={directSplit.amountCents}
+        persons={persons} defaultParticipantIds={defaultParticipantIds} existing={splitsByTransaction[directSplit.id] ?? null}
+        receipt={receiptsByTransaction[directSplit.id]} onClosed={() => {
+          apply({ split: null });
+          requestAnimationFrame(() => document.getElementById('tx-' + directSplit.id)?.focus({ preventScroll: true }));
+        }} />}
       {!account && (
         <AccountTabs
           tabs={tabs}
@@ -711,7 +725,9 @@ export function TransactionTable({
           apply(filterPatch({ ...filters, review: filters.review === 'flagged' ? 'all' : 'flagged' }))
         }
       />
-      <div className="rounded-xl border bg-card">
+      {demo && <button className="ledger-columns" type="button" aria-pressed={allColumns}
+        onClick={() => setAllColumns(!allColumns)}>{allColumns ? 'Show compact view' : 'Show all columns'}</button>}
+      <div className="ledger-table rounded-xl border bg-card" data-full={allColumns || undefined}>
         {/* table-fixed so the sized columns keep their widths and the
             description column absorbs only the remaining space (truncating
             instead of pushing the amount column past the card's right edge). */}
@@ -722,6 +738,7 @@ export function TransactionTable({
                 {headerGroup.headers.map((header) => (
                   <th
                     key={header.id}
+                    data-column={header.column.id}
                     aria-sort={
                       sort.sort === header.column.id
                         ? sort.dir === 'asc'

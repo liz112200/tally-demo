@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LogOut } from 'lucide-react';
+import { ChartNoAxesColumn, Landmark, LogOut, ReceiptText, Settings2, UsersRound } from 'lucide-react';
 import { signOut } from '@/app/_actions/auth';
 import { cn } from '@/lib/utils';
 import { ThemeToggle } from '@/app/_components/theme-toggle';
@@ -38,6 +38,21 @@ export function SiteHeader({ demo }: { demo: boolean }) {
   if (pathname.startsWith('/s/')) return null;
   // Signing in has nowhere to navigate to yet.
   if (pathname === '/sign-in') return null;
+  if (demo) {
+    const icons = [Landmark, ReceiptText, UsersRound, ChartNoAxesColumn, Settings2];
+    return <header className="ledger-nav">
+      <Link href="/" aria-label="Tally, home" className="ledger-brand"><TallyMark />Tally</Link>
+      <nav aria-label="Main navigation">
+        {navFor(true).map(({ href, label }, i) => {
+          const Icon = icons[i];
+          return <Link key={href} href={href} aria-current={navActive(href, pathname) ? 'page' : undefined}>
+            <Icon aria-hidden />{label}
+          </Link>;
+        })}
+      </nav>
+      <div className="ledger-identity"><span aria-hidden>R</span>Riley<ThemeToggle /></div>
+    </header>;
+  }
   return (
     <header className="sticky top-0 z-40 border-b bg-background/90 backdrop-blur">
       <div className="mx-auto flex h-12 max-w-6xl items-center gap-3 px-4 sm:gap-6 sm:px-6">

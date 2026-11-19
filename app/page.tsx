@@ -1,3 +1,6 @@
+import { getDebtShares } from '@/db/queries';
+import { computeBidirectionalBalances } from '@/lib/balances';
+import { isDemoMode } from '@/lib/demo-mode';
 import { redirect } from 'next/navigation';
 import { requireUser } from '@/app/_lib/session';
 import { loadBoard, needsYouFacts } from '@/app/_lib/board';
@@ -22,18 +25,27 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
     for (const v of Array.isArray(value) ? value : value === undefined ? [] : [value]) query.append(key, v);
   }
   if ([...query.keys()].length > 0) redirect(`/expenses?${query}`);
-  const board = await loadBoard();
+  const demo = isDemoMode();
+  const [board, debtShares] = await Promise.all([loadBoard(), demo ? getDebtShares() : []]);
+  const balances = computeBidirectionalBalances(debtShares.map((s) => ({
+    ...s, amountCents: toCents(s.amountCents), allocatedCents: toCents(s.allocatedCents),
+  })));
   const day = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
   const items = needsYouItems(needsYouFacts(board), { day, money: (n) => formatUSD(toCents(n)) });
   return (
     <main className="mx-auto max-w-6xl space-y-5 px-4 py-6 sm:px-6 sm:py-8">
-      <NeedsYouBand items={items} />
+      {!demo && <NeedsYouBand items={items} />}
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <h1 className="text-2xl font-bold tracking-tight">Accounts</h1>
         <a href="/accounts/logins" className="inline-flex min-h-9 items-center text-sm text-blue-700 hover:underline dark:text-blue-400">
           Bank logins{board.loginCount > 0 ? ` (${board.loginCount})` : ''} →
         </a>
       </div>
+      {demo && <dl className="ledger-metrics" aria-label="Outstanding balances">
+        <div><dt>Owed to you</dt><dd>{formatUSD(toCents(balances.reduce((sum, b) => sum + Math.max(0, b.netCents), 0)))}</dd></div>
+        <div><dt>You owe</dt><dd>{formatUSD(toCents(balances.reduce((sum, b) => sum + Math.max(0, -b.netCents), 0)))}</dd></div>
+        <div><dt>Shared transactions</dt><dd>{Object.keys(board.view.splitsByTransaction).length}</dd></div>
+      </dl>}
       {board.cards.length === 0 && board.unmapped.length === 0 ? (
         <p className="rounded-xl border bg-card p-6 text-sm text-muted-foreground">
           No accounts yet. Import a CSV from Expenses, or link a bank on the Bank logins page.
@@ -41,6 +53,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
       ) : (
         <AccountBoard cards={board.cards} unmapped={board.unmapped} />
       )}
+      {demo && <NeedsYouBand items={items} />}
     </main>
   );
 }

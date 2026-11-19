@@ -83,7 +83,7 @@ export default async function InsightsPage({
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-8">
-      <div className="mb-5 flex items-end justify-between gap-4">
+      <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Insights</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">

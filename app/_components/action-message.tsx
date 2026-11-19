@@ -4,7 +4,7 @@ import { Check } from 'lucide-react';
 import type { LinkResultState } from '@/app/_actions/bank';
 
 // `details`: lines listed under the message, one per account synced.
-export type Message = { kind: 'error' | 'warning' | 'success'; text: string; details?: string[] } | null;
+export type Message = { kind: 'error' | 'warning' | 'success'; text: string; details?: string[]; balancesHref?: string } | null;
 
 // What an action did. Success is said as plainly as failure, in the page's
 // own text colour: amber and red stay for what needs the owner.

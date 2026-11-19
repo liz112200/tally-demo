@@ -28,7 +28,7 @@ export function AccountBoard({ cards, unmapped }: { cards: BoardCard[]; unmapped
         <a
           key={c.id}
           href={`/accounts/${c.id}`}
-          className="row-span-7 grid grid-rows-subgrid gap-y-2 rounded-2xl border bg-card p-4 text-left transition-colors hover:border-foreground/30 focus-visible:outline-2 focus-visible:outline-offset-2"
+          className="ledger-card row-span-7 grid grid-rows-subgrid gap-y-2 rounded-2xl border bg-card p-4 text-left transition-colors hover:border-foreground/30 focus-visible:outline-2 focus-visible:outline-offset-2"
         >
           <div>
             <div className="text-xl font-bold leading-tight tracking-tight">{c.name}</div>

@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useState, useTransition, type ReactNode } from 'react';
+import Link from 'next/link';
 import { X } from 'lucide-react';
 import { SOMETHING_WENT_WRONG, type ActionResult } from '@/lib/action-result';
 import { MessageLine, type Message } from './action-message';
@@ -49,6 +50,7 @@ export function PageResultProvider({ children }: { children: ReactNode }) {
           className="fixed bottom-20 left-1/2 z-40 flex w-max max-w-[min(36rem,calc(100vw-2rem))] -translate-x-1/2 items-start gap-2 rounded-lg border bg-card px-3 py-2 shadow-lg"
         >
           <MessageLine message={message} />
+          {message.balancesHref && <Link href={message.balancesHref} className="text-xs font-medium text-primary underline">View balances</Link>}
           <button
             type="button"
             aria-label="Dismiss"
@@ -102,10 +104,10 @@ export function useAction(options: { errorsInPlace?: boolean } = {}) {
 // For a form built on useActionState: says a successful save's `message` on
 // the page result line, once per submission (each result is a new object).
 // Field errors stay in the form, where they are.
-export function useReportSuccess(state: { ok?: boolean; message?: string }) {
+export function useReportSuccess(state: { ok?: boolean; message?: string }, balancesHref?: string) {
   const report = useContext(PageResultContext);
   if (!report) throw new Error('useReportSuccess must be used inside a PageResultProvider');
   useEffect(() => {
-    if (state.ok && state.message) report({ kind: 'success', text: state.message });
-  }, [state, report]);
+    if (state.ok && state.message) report({ kind: 'success', text: state.message, balancesHref });
+  }, [state, report, balancesHref]);
 }
