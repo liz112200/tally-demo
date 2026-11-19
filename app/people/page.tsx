@@ -187,7 +187,7 @@ export default async function PeoplePage() {
         <h1 className="text-xl font-semibold tracking-tight">People</h1>
         <p className="mt-0.5 text-sm text-muted-foreground">
           {rows.length === 0
-            ? 'Just you so far — add the people you split with'
+            ? 'Just you so far'
             : `You and ${rows.length} ${
                 rows.length === 1 ? 'person' : 'people'
               } · ${formatUSD(toCents(owedToOwner))} owed to you`}

@@ -833,26 +833,16 @@ export function TransactionTable({
           onClear={clearSelection}
         />
       )}
-      <p className="flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-xs text-muted-foreground">
-        <span>click a row for details</span>
-        <span className="flex items-center gap-1">
-          <Zap className="size-3" aria-hidden />
-          tag — set by a rule
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="size-2 rounded-full bg-muted-foreground" aria-hidden />
-          dot — set manually
-        </span>
-        <span className="flex items-center gap-1">
-          <SplitIcon className="size-3" aria-hidden />
-          badge — split, with participant count
-        </span>
-        <span className="flex items-center gap-1">
-          <ReceiptText className="size-3" aria-hidden />
-          icon — receipt attached
-        </span>
-        <span>dimmed — not splittable (credits, rent, income)</span>
-      </p>
+      <details className="px-1 text-xs text-muted-foreground">
+        <summary className="w-fit cursor-pointer py-1">Table key</summary>
+        <ul className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
+          <li className="flex items-center gap-1"><Zap className="size-3" aria-hidden />Set by rule</li>
+          <li className="flex items-center gap-1"><span className="size-2 rounded-full bg-muted-foreground" aria-hidden />Set manually</li>
+          <li className="flex items-center gap-1"><SplitIcon className="size-3" aria-hidden />Split · number of people</li>
+          <li className="flex items-center gap-1"><ReceiptText className="size-3" aria-hidden />Receipt attached</li>
+          <li>Dimmed rows can’t be split.</li>
+        </ul>
+      </details>
     </div>
   );
 }

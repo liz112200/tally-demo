@@ -72,8 +72,7 @@ export function VerifyForm({
         <div className="space-y-2 rounded-lg border bg-muted/40 px-3 py-2.5 text-sm">
           <p>
             Demo statement, {sample.from} to {sample.to}: {chargesLabel.toLowerCase()} {sample.charges},{' '}
-            {creditsLabel.toLowerCase()} {sample.credits}. It was generated from the same bank rows, so it matches to the
-            cent; a typo does not.
+            {creditsLabel.toLowerCase()} {sample.credits}.
           </p>
           <div className="flex flex-wrap gap-2">
             <Button size="sm" onClick={() => fill(sample.charges)}>

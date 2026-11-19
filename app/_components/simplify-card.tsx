@@ -23,7 +23,6 @@ export function SimplifyCard({
 }) {
   const [open, setOpen] = useState(false);
   const { outstandingDebts, peopleInvolved, perPersonPayments, transfers } = view;
-  const saved = perPersonPayments.length - transfers.length;
   const name = (id: string) => (id === ownerId ? 'You' : (names[id] ?? 'Unknown'));
 
   return (
@@ -46,26 +45,15 @@ export function SimplifyCard({
           aria-expanded={open}
           onClick={() => setOpen((o) => !o)}
         >
-          {open ? 'Hide transfers' : 'Show simplified transfers'}
+          {open ? 'Hide transfers' : 'Show transfers'}
         </Button>
-      </div>
-
-      <div className="mt-2 space-y-1 text-xs text-muted-foreground">
-        <p>
-          Simplification works when amounts between people line up. Every debt
-          here has you on one side, so the savings depend on how the balances
-          align: {saved > 0
-            ? `right now ${saved} ${saved === 1 ? 'payment' : 'payments'} can be skipped.`
-            : 'right now settling person by person is already minimal.'}
-        </p>
-        <p>
-          Transfers between two other people can&rsquo;t be recorded, because
-          settlements always involve you. Treat this as a suggestion.
-        </p>
       </div>
 
       {open && (
         <div className="mt-3 grid gap-3 border-t pt-3 sm:grid-cols-2">
+          <p className="text-xs text-muted-foreground sm:col-span-2">
+            Suggested payments. You can record payments you send or receive.
+          </p>
           <PaymentList title="Settling person by person" payments={perPersonPayments} name={name} />
           <PaymentList title="Simplified" payments={transfers} name={name} highlight />
         </div>

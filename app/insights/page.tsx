@@ -87,7 +87,7 @@ export default async function InsightsPage({
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Insights</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Calendar-month spending by transaction date
+            By transaction month
           </p>
         </div>
         <nav
@@ -163,16 +163,12 @@ export default async function InsightsPage({
           )}
         </Card>
 
-        <Card title="Category breakdown" className="lg:col-span-2">
+        <Card title="Splittable spending by category" className="lg:col-span-2">
           {breakdown.length > 0 ? (
             <CategoryBarChart slices={breakdown} />
           ) : (
             <NoSpending />
           )}
-          <p className="mt-2 text-[11px] text-muted-foreground">
-            Splittable spending only; rent and income are counted in the
-            month total but not broken down here.
-          </p>
         </Card>
 
         <Card title="Top merchants">

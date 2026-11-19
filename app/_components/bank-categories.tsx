@@ -33,9 +33,7 @@ export function BankCategories({
         The bank&apos;s categories
       </h2>
       <p className="px-1 text-xs text-muted-foreground">
-        A synced row your rules leave uncategorized takes the category you choose here, marked on the row as the
-        bank&apos;s. Rules always win, and nothing you or a rule set is changed. Transfers stay with your rules: the bank
-        files a payment to a person as a transfer.
+        Bank categories fill gaps on synced rows. Your edits and rules take priority. Use rules for transfers.
       </p>
       <ul className="divide-y rounded-lg border">
         {PLAID_CATEGORIES.map(([key, label]) => {

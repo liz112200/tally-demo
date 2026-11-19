@@ -235,15 +235,12 @@ function UploadStep({
   return (
     <div className="grid gap-3">
       <p className="text-xs text-muted-foreground">
-        Upload a photo of a receipt or a screenshot of an app order (Walmart,
-        Weee, Instacart, Amazon…) — the items are read out for you to split.
-        Add several images for a long receipt or an order split across screens.
+        Add photos or screenshots of one receipt. You can review the items before splitting.
       </p>
       {demo && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-dashed px-3 py-2 text-xs text-muted-foreground">
           <span className="min-w-0 flex-1">
-            Extraction is simulated in this demo: any image reads as a sample
-            dinner receipt sized to this transaction.
+            In the demo, any image produces a sample dinner matching this amount.
           </span>
           <Button type="button" variant="outline" size="xs" onClick={pickSamplePhoto}>
             Use a sample photo

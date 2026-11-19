@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { ArrowLeft } from 'lucide-react';
 import { notFound } from 'next/navigation';
 import { z } from 'zod';
 import { requireUser } from '@/app/_lib/session';
@@ -17,7 +18,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
   const transactionId = sample ? await demoDinnerTransactionId() : z.uuid().safeParse(id).data;
   if (!transactionId) {
     if (!sample) notFound();
-    return <main className="mx-auto max-w-3xl p-6"><h1 className="text-xl font-semibold">Sample dinner unavailable</h1>
+    return <main className="mx-auto max-w-6xl space-y-3 px-4 py-6 sm:px-6"><Link href="/" className="text-sm underline">Back to demo</Link><h1 className="text-xl font-semibold">Sample dinner unavailable</h1>
       <p className="mt-2">Use Reset demo in the banner to restore the sample receipt.</p></main>;
   }
   const [row, receipt, persons] = await Promise.all([
@@ -25,12 +26,15 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
   ]);
   if (!row || !receipt || !row.isSplittable) notFound();
   return (
-    <main className="mx-auto max-w-4xl space-y-4 px-3 py-5 sm:px-6 sm:py-8">
-      <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Link className="underline underline-offset-2" href={'/expenses?tx=' + row.id}>Expense detail</Link><span aria-hidden>/</span>
-        <h1 className="font-medium text-foreground">Split a receipt</h1>
-      </nav>
-      <ReceiptSplit key={receipt.id} receipt={receipt} amountCents={row.amountCents}
+    <main className="mx-auto max-w-6xl space-y-4 px-4 py-6 sm:px-6 sm:py-8">
+      <div>
+        <Link href={sample ? '/' : `/expenses?tx=${row.id}`}
+          className="mb-2 inline-flex min-h-9 items-center gap-1.5 text-sm text-blue-700 hover:underline dark:text-blue-400">
+          <ArrowLeft className="size-4" aria-hidden />{sample ? 'Back to demo' : 'Back to expense'}
+        </Link>
+        <h1 className="text-xl font-semibold tracking-tight">Split a receipt</h1>
+      </div>
+      <ReceiptSplit key={receipt.id} sample={sample} receipt={receipt} amountCents={row.amountCents}
         persons={persons.map(({ id, name, isOwner }) => ({ id, name, isOwner }))} />
     </main>
   );

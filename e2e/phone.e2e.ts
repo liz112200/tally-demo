@@ -50,4 +50,10 @@ test('the sample dinner opens directly and stacks its live preview on a phone', 
   await noSideScroll(page, 'Itemized dinner');
   const paper = (await receipt.boundingBox())!;
   expect((await preview.boundingBox())!.y).toBeGreaterThanOrEqual(paper.y + paper.height - 1);
+  await bread.getByRole('button', { name: 'Both' }).click();
+  await preview.getByRole('button', { name: 'Save split' }).click();
+  await expect(page.getByRole('heading', { name: 'Split saved' })).toBeFocused();
+  await noSideScroll(page, 'Saved dinner');
+  await page.getByRole('link', { name: 'Try bank sync' }).click();
+  await expect(page.getByRole('heading', { name: 'Bank logins' })).toBeVisible();
 });

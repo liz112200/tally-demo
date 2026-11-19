@@ -23,9 +23,7 @@ export function NeedsYouBand({ items }: { items: NeedsYouItem[] }) {
     return (
       <div role="status" className="flex items-center gap-2.5 rounded-xl border border-emerald-600/30 bg-emerald-500/10 px-4 py-2.5 text-sm text-emerald-900 dark:text-emerald-200">
         <Check aria-hidden className="size-4 shrink-0" />
-        <span>
-          <span className="font-semibold">All clear.</span> Nothing is waiting on you.
-        </span>
+        <span className="font-semibold">All clear.</span>
       </div>
     );
   }
@@ -35,7 +33,6 @@ export function NeedsYouBand({ items }: { items: NeedsYouItem[] }) {
         <h2 id="needs-you" className="whitespace-nowrap text-[15px] font-semibold">
           Needs you · {items.length}
         </h2>
-        <span className="text-xs text-muted-foreground">What Tally has noticed and can tell is still open</span>
       </div>
       <ul
         {...(items.length > SCROLL_AFTER

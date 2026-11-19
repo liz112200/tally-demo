@@ -102,11 +102,10 @@ export default async function SettingsPage() {
                   </li>
                 ))}
               </ul>
-              <p className="text-xs text-muted-foreground">
-                A passkey belongs to this site&apos;s address and to the password manager that made it: one made in Chrome is
-                not offered by Safari, and the other way round. If the app moves to another domain, every passkey is made
-                again with the setup token.
-              </p>
+              <details className="text-xs text-muted-foreground">
+                <summary className="w-fit cursor-pointer">Using passkeys on another device or domain</summary>
+                <p className="mt-1">Use the password manager that saved your passkey. A new domain requires registering passkeys again with the setup token.</p>
+              </details>
             </div>
             <div className="space-y-3">
               <h3 className="text-sm font-medium">Signed in</h3>

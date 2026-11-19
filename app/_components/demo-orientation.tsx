@@ -27,8 +27,9 @@ export function DemoOrientation({ verifyHref, dismissed: fromServer }: { verifyH
         <details className="min-w-0 flex-1 text-sm">
           <summary className="w-fit cursor-pointer py-2.5 text-muted-foreground">More things to try</summary>
           <ul className="my-2 space-y-3">
-            {others.map((step) => <li key={step.href}><Link href={step.href} className="font-medium underline underline-offset-2">{step.title}</Link>
-              <p className="mt-0.5 text-xs text-muted-foreground">{step.detail}</p></li>)}
+            {others.map((step) => <li key={step.href}>
+              <Link href={step.href} className="font-medium underline underline-offset-2">{step.title}</Link>
+            </li>)}
           </ul>
         </details>
         <Button variant="ghost" size="icon-sm" className="mt-1" onClick={dismiss} aria-label="Dismiss"><X /></Button>

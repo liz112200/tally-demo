@@ -7,27 +7,23 @@
 // brings it back. Storage may be unavailable (private windows); the choice
 // then lasts for the page view.
 
-export function orientationSteps(verifyHref: string): { href: string; title: string; detail: string }[] {
+export function orientationSteps(verifyHref: string): { href: string; title: string }[] {
   return [
     {
       href: '/expenses/receipt/sample-dinner',
       title: 'Split a sample dinner',
-      detail: 'Assign receipt items and see each person’s share.',
     },
     {
       href: '/accounts/logins',
       title: 'Sync a bank',
-      detail: 'Sync the sample American Express login.',
     },
     {
       href: verifyHref,
-      title: 'Check an account against its statement',
-      detail: 'Chase checking’s synced rows count only once its statement matches to the cent. Try the real figures, then a typo.',
+      title: 'Verify a bank statement',
     },
     {
       href: '/people',
       title: 'Simplify balances',
-      detail: 'People shows who owes whom, and the fewest transfers that would settle everyone.',
     },
   ];
 }

@@ -252,7 +252,7 @@ export default async function BankLoginsPage() {
           </p>
           <p className="mt-0.5 text-xs text-muted-foreground">
             {demo
-              ? 'Demo banks: synthetic logins, synced through the same code as a real bank.'
+              ? 'Try syncing a sample login. Real bank linking is disabled.'
               : sandbox
                 ? 'Sandbox: Items are free here.'
                 : `Items used: ${itemsUsed(connections)} of ${ITEM_BUDGET} on Plaid's Trial, removed logins included. Plaid's dashboard is the authority.`}
@@ -262,15 +262,11 @@ export default async function BankLoginsPage() {
             // reads what Plaid has stored; Plaid checks each bank on its own
             // schedule, so "no changes" soon after a sync is normal.
             <p className="mt-0.5 text-xs text-muted-foreground">
-              Every login syncs daily around 10:00 UTC, and Sync now syncs it at once. Both bring what Plaid has found
-              since the last sync; Plaid checks each bank one to four times a day, so a second sync soon after usually
-              says &ldquo;no changes&rdquo;. That is normal.
+              Daily sync runs around 10:00 UTC. Sync now fetches updates already available from Plaid.
             </p>
           )}
         </div>
-        {demo ? (
-          <p className="text-xs text-muted-foreground">Linking a real bank is not available in the demo.</p>
-        ) : configured ? (
+        {!demo && (configured ? (
           <LinkBankButton
             sandboxOverride={duplicateOverrideAllowed(process.env.PLAID_ENV)}
             linkedInstitutions={loginsByInstitution(live, (d) => formatShortDay(d, now)).map(institutionLine)}
@@ -278,7 +274,7 @@ export default async function BankLoginsPage() {
           />
         ) : (
           <p className="text-xs text-muted-foreground">Bank linking is not configured here.</p>
-        )}
+        ))}
       </div>
 
       <div className="space-y-4">

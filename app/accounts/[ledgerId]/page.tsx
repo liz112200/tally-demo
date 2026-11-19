@@ -146,13 +146,12 @@ export default async function AccountPage({
           </>
         ) : (
           <p className="text-sm text-muted-foreground">
-            No statement recorded, so its rows have no cycle to sit in. Record one below.
+            Record a statement to see this account’s cycle.
           </p>
         )}
         {ledger.purchaseDatedCsv && hasCsvRows && (
           <p className="rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
-            This card&apos;s CSV records the purchase date, not the posting date: a CSV row bought near a closing day may
-            sit beside the statement that counts it.
+            CSV rows use purchase dates. Near closing, the purchase date and posting date can fall in different statement periods.
           </p>
         )}
         {banks.map((b) => {
@@ -167,7 +166,7 @@ export default async function AccountPage({
           ) : (
             <p key={b.id} className="text-sm text-amber-800 dark:text-amber-300">
               {banks.length > 1 && <span className="font-medium">{name}: </span>}
-              Not checked against a statement yet, so its synced rows count in no total.{' '}
+              Synced rows are excluded from totals until verified.{' '}
               <a href={`/accounts/verify/${b.id}`} className="underline underline-offset-2">
                 Check against a statement
               </a>

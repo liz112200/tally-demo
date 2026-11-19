@@ -35,8 +35,7 @@ export function DemoBanner({ sourceUrl, orientationDismissed: fromServer }: { so
       <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-3 gap-y-1.5 px-6 py-2">
         <FlaskConical className="size-4 shrink-0 text-primary" aria-hidden />
         <p>
-          <strong className="font-medium">This is a demo.</strong>{' '}
-          Every person, merchant, and amount is synthetic. Data resets daily.{' '}
+          <strong className="font-medium">Demo</strong> · Sample data resets daily.{' '}
           <Link
             href={sourceUrl}
             className="underline underline-offset-2 hover:text-primary"
@@ -47,7 +46,7 @@ export function DemoBanner({ sourceUrl, orientationDismissed: fromServer }: { so
           </Link>
         </p>
         <div className="ml-auto flex items-center gap-2">
-          {orientationDismissed && (
+          {orientationDismissed && !pathname.startsWith('/expenses/receipt/') && (
             <Button variant="ghost" size="xs" onClick={() => setOrientationDismissed(false)}>
               Things to try
             </Button>
