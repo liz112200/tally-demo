@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { toCents, formatUSD, formatCents, tryParseDollars } from '@/lib/money';
-import { computeItemShares, type ResolvedShare } from '@/lib/split';
+import { ReceiptSplit } from './receipt-split';
 import { totalsMismatch } from '@/lib/receipt/compare';
 import {
   uploadReceipt,
@@ -30,14 +30,12 @@ import {
   saveReceiptReview,
   removeReceipt,
 } from '@/app/_actions/receipts';
-import { saveItemSplit } from '@/app/_actions/splits';
 import {
   RECEIPT_MIME_TYPES,
   RECEIPT_MAX_BYTES,
   RECEIPT_MAX_IMAGES,
   type UploadReceiptState,
   type ReceiptReviewState,
-  type ItemSplitState,
 } from '@/app/_lib/schema';
 import type { ReceiptView } from '@/db/queries';
 import type { PersonOption } from '@/app/_components/split-editor';
@@ -49,7 +47,6 @@ type WizardStep = 'upload' | 'review' | 'assign';
 
 const initialUpload: UploadReceiptState = {};
 const initialReview: ReceiptReviewState = {};
-const initialItemSplit: ItemSplitState = {};
 
 // The receipt wizard: upload → extract → review → assign → save. The
 // receipt row persists from a successful upload on, so closing mid-way
@@ -77,7 +74,7 @@ export function ReceiptWizardDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={trigger} />
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>
             {existingReceipt ? 'Receipt' : 'Attach receipt'}
@@ -165,7 +162,8 @@ function ReceiptWizard({
   }
 
   return (
-    <AssignStep
+    <ReceiptSplit
+      amountCents={amountCents}
       key={receipt.id}
       receipt={receipt}
       persons={persons}
@@ -684,278 +682,3 @@ function ReviewStep({
     </div>
   );
 }
-
-// Assign each item to one or more people; an item splits equally among its
-// assignees, and unassigned items stay the owner's. The preview runs the
-// same computeItemShares the Server Action runs, so what is shown is what
-// saves.
-function AssignStep({
-  receipt,
-  persons,
-  onBack,
-  onSaved,
-}: {
-  receipt: ReceiptView;
-  persons: PersonOption[];
-  onBack: () => void;
-  onSaved: () => void;
-}) {
-  const [state, dispatch, pending] = useActionState(saveItemSplit, initialItemSplit);
-  useReportSuccess(state);
-  const [assignments, setAssignments] = useState<Map<string, Set<string>>>(
-    () =>
-      new Map(
-        receipt.items.map((item) => [
-          item.id,
-          new Set(
-            item.assignedPersonIds.filter((id) =>
-              persons.some((p) => p.id === id),
-            ),
-          ),
-        ]),
-      ),
-  );
-  // The "brush": who a tap assigns. Start with everyone selected so the
-  // common case (share everything) is one "Apply to all" tap away.
-  const [active, setActive] = useState<Set<string>>(
-    () => new Set(persons.map((p) => p.id)),
-  );
-
-  useEffect(() => {
-    if (state.ok) onSaved();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state]);
-
-  const owner = persons.find((p) => p.isOwner);
-
-  const toggleActive = (personId: string) =>
-    setActive((prev) => {
-      const next = new Set(prev);
-      if (next.has(personId)) next.delete(personId);
-      else next.add(personId);
-      return next;
-    });
-
-  // A tap paints the active set onto an item (overwrite). Applying to all
-  // items covers the fully-shared receipt; the per-item clear (x) hands an
-  // item back to the owner.
-  const paintItem = (itemId: string) =>
-    setAssignments((prev) => new Map(prev).set(itemId, new Set(active)));
-  const paintAll = () =>
-    setAssignments((prev) => {
-      const next = new Map(prev);
-      for (const item of receipt.items) next.set(item.id, new Set(active));
-      return next;
-    });
-  const clearItem = (itemId: string) =>
-    setAssignments((prev) => new Map(prev).set(itemId, new Set()));
-
-  const preview = useMemo((): { shares: ResolvedShare[] } | { problem: string } => {
-    if (!owner) return { problem: 'Owner person missing' };
-    try {
-      return {
-        shares: computeItemShares({
-          ownerId: owner.id,
-          taxCents: toCents(receipt.taxCents),
-          tipCents: toCents(receipt.tipCents),
-          items: receipt.items.map((item) => ({
-            amountCents: toCents(item.amountCents),
-            assigneePersonIds: [...(assignments.get(item.id) ?? [])],
-          })),
-          personOrder: persons.map((p) => p.id),
-        }),
-      };
-    } catch (err) {
-      return {
-        problem: err instanceof Error ? err.message : 'Invalid assignments',
-      };
-    }
-  }, [assignments, owner, persons, receipt]);
-
-  function save() {
-    const payload = JSON.stringify({
-      transactionId: receipt.transactionId,
-      receiptId: receipt.id,
-      assignments: receipt.items.map((item) => ({
-        itemId: item.id,
-        personIds: [...(assignments.get(item.id) ?? [])],
-      })),
-    });
-    const fd = new FormData();
-    fd.set('payload', payload);
-    startTransition(() => dispatch(fd));
-  }
-
-  const nameById = new Map(persons.map((p) => [p.id, p.name]));
-
-  const activeLabel = persons
-    .filter((p) => active.has(p.id))
-    .map((p) => (p.isOwner ? 'me' : p.name))
-    .join(' · ');
-
-  return (
-    <div className="grid gap-3">
-      {/* The brush: choose who a tap assigns, then tap items. */}
-      <div className="grid gap-2 rounded-lg border bg-muted/30 px-3 py-2.5">
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-            Assigning to
-          </span>
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => setActive(new Set(persons.map((p) => p.id)))}
-              className="rounded px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
-            >
-              Everyone
-            </button>
-            {owner && (
-              <button
-                type="button"
-                onClick={() => setActive(new Set([owner.id]))}
-                className="rounded px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
-              >
-                Just me
-              </button>
-            )}
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-1">
-          {persons.map((p) => {
-            const on = active.has(p.id);
-            return (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => toggleActive(p.id)}
-                aria-pressed={on}
-                className={cn(
-                  'rounded-full border px-2 py-0.5 text-xs transition-colors',
-                  on
-                    ? 'border-primary/50 bg-primary/10 font-medium text-primary'
-                    : 'text-muted-foreground hover:bg-muted',
-                )}
-              >
-                {p.isOwner ? 'me' : p.name}
-              </button>
-            );
-          })}
-        </div>
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-[11px] text-muted-foreground">
-            Tap an item below to give it{' '}
-            <span className="font-medium text-foreground">
-              {active.size === 0 ? 'nobody (yours)' : activeLabel}
-            </span>
-            .
-          </p>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="h-6.5 shrink-0 text-xs"
-            onClick={paintAll}
-          >
-            Apply to all
-          </Button>
-        </div>
-      </div>
-
-      <div className="overflow-hidden rounded-lg border">
-        <ul className="divide-y">
-          {receipt.items.map((item) => {
-            const assigned = assignments.get(item.id) ?? new Set<string>();
-            const names = persons
-              .filter((p) => assigned.has(p.id))
-              .map((p) => (p.isOwner ? 'me' : p.name));
-            return (
-              <li key={item.id} className="flex items-stretch">
-                {/* The whole row is the tap target that paints the active
-                    brush onto this item. */}
-                <button
-                  type="button"
-                  onClick={() => paintItem(item.id)}
-                  className="flex min-w-0 flex-1 items-center gap-2 px-3 py-1.5 text-left transition-colors hover:bg-muted/50"
-                  aria-label={`Assign ${item.description} to ${active.size === 0 ? 'nobody' : activeLabel}`}
-                >
-                  <span className="min-w-0 flex-1 truncate text-[13px]">
-                    {item.description}
-                  </span>
-                  <span className="shrink-0 font-mono text-xs">
-                    {formatUSD(toCents(item.amountCents))}
-                  </span>
-                  <span
-                    className={cn(
-                      'w-32 shrink-0 truncate text-right text-[11px]',
-                      names.length === 0
-                        ? 'text-muted-foreground/70 italic'
-                        : 'text-primary',
-                    )}
-                  >
-                    {names.length === 0 ? 'yours' : names.join(' · ')}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => clearItem(item.id)}
-                  disabled={assigned.size === 0}
-                  aria-label={`Clear assignees on ${item.description}`}
-                  className="flex shrink-0 items-center px-2 text-muted-foreground/50 transition-colors hover:text-destructive disabled:opacity-0"
-                >
-                  <X className="size-3.5" aria-hidden />
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
-      <p className="text-[11px] text-muted-foreground">
-        Unassigned items stay yours. Tax {formatUSD(toCents(receipt.taxCents))} and
-        tip {formatUSD(toCents(receipt.tipCents))} split equally among everyone
-        holding an item.
-      </p>
-
-      {'shares' in preview ? (
-        <div className="rounded-lg bg-muted/60 px-3 py-2">
-          <p className="mb-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-            Resolved shares
-          </p>
-          <ul className="grid gap-0.5">
-            {preview.shares.map((s) => (
-              <li key={s.personId} className="flex items-baseline justify-between text-xs">
-                <span>
-                  {nameById.get(s.personId) ?? '(unknown)'}
-                  {s.personId === owner?.id && (
-                    <span className="ml-1 text-muted-foreground">(you — not owed)</span>
-                  )}
-                </span>
-                <span className="font-mono">{formatUSD(toCents(s.amountCents))}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : (
-        <p className="text-xs text-destructive">{preview.problem}</p>
-      )}
-      {state.error && <p className="text-xs text-destructive">{state.error}</p>}
-
-      <div className="flex items-center justify-between">
-        <Button type="button" variant="ghost" size="sm" onClick={onBack}>
-          Back
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          onClick={save}
-          disabled={pending || !('shares' in preview)}
-        >
-          {pending ? 'Saving…' : 'Save split'}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-// The phase-5 row-hover attach/view affordance ("Rcpt") lived here; phase 6
-// consolidated it into the expanded row's receipt block (transaction-
-// detail.tsx), which opens this same wizard dialog.

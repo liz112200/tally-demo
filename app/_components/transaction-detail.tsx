@@ -178,6 +178,11 @@ function ReceiptBlock({
           {formatUSD(toCents(receipt.totalCents))}
           {imageCount > 1 && ` · ${imageCount} images`}
         </p>
+        {row.isSplittable && receipt.items.length > 0 && (
+          <Link className="mr-2 inline-flex min-h-9 items-center font-medium text-primary underline underline-offset-2" href={`/expenses/receipt/${row.id}`}>
+            Split by item
+          </Link>
+        )}
         {problem && <p className="text-destructive">{problem}</p>}
         <ReceiptWizardDialog
           transactionId={row.id}

@@ -378,6 +378,8 @@ export const MERCHANTS: Merchant[] = [
   },
 ];
 
+export const SAMPLE_DINNER = 'Dinner at Alba';
+
 // Manual entries: cash spending the owner typed in by hand.
 export const MANUAL_ENTRIES: { description: string; amountCents: number; category: string | null }[] = [
   { description: 'Farmers market (cash)', amountCents: 2400, category: 'Groceries' },

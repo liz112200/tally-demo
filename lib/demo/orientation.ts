@@ -10,19 +10,19 @@
 export function orientationSteps(verifyHref: string): { href: string; title: string; detail: string }[] {
   return [
     {
-      href: '/',
+      href: '/expenses/receipt/sample-dinner',
+      title: 'Split a sample dinner',
+      detail: 'Assign receipt items and see each person’s share.',
+    },
+    {
+      href: '/accounts/logins',
       title: 'Sync a bank',
-      detail: 'Press Sync now on American Express a few times, then answer the purchase held at the cutover: on the CSV, or new?',
+      detail: 'Sync the sample American Express login.',
     },
     {
       href: verifyHref,
       title: 'Check an account against its statement',
       detail: 'Chase checking’s synced rows count only once its statement matches to the cent. Try the real figures, then a typo.',
-    },
-    {
-      href: '/expenses?q=pizza+night',
-      title: 'Split a dinner',
-      detail: 'Open Pizza night and split it equally, by amount, or by percent. Rows with a receipt split item by item.',
     },
     {
       href: '/people',

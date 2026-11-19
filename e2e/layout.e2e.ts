@@ -42,16 +42,16 @@ test('the tips strip is in the server’s page in its final state, and dismissin
   await context.clearCookies();
   // As sent by the server, before any script runs.
   const html = async () => (await page.request.get('/')).text();
-  expect(await html()).toContain('Four things to try');
+  expect(await html()).toContain('More things to try');
   await settled(page, '/');
   await page.getByRole('button', { name: 'Dismiss' }).first().click();
-  await expect(page.getByText('Four things to try')).toHaveCount(0);
-  expect(await html()).not.toContain('Four things to try');
+  await expect(page.getByText('More things to try')).toHaveCount(0);
+  expect(await html()).not.toContain('More things to try');
   await settled(page, '/');
-  await expect(page.getByText('Four things to try')).toHaveCount(0);
+  await expect(page.getByText('More things to try')).toHaveCount(0);
   // Brought back from the banner, for the next load too.
   await page.getByRole('button', { name: 'Things to try' }).click();
-  await expect(page.getByText('Four things to try')).toBeVisible();
+  await expect(page.getByText('More things to try')).toBeVisible();
   await settled(page, '/');
-  await expect(page.getByText('Four things to try')).toBeVisible();
+  await expect(page.getByText('More things to try')).toBeVisible();
 });

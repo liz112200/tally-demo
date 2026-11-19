@@ -37,3 +37,17 @@ test('a statement’s edit form fits a phone', async ({ page }) => {
   expect(box.x + box.width).toBeLessThanOrEqual(390);
   await noSideScroll(page, 'The statement edit form');
 });
+
+test('the sample dinner opens directly and stacks its live preview on a phone', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('link', { name: 'Split a sample dinner' }).click();
+  const receipt = page.getByRole('region', { name: 'Itemized receipt' });
+  const preview = page.getByRole('region', { name: 'Split preview' });
+  await expect(receipt.getByRole('heading', { name: 'Dinner at Alba' })).toBeVisible();
+  const bread = receipt.getByRole('group', { name: 'Assign Garlic bread', exact: true });
+  await bread.getByRole('button', { name: 'You', exact: true }).click();
+  await expect(preview.locator('[aria-live]')).toContainText('$22.00');
+  await noSideScroll(page, 'Itemized dinner');
+  const paper = (await receipt.boundingBox())!;
+  expect((await preview.boundingBox())!.y).toBeGreaterThanOrEqual(paper.y + paper.height - 1);
+});

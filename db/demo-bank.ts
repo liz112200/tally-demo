@@ -1,7 +1,8 @@
 import 'server-only';
-import { and, asc, eq, isNull } from 'drizzle-orm';
+import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm';
 import { db } from './index';
-import { bankAccounts } from './schema';
+import { bankAccounts, categories, receiptItems, receipts, transactions } from './schema';
+import { SAMPLE_DINNER } from '@/lib/demo/catalog';
 import { getAllPersons } from './queries';
 import { buildDemoSeed, seedDayFromOwnerCreatedAt, type DemoSeed } from '@/lib/demo/seed';
 import { createSyntheticProvider } from '@/lib/bank-sync/synthetic/provider';
@@ -30,6 +31,23 @@ export async function demoUnverifiedAccountId(): Promise<string | null> {
     .from(bankAccounts)
     .where(and(isNull(bankAccounts.verifiedAt), eq(bankAccounts.syncEnabled, true)))
     .orderBy(asc(bankAccounts.createdAt), asc(bankAccounts.id))
+    .limit(1);
+  return row?.id ?? null;
+}
+
+// Older demo ledgers already contain restaurant receipts. Prefer the walkthrough
+// as soon as a daily reset has seeded it, and still offer dinner if it was removed.
+export async function demoDinnerTransactionId(): Promise<string | null> {
+  const [row] = await db.select({ id: transactions.id }).from(transactions)
+    .innerJoin(receipts, eq(receipts.transactionId, transactions.id))
+    .innerJoin(categories, eq(categories.id, transactions.categoryId))
+    .where(and(
+      eq(categories.name, 'Dining'), eq(categories.isSplittable, true),
+      isNull(transactions.deletedAt), isNull(transactions.bankAccountId), eq(transactions.pending, false),
+      sql`${transactions.amountCents} > 0`,
+      sql`exists (select 1 from ${receiptItems} where ${receiptItems.receiptId} = ${receipts.id})`,
+    ))
+    .orderBy(desc(sql`${transactions.descriptionRaw} = ${SAMPLE_DINNER}`), desc(transactions.date), asc(transactions.id))
     .limit(1);
   return row?.id ?? null;
 }

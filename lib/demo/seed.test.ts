@@ -1,3 +1,4 @@
+import { computeItemShares } from '../split';
 import { describe, it, expect } from 'vitest';
 import { buildDemoSeed, seedDayFromOwnerCreatedAt, type DemoSeed } from './seed';
 import { computeBidirectionalBalances, type DebtShare } from '../balances';
@@ -79,6 +80,25 @@ describe('buildDemoSeed', () => {
   it('never collides on the dedup index', () => {
     const live = seed.transactions.filter((t) => t.dedupHash !== null && !t.dedupExempt).map((t) => t.dedupHash);
     expect(new Set(live).size).toBe(live.length);
+  });
+
+  it('seeds the dinner walkthrough with a real receipt and draft assignments', () => {
+    const receipt = seed.receipts.find((r) => r.merchantExtracted === 'Dinner at Alba');
+    expect(receipt).toBeDefined();
+    const items = seed.receiptItems.filter((i) => i.receiptId === receipt!.id);
+    const shares = computeItemShares({
+      ownerId: seed.ownerId,
+      personOrder: seed.persons.map((p) => p.id),
+      taxCents: toCents(receipt!.taxCents),
+      tipCents: toCents(receipt!.tipCents),
+      items: items.map((i) => ({
+        amountCents: toCents(i.amountCents),
+        assigneePersonIds: seed.receiptItemAssignments.filter((a) => a.receiptItemId === i.id).map((a) => a.personId),
+      })),
+    });
+    expect(items.map((i) => i.description)).toEqual(['Margherita pizza', 'Rigatoni', 'Garlic bread']);
+    expect(shares.map((s) => s.amountCents)).toEqual([28000, 26000]);
+    expect(seed.transactions.find((t) => t.id === receipt!.transactionId)?.amountCents).toBe(54000);
   });
 
   it('uses every split method, with receipts behind the item splits', () => {

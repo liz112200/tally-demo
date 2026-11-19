@@ -576,10 +576,9 @@ These are decided. Do not reintroduce the alternatives.
 
 ## Git conventions
 
-- Commit messages are the owner's: imperative mood, no AI attribution
-  anywhere in the git record.
-- Do not add a `Co-Authored-By: Claude` trailer to any commit.
-- Do not add a "Generated with Claude Code" line to PR descriptions.
+- Use the owner's configured Git identity as the sole author and committer.
+  Write imperative commit messages. Omit co-author trailers, assistant
+  attribution, and generation credits from commits and pull requests.
 - `.claude/settings.json` sets `includeCoAuthoredBy: false` to enforce the
   no-co-author rule structurally. Do not remove it.
 

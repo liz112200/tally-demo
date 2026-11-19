@@ -14,9 +14,10 @@ migration, no shared credential, no shared store.
 ## What differs in demo mode
 
 - A banner states that the data is synthetic and resets daily, links to the
-  source, and offers Reset. A first-visit strip points at four things to try:
-  syncing a bank, checking an account against its statement, splitting a
-  dinner, and simplifying balances.
+  source, and offers Reset. “Split a sample dinner” opens a real receipt directly. Assign items,
+  inspect the live shares, and save the split to the demo ledger. A reset
+  restores Dinner at Alba and its starting assignments. “More things to try”
+  links to bank sync, statement verification, and balance simplification.
 - Expenses gains "Import a sample statement", which runs the real import
   preview on a generated Discover CSV whose oldest rows are already imported.
 - /accounts shows two synthetic bank logins, Chase checking and Amex, served

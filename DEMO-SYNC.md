@@ -128,12 +128,10 @@ does, produced by the real code from seeded inputs, not by setting a flag.
    the flight split with Jordan (+$35.00, a seat change). The row gets the
    production flag: shares kept, balances unchanged, until the owner
    re-saves or removes the split.
-4. **The strip points there.** "Four things to try": "Sync a bank"
-   (/accounts), "Check an account against its statement" (the unverified
-   account's verify page, looked up per request in demo mode only), "Split a
-   dinner", "Simplify balances". "Import a sample statement" left it;
-   Discover stays CSV-only and the sample import keeps its button on
-   Expenses.
+4. **The strip points there.** “Split a sample dinner” opens an itemized receipt.
+   “More things to try” links to Bank logins for sync, the unverified account's
+   statement check, and People for balance simplification. The sample statement
+   import stays on Expenses.
 5. **One line of context on /accounts, demo only.** Under each card: "CSV
    history to <date>, bank sync from <date>. Rows that could be either are
    held for you." Production's /accounts is unchanged.

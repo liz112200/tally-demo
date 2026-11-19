@@ -23,6 +23,7 @@ import {
   DEMO_RULES,
   GROCERY_ITEMS,
   MANUAL_ENTRIES,
+  SAMPLE_DINNER,
   MERCHANTS,
   NON_SPLITTABLE,
   NOT_SPENDING,
@@ -470,6 +471,13 @@ export function buildDemoSeed(today: string, seed: number = DEMO_SEED): DemoSeed
     });
   });
 
+  const dinner: RawRow = {
+    id: root.fork('sample-dinner-row').uuid(), date: dayToDate(today, 1),
+    source: 'manual', daysAgo: 1, cents: 5400, description: SAMPLE_DINNER,
+    merchant: null, bankCategory: '', chaseType: '', manualCategory: 'Dining',
+  };
+  rows.push(dinner);
+
   // Which rows have been imported (or typed in): a bank row is in the
   // ledger once its statement period has been downloaded, the day after the
   // period ends. Period i covers days [PERIOD_ENDS[i], PERIOD_ENDS[i-1]).
@@ -879,6 +887,28 @@ export function buildDemoSeed(today: string, seed: number = DEMO_SEED): DemoSeed
     }
   });
   rows.filter((r) => r.source === 'manual').forEach((r) => toTransaction(r, null, 0));
+
+  // An attached, assigned receipt. The split first enters balances when the visitor saves it.
+  const dinnerIds = root.fork('sample-dinner');
+  const receiptId = dinnerIds.uuid();
+  const dinnerItems = [
+    { description: 'Margherita pizza', amountCents: 18000, people: [ownerId] },
+    { description: 'Rigatoni', amountCents: 16000, people: [personId.alex] },
+    { description: 'Garlic bread', amountCents: 8000, people: [ownerId, personId.alex] },
+  ].map(({ description, amountCents, people }, position) => {
+    const item = { id: dinnerIds.uuid(), receiptId, position, description, quantity: 1, amountCents, createdAt: createdAt(dinner) };
+    receiptItems.push(item);
+    assignments.push(...people.map((personId) => ({ receiptItemId: item.id, personId })));
+    return item;
+  });
+  const totals = { subtotalCents: 42000, taxCents: 4000, tipCents: 8000, totalCents: dinner.cents * CENTS_TO_MINOR };
+  receipts.push({
+    id: receiptId, transactionId: dinner.id, merchantExtracted: SAMPLE_DINNER, dateExtracted: dinner.date,
+    ...totals, createdAt: createdAt(dinner),
+    image: { pathname: `receipts/demo-${dinner.id}.svg`, svg: renderReceiptSvg({
+      merchant: SAMPLE_DINNER, date: dinner.date, items: dinnerItems, tipLabel: 'Tip', ...totals,
+    }) },
+  });
 
   // 8. The sample statement: the newest Discover activity, not yet imported.
   const sampleRows = rows

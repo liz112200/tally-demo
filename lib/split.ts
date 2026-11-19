@@ -158,7 +158,7 @@ export function computeShares(
 // transaction amount. A tolerated total mismatch (warned in review, never
 // blocking) is the one sanctioned case where an item split's shares do not
 // sum to abs(transaction.amount_cents).
-export function computeItemShares(input: {
+type ItemSplitInput = {
   ownerId: string;
   taxCents: Cents;
   tipCents: Cents;
@@ -167,7 +167,13 @@ export function computeItemShares(input: {
   // ALL known persons in created_at ascending order; participant order and
   // remainder distribution derive from it.
   personOrder: readonly string[];
-}): ResolvedShare[] {
+};
+
+export function computeItemShares(input: ItemSplitInput): ResolvedShare[] {
+  return explainItemShares(input).map(({ personId, amountCents }) => ({ personId, amountCents }));
+}
+
+export function explainItemShares(input: ItemSplitInput) {
   const { ownerId, taxCents, tipCents, items, personOrder } = input;
   if (taxCents < 0 || tipCents < 0) {
     throw new Error('Tax and tip must not be negative');
@@ -177,13 +183,13 @@ export function computeItemShares(input: {
     throw new Error('Owner must appear in personOrder');
   }
 
-  const totals = new Map<string, number>();
+  const parts = new Map<string, { itemIndexes: number[]; amountCents: Cents }[]>();
   // Pool line items that share the same assignee set before splitting.
   // Per-item remainder on odd-cent prices accumulates (e.g. four $X.99
   // items between two people drifts $0.04) even when everyone shares
   // everything equally; one split per assignee group keeps shares fair.
-  const groups = new Map<string, { assignees: string[]; amountCents: number }>();
-  for (const item of items) {
+  const groups = new Map<string, { assignees: string[]; amountCents: number; itemIndexes: number[] }>();
+  for (const [index, item] of items.entries()) {
     if (item.amountCents < 0) {
       throw new Error(`Item amounts must not be negative, received: ${item.amountCents}`);
     }
@@ -197,8 +203,9 @@ export function computeItemShares(input: {
     const group = groups.get(key);
     if (group) {
       group.amountCents += item.amountCents;
+      group.itemIndexes.push(index);
     } else {
-      groups.set(key, { assignees, amountCents: item.amountCents });
+      groups.set(key, { assignees, amountCents: item.amountCents, itemIndexes: [index] });
     }
   }
 
@@ -210,13 +217,15 @@ export function computeItemShares(input: {
       group.assignees.length,
     );
     group.assignees.forEach((id, i) => {
-      totals.set(id, (totals.get(id) ?? 0) + shares[i]);
+      const lines = parts.get(id) ?? [];
+      lines.push({ itemIndexes: group.itemIndexes, amountCents: shares[i] });
+      parts.set(id, lines);
     });
   }
 
   // Participants: everyone holding at least one item share, in person
   // order. Tax and tip divide equally among them.
-  const participants = [...totals.keys()].sort(
+  const participants = [...parts.keys()].sort(
     (a, b) => rank.get(a)! - rank.get(b)!,
   );
   if (participants.length === 0) {
@@ -224,14 +233,13 @@ export function computeItemShares(input: {
   }
   const taxTipTotal = toCents(taxCents + tipCents);
   const taxTipShares = distributeRemainder(taxTipTotal, participants.length);
-  participants.forEach((id, i) => {
-    totals.set(id, totals.get(id)! + taxTipShares[i]);
+  const shares = participants.map((personId, i) => {
+    const lines = parts.get(personId)!;
+    return {
+      personId, lines, taxTipCents: taxTipShares[i],
+      amountCents: toCents(lines.reduce((sum, line) => sum + line.amountCents, taxTipShares[i] as number)),
+    };
   });
-
-  const shares = participants.map((personId) => ({
-    personId,
-    amountCents: toCents(totals.get(personId)!),
-  }));
 
   // Engine-bug guard: shares must sum to items + tax + tip exactly.
   const expected = toCents(

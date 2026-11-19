@@ -1,6 +1,7 @@
 'use client';
 
 import { useActionState, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { Split as SplitIcon, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -616,9 +617,7 @@ function ItemSplitView({
 
       <div className="flex justify-between">
         <RemoveSplitButton transactionId={transactionId} onRemoved={onRemoved} />
-        <p className="self-center text-[11px] text-muted-foreground">
-          Edit items via the rcpt badge; removing keeps the receipt.
-        </p>
+        <Link className="self-center text-sm underline underline-offset-2" href={`/expenses/receipt/${transactionId}`}>Edit item assignments</Link>
       </div>
     </div>
   );
