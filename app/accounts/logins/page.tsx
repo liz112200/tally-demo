@@ -114,13 +114,25 @@ function InfoLine({ children }: { children: React.ReactNode }) {
 
 type LedgerState = Awaited<ReturnType<typeof ledgerStateFor>> extends Map<string, infer V> ? V : never;
 
-// "CSV history to Oct 22, bank sync from Oct 23. ..." under each demo account.
-function demoContextLine(state: LedgerState | undefined, lastCsv: ReadonlyMap<string, string>): string | null {
-  if (!state?.ledgerAccountId || !state.cutoverDate) return null;
-  const last = lastCsv.get(state.ledgerAccountId);
-  if (!last) return null;
-  const day = (iso: string) => formatShortDay(new Date(`${iso}T00:00:00Z`), new Date());
-  return `CSV history to ${day(last)}, bank sync from ${day(state.cutoverDate)}. Rows that could be either are held for you.`;
+function ConnectionDetails({ connection, ledger, lastCsv }: {
+  connection: BankConnectionRow;
+  ledger: Map<string, LedgerState>;
+  lastCsv: ReadonlyMap<string, string>;
+}) {
+  return <details className="border-t px-4 py-2 text-xs text-muted-foreground">
+    <summary className="w-fit cursor-pointer py-1 font-medium">Connection details</summary>
+    <p className="mt-2">Linked {formatDay(connection.createdAt)}{connection.healthCheckedAt && <> · Checked {formatSynced(connection.healthCheckedAt)}</>}</p>
+    {connection.accounts.map((account) => {
+      const state = ledger.get(account.id);
+      const last = state?.ledgerAccountId && lastCsv.get(state.ledgerAccountId);
+      return <div key={account.id} className="my-2 space-y-1">
+        <p>{account.name} · {account.subtype ?? account.type} · {rowsPhrase(account.rowCount)}</p>
+        {last && <p>CSV history through {last}</p>}
+        {state?.cutoverDate && <p>Bank history from {state.cutoverDate}</p>}
+        {state?.verifiedAt && <p>Statement verified {formatDay(state.verifiedAt)}</p>}
+      </div>;
+    })}
+  </details>;
 }
 
 // What slice 7 adds under an account (REAL-ACCOUNTS.md): where it syncs into
@@ -134,22 +146,31 @@ function LedgerLines({
   hasRows,
   replacesName,
   linked,
-  demoContext,
+  compact,
 }: {
   accountId: string;
   state: LedgerState | undefined;
   hasRows: boolean;
   replacesName: string | null;
   linked: boolean;
-  // The demo's one line on what the cutover is (DEMO-SYNC.md).
-  demoContext: string | null;
+  compact: boolean;
 }) {
   if (!state) return null;
   if (state.replacesAccountId && replacesName && linked) return <ReissuedChoice accountId={accountId} replaces={replacesName} />;
   if (!state.ledgerAccountId) return null;
+  if (compact) {
+    const needsVerification = !state.verifiedAt && (hasRows || state.heldCount > 0);
+    return <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 py-1 text-xs">
+      {needsVerification && (linked
+        ? <a href={`/accounts/verify/${accountId}`} className="font-medium text-warning underline underline-offset-2">Verify statement to count rows</a>
+        : <span className="text-warning">Unverified · rows excluded</span>)}
+      <a href={`/accounts/${state.ledgerAccountId}`} className="font-medium text-primary underline-offset-2 hover:underline">
+        {state.heldCount > 0 ? `Review ${state.heldCount} held row${state.heldCount === 1 ? '' : 's'} →` : 'Open account →'}
+      </a>
+    </div>;
+  }
   return (
     <div className="space-y-1 text-xs">
-      {demoContext && <InfoLine>{demoContext}</InfoLine>}
       <div className="text-muted-foreground">
         Into {state.ledgerName}
         {state.cutoverDate ? <> · from {state.cutoverDate}; earlier bank rows are never added</> : <> · full history</>}
@@ -250,13 +271,11 @@ export default async function BankLoginsPage() {
                   accountCount === 1 ? '' : 's'
                 }`}
           </p>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {demo
-              ? 'Try syncing a sample login. Real bank linking is disabled.'
-              : sandbox
+          {!demo && <p className="mt-0.5 text-xs text-muted-foreground">
+            {sandbox
                 ? 'Sandbox: Items are free here.'
                 : `Items used: ${itemsUsed(connections)} of ${ITEM_BUDGET} on Plaid's Trial, removed logins included. Plaid's dashboard is the authority.`}
-          </p>
+          </p>}
           {!demo && configured && (
             // What Sync now can bring (SCHEDULED-SYNC.md): /transactions/sync
             // reads what Plaid has stored; Plaid checks each bank on its own
@@ -303,10 +322,10 @@ export default async function BankLoginsPage() {
                       {c.institutionName ?? 'Unknown institution'}
                       {healthBadge(c)}
                     </h2>
-                    <div className="text-xs text-muted-foreground">
+                    {!demo && <div className="text-xs text-muted-foreground">
                       Linked {formatDay(c.createdAt)}
                       {c.healthCheckedAt && linked && <> · checked {formatSynced(c.healthCheckedAt)}</>}
-                    </div>
+                    </div>}
                     {!linked && (
                       <p className="text-xs text-muted-foreground">
                         Plaid&apos;s access ended and the token was erased. Its {rowsPhrase(rows)} stay in the ledger.
@@ -383,10 +402,13 @@ export default async function BankLoginsPage() {
                           </span>
                           {a.mask && <span className="ml-2 font-mono text-xs text-muted-foreground">•• {a.mask}</span>}
                           <div className="text-xs text-muted-foreground">
-                            {a.subtype ?? a.type}
-                            {a.lastSyncedAt && <> · last synced {formatSynced(a.lastSyncedAt)}</>}
-                            {a.syncEnabled && !a.lastSyncedAt && <> · not synced yet</>}
-                            {a.rowCount > 0 && <> · {rowsPhrase(a.rowCount)}</>}
+                            {demo
+                              ? (a.lastSyncedAt ? `Last synced ${formatSynced(a.lastSyncedAt)}` : 'No sync yet')
+                              : <>{a.subtype ?? a.type}
+                                {a.lastSyncedAt && <> · last synced {formatSynced(a.lastSyncedAt)}</>}
+                                {a.syncEnabled && !a.lastSyncedAt && <> · not synced yet</>}
+                                {a.rowCount > 0 && <> · {rowsPhrase(a.rowCount)}</>}
+                              </>}
                           </div>
                           {a.unsharedAt && (
                             <div className="text-xs text-muted-foreground">
@@ -404,7 +426,7 @@ export default async function BankLoginsPage() {
                             hasRows={a.rowCount > 0}
                             replacesName={ledger.get(a.id)?.replacesAccountId ? nameOf(ledger.get(a.id)!.replacesAccountId!) : null}
                             linked={linked && canSync}
-                            demoContext={demo ? demoContextLine(ledger.get(a.id), lastCsv) : null}
+                            compact={demo}
                           />
                         </div>
                         {!linked ? null : SYNCABLE.has(a.type) ? (
@@ -435,6 +457,7 @@ export default async function BankLoginsPage() {
                     ))}
                   </ul>
                 )}
+                {demo && <ConnectionDetails connection={c} ledger={ledger} lastCsv={lastCsv} />}
                 {configured && c.status !== 'removed' && (
                   <details className="border-t">
                     <summary className="cursor-pointer px-4 py-2 text-xs text-muted-foreground">Manage this login</summary>

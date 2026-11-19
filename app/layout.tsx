@@ -22,7 +22,7 @@ export const metadata: Metadata = {
 // Applies the stored (or system) theme before first paint so neither theme
 // flashes. Runs inline in <head>; localStorage may be unavailable in some
 // contexts, hence the try/catch.
-const themeInit = `try{var t=localStorage.getItem("theme");if(t==="dark"||(!t&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.classList.add("dark")}catch(e){}`;
+const themeInit = `try{var p=localStorage.getItem("ledger-dark-palette");if(document.documentElement.dataset.demo&&p)document.documentElement.dataset.darkPalette=p;var t=localStorage.getItem("theme");if(t==="dark"||(!t&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.classList.add("dark")}catch(e){}`;
 
 export default async function RootLayout({
   children,

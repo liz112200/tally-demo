@@ -22,7 +22,8 @@ html[data-demo] {
   --radius: .55rem;
   --ledger-rail: #1d3533;
 }
-html.dark[data-demo] {
+html.dark[data-demo], .palette-preview {
+  color-scheme: dark;
   --background: #151c20;
   --foreground: #e9efee;
   --card: #1e292d;
@@ -37,6 +38,70 @@ html.dark[data-demo] {
   --input: #536965;
   --ledger-rail: #132522;
 }
+html.dark[data-demo][data-dark-palette="graphite"], .palette-preview[data-dark-palette="graphite"] {
+  --background: #171719;
+  --foreground: #e9e9eb;
+  --card: #202023;
+  --popover: #27272b;
+  --primary: #d4d4db;
+  --primary-foreground: #252529;
+  --muted: #2d2d31;
+  --muted-foreground: #b4b4be;
+  --accent: #36363c;
+  --accent-foreground: #f2f2f5;
+  --border: #404046;
+  --input: #66666f;
+  --ledger-rail: #111113;
+}
+html.dark[data-demo][data-dark-palette="ink"], .palette-preview[data-dark-palette="ink"] {
+  --background: #080808;
+  --foreground: #f4f4f4;
+  --card: #141414;
+  --popover: #1b1b1b;
+  --primary: #f0f0f0;
+  --primary-foreground: #111111;
+  --muted: #222222;
+  --muted-foreground: #bababa;
+  --accent: #303030;
+  --accent-foreground: #ffffff;
+  --border: #363636;
+  --input: #696969;
+  --ledger-rail: #040404;
+}
+html.dark[data-demo][data-dark-palette="slate"], .palette-preview[data-dark-palette="slate"] {
+  --background: #15171c;
+  --foreground: #e8ecf2;
+  --card: #1e222a;
+  --popover: #252a33;
+  --primary: #c0d1ef;
+  --primary-foreground: #1a2432;
+  --muted: #2b303a;
+  --muted-foreground: #b1bac9;
+  --accent: #333c4c;
+  --accent-foreground: #e2eafa;
+  --border: #404754;
+  --input: #606a7b;
+  --ledger-rail: #101217;
+}
+html.dark[data-demo][data-dark-palette="cinder"], .palette-preview[data-dark-palette="cinder"] {
+  --background: #1a1817;
+  --foreground: #f1ebe6;
+  --card: #24211f;
+  --popover: #2a2724;
+  --primary: #e2c5a3;
+  --primary-foreground: #30251c;
+  --muted: #322e2b;
+  --muted-foreground: #c0b6ae;
+  --accent: #3d3530;
+  --accent-foreground: #f5e7d8;
+  --border: #4b4540;
+  --input: #706760;
+  --ledger-rail: #131110;
+}
+.palette-preview { position: relative; display: block; height: 3.25rem; background: var(--background); border-bottom: 1px solid var(--border) }
+.palette-preview i { position: absolute; inset: 0 auto 0 0; width: 22%; background: var(--ledger-rail); border-right: 1px solid var(--border) }
+.palette-preview b { position: absolute; inset: 20% 8% 18% 30%; border-radius: .25rem; background: var(--popover); border: 1px solid var(--border) }
+.palette-preview em { position: absolute; inset: auto 16% 31% auto; width: 20%; height: .35rem; border-radius: .2rem; background: var(--primary) }
 .ledger-nav {
   background: var(--ledger-rail);
   color: #f0f7f1;
@@ -114,3 +179,11 @@ html[data-demo] main:has(> h1) { width: 100% }
   html[data-demo] .ledger-table:not([data-full]) th[data-column=amountCents] { width: 5.5rem }
   html[data-demo] .ledger-table:not([data-full]) .ledger-row-date { display: block; font-size: .7rem; color: var(--muted-foreground) }
 }
+
+html.dark[data-demo] .ledger-nav { color: var(--foreground) }
+html.dark[data-demo] .ledger-brand svg { color: var(--primary-foreground); background: var(--primary) }
+html.dark[data-demo] .ledger-nav nav a { color: var(--muted-foreground) }
+html.dark[data-demo] .ledger-nav nav a:is([aria-current], :hover),
+html.dark[data-demo] .ledger-identity > span { background: var(--accent); color: var(--accent-foreground) }
+html.dark[data-demo] .ledger-identity { border-color: var(--border) }
+html.dark[data-demo] [data-slot="dialog-portal"]:has(.ledger-drawer) [data-slot="dialog-overlay"] { background: #0004 }

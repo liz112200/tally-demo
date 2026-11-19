@@ -411,6 +411,15 @@ function SplitForm({
       {/* Participants, with per-person inputs for amount/percent methods */}
       <fieldset className="overflow-hidden rounded-lg border">
         <legend className="sr-only">Participants</legend>
+        {ledgerMethod && persons.length > 0 && (
+          <div className="flex items-center justify-between gap-2 border-b bg-muted/40 px-3 py-1">
+            <span className="text-xs text-muted-foreground" aria-live="polite">{participants.length} of {persons.length} selected</span>
+            <button type="button" disabled={pending} className="min-h-9 rounded px-2 text-xs font-semibold text-primary hover:underline pointer-coarse:min-h-11"
+              onClick={() => setSelected(participants.length === persons.length ? new Set() : new Set(persons.map((p) => p.id)))}>
+              {participants.length === persons.length ? 'Clear selection' : 'Select everyone'}
+            </button>
+          </div>
+        )}
         <ul className="divide-y">
           {persons.map((person) => {
             const checked = selected.has(person.id);

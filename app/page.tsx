@@ -34,7 +34,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const items = needsYouItems(needsYouFacts(board), { day, money: (n) => formatUSD(toCents(n)) });
   return (
     <main className="mx-auto max-w-6xl space-y-5 px-4 py-6 sm:px-6 sm:py-8">
-      {!demo && <NeedsYouBand items={items} />}
+      <NeedsYouBand items={items} />
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <h1 className="text-2xl font-bold tracking-tight">Accounts</h1>
         <a href="/accounts/logins" className="inline-flex min-h-9 items-center text-sm text-blue-700 hover:underline dark:text-blue-400">
@@ -53,7 +53,6 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
       ) : (
         <AccountBoard cards={board.cards} unmapped={board.unmapped} />
       )}
-      {demo && <NeedsYouBand items={items} />}
     </main>
   );
 }

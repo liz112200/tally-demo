@@ -23,6 +23,7 @@ test('the board: each card carries its statement count, and the band lines open 
   for (const card of await page.locator('a[href^="/accounts/"]:has(div.text-xl)').all()) {
     await expect(card).toContainText(/closes .+\d+ statements?/);
   }
+  await expect(page.locator('main > :first-child')).toHaveAttribute('aria-labelledby', 'needs-you');
   const lines = await band(page);
   // The seed's own items (ACCOUNTS-BOARD.md, The demo): at least three.
   expect(lines.length).toBeGreaterThanOrEqual(3);

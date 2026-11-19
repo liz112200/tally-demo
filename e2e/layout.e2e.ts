@@ -55,3 +55,32 @@ test('the tips strip is in the server’s page in its final state, and dismissin
   await settled(page, '/');
   await expect(page.getByText('More things to try')).toBeVisible();
 });
+
+test('demo palettes change the drawer and survive reload and light mode', async ({ page }) => {
+  await page.goto('/settings#appearance');
+  const palette = page.getByRole('button', { name: /Graphite/ });
+  await palette.click();
+  await expect(palette).toHaveAttribute('aria-pressed', 'true');
+  await page.reload();
+  await expect(palette).toHaveAttribute('aria-pressed', 'true');
+  const background = () => page.locator('body').evaluate((el) => getComputedStyle(el).backgroundColor);
+  expect(await background()).toBe('rgb(23, 23, 25)');
+  await page.getByRole('button', { name: 'Toggle theme' }).click();
+  expect(await background()).toBe('rgb(243, 245, 245)');
+  await page.getByRole('button', { name: 'Toggle theme' }).click();
+  await page.goto('/expenses/receipt/sample-dinner');
+  const drawer = page.getByRole('dialog', { name: 'Dinner at Alba' });
+  await expect(drawer).toBeVisible();
+  expect(await drawer.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe('rgb(39, 39, 43)');
+});
+
+test('bank history is collapsed while next actions stay visible', async ({ page }) => {
+  await page.goto('/accounts/logins');
+  await expect(page.getByRole('button', { name: 'Sync now' })).toHaveCount(2);
+  await expect(page.getByRole('link', { name: /Review.*held row/ })).toBeVisible();
+  await expect(page.getByRole('link', { name: /Verify statement/ })).toBeVisible();
+  const details = page.locator('details').filter({ has: page.locator('summary', { hasText: 'Connection details' }) }).first();
+  await expect(details.getByText(/CSV history through/)).toBeHidden();
+  await details.locator('summary').click();
+  await expect(details.getByText(/CSV history through/)).toBeVisible();
+});

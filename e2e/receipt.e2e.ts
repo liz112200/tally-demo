@@ -48,7 +48,20 @@ test('the ordinary split uses the same drawer and Escape returns to the ledger',
   await page.getByRole('button', { name: /^Split / }).filter({ hasText: 'Split' }).first().click();
   const dialog = page.getByRole('dialog');
   await expect(dialog.getByLabel('Split method')).toHaveValue('equal');
+  const people = dialog.getByRole('group', { name: 'Participants' });
+  const checkboxes = people.getByRole('checkbox');
+  // The seeded default may already include everyone.
+  if (await people.getByRole('button', { name: 'Clear selection' }).count())
+    await people.getByRole('button', { name: 'Clear selection' }).click();
+  await people.getByRole('button', { name: 'Select everyone' }).click();
+  await expect(people.getByRole('checkbox', { checked: true })).toHaveCount(await checkboxes.count());
   await dialog.getByLabel('Split method').selectOption('amount');
+  await checkboxes.first().uncheck();
+  await people.getByRole('button', { name: 'Select everyone' }).click();
+  await dialog.getByLabel('Split method').selectOption('percent');
+  await people.getByRole('button', { name: 'Clear selection' }).click();
+  await expect(people.getByRole('checkbox', { checked: true })).toHaveCount(0);
+  await expect(dialog.getByRole('button', { name: 'Save split' })).toBeDisabled();
   await expect(dialog.getByRole('group', { name: 'Participants' })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(dialog).toHaveCount(0);
