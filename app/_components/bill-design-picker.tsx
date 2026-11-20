@@ -1,5 +1,6 @@
 'use client';
 
+import { BillStamp } from '@/app/_components/bill-stamp';
 import { Palette } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -16,22 +17,27 @@ export function BillDesignPicker({ design, onChange, name, net }: {
     <DialogTrigger render={<Button variant="outline" size="sm" />}>
       <Palette aria-hidden /> Bill style
     </DialogTrigger>
-    <DialogContent className="max-h-[90dvh] overflow-y-auto">
+    <DialogContent className="bill-picker sm:max-w-3xl">
       <DialogTitle>Choose bill paper</DialogTitle>
-      <div className="bill-proof bill-paper" data-paper={design} aria-label="Bill preview">
-        <div className="bill-proof-body">
-          <span className="guest-stamp">Guest check</span>
-          <h3>{guestCopy.heading(name)}</h3>
-          <p>Total: <strong>{guestCheckBalance(net)} <small>{guestCopy.balance(net)}</small></strong></p>
+      <div className="bill-picker-content">
+        <div className="bill-proof bill-paper" data-paper={design} aria-label="Bill preview">
+          <div className="bill-proof-body">
+            <BillStamp />
+            <h3>{guestCopy.heading(name)}</h3>
+            <p>Total: <strong>{guestCheckBalance(net)} <small>{guestCopy.balance(net)}</small></strong></p>
+          </div>
         </div>
+        <fieldset className="bill-swatches">
+          <legend className="sr-only">Paper pattern</legend>
+          {(Object.keys(billDesigns) as BillDesign[]).map(key => <label key={key}>
+            <span className="bill-swatch-art" data-paper={key} aria-hidden="true" />
+            <span className="bill-swatch-caption">
+              <input type="radio" name="bill-paper" checked={design === key} onChange={() => onChange(key)} />
+              {billDesigns[key]}
+            </span>
+          </label>)}
+        </fieldset>
       </div>
-      <fieldset className="bill-swatches">
-        <legend className="sr-only">Paper pattern</legend>
-        {(Object.keys(billDesigns) as BillDesign[]).map(key => <label key={key}>
-          <input type="radio" name="bill-paper" checked={design === key} onChange={() => onChange(key)} />
-          <span>{billDesigns[key]}</span>
-        </label>)}
-      </fieldset>
       <DialogClose render={<Button />}>Done</DialogClose>
     </DialogContent>
   </Dialog>;

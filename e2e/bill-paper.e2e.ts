@@ -1,3 +1,4 @@
+import { billDesigns } from '../lib/bill-design';
 import { expect, test } from '@playwright/test';
 
 test('the recipient opens the paper chosen in People in light and dark', async ({ page, context }) => {
@@ -6,10 +7,16 @@ test('the recipient opens the paper chosen in People in light and dark', async (
   await page.getByRole('button', { name: /Alex/, expanded: false }).click();
   await page.getByRole('button', { name: 'Bill style' }).click();
   const picker = page.getByRole('dialog', { name: 'Choose bill paper' });
-  for (const [name, paper] of [['Wildflowers', 'flowers'], ['Paw prints', 'paws']]) {
+  await expect(picker.getByText('Shared bill', { exact: true })).toBeVisible();
+  for (const [paper, name] of Object.entries(billDesigns)) {
     await picker.getByRole('radio', { name }).check();
     await expect(picker.locator('.bill-proof')).toHaveAttribute('data-paper', paper);
+    if (paper !== 'classic') {
+      await expect(picker.locator(`.bill-swatch-art[data-paper="${paper}"]`)).toHaveCSS('background-image', 'url("' + new URL(`/demo/paper/${paper}.svg`, page.url()).href + '")');
+      expect((await page.request.get(`/demo/paper/${paper}.svg`)).ok()).toBe(true);
+    }
   }
+  await picker.getByRole('radio', { name: 'Vinyl records' }).check();
   await picker.getByRole('button', { name: 'Done' }).click();
   await page.getByRole('button', { name: 'Copy link' }).click();
   await expect(page.getByRole('button', { name: 'Link copied' })).toBeVisible();
@@ -19,10 +26,12 @@ test('the recipient opens the paper chosen in People in light and dark', async (
     await page.emulateMedia({ colorScheme });
     await page.goto(url.pathname + url.search);
     await expect(page.getByRole('heading', { name: 'Our tab, Alex' })).toBeVisible();
-    await expect(page.locator('.shared-check')).toHaveAttribute('data-paper', 'paws');
+    await expect(page.locator('.shared-check')).toHaveAttribute('data-paper', 'vinyl');
+    await expect(page.getByText('Shared bill', { exact: true })).toBeVisible();
+    await expect(page.locator('.shared-check')).toContainText('share-snowy-seven.vercel.app');
     await expect(page.locator('.shared-check section').first()).toContainText(/What (I|you) paid/);
   }
   await page.goto(url.pathname + '?paper=flowers');
-  await expect(page.locator('.shared-check')).toHaveAttribute('data-paper', 'paws');
+  await expect(page.locator('.shared-check')).toHaveAttribute('data-paper', 'vinyl');
   await expect(page.getByRole('heading', { name: 'Our tab, Alex' })).toBeVisible();
 });

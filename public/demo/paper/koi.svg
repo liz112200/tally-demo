@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="148" height="76" viewBox="0 0 148 76">
+  <defs><g id="fish">
+    <path d="M-15 2q-6-6-11-7l2 7-5 6q8 0 14-5" fill="#efa670" stroke="#a76754"/>
+    <path d="M-16 2Q-1-14 15-5q9 5 4 10Q5 15-16 2Z" fill="#f1ddc4" stroke="#9e7466" stroke-width="1.5"/>
+    <path d="M-6-5q5-4 12-3-7 6-4 12-6 0-9-3ZM8 8q-3-5 3-8 3-2 8 1 1 5-11 7" fill="#cf7352"/>
+    <circle cx="15" cy="-3" r="1.4" fill="#493e3b"/>
+  </g></defs>
+  <use href="#fish" transform="translate(37 25) rotate(-25)"/>
+  <use href="#fish" transform="translate(112 48) rotate(152) scale(.85)"/>
+  <path d="M56 55q8 5 16 1m-12 5q5 3 9 1M87 14q8-4 14 0" fill="none" stroke="#83aaa7" stroke-width="1.5" stroke-linecap="round"/>
+</svg>

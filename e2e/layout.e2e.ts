@@ -56,7 +56,7 @@ test('the tips strip is in the server’s page in its final state, and dismissin
   await expect(page.getByText('More things to try')).toBeVisible();
 });
 
-test('Passbook and Guest Check follow the theme across reloads and palette changes', async ({ page }) => {
+test('Passbook and shared bills follow the theme across reloads and palette changes', async ({ page }) => {
   await page.goto('/settings#appearance');
   const carbon = page.getByRole('button', { name: /Carbon/ });
   await page.emulateMedia({ colorScheme: 'dark' });
@@ -68,7 +68,7 @@ test('Passbook and Guest Check follow the theme across reloads and palette chang
   await expect(page.locator('.passbook-cover')).toHaveCSS('background-color', 'rgb(46, 55, 66)');
   await page.goto('/expenses/receipt/sample-dinner');
   const carbonDrawer = page.getByRole('dialog', { name: 'Dinner at Alba' });
-  await expect(carbonDrawer.getByText('Guest check', { exact: true })).toBeVisible();
+  await expect(carbonDrawer.getByText('Shared bill', { exact: true })).toBeVisible();
   await expect(carbonDrawer).toHaveCSS('background-color', 'rgb(39, 35, 32)');
   await expect(carbonDrawer).toHaveCSS('border-left', '1px solid rgb(120, 102, 91)');
   await expect(carbonDrawer).toHaveCSS('border-top', '1px solid rgb(120, 102, 91)');

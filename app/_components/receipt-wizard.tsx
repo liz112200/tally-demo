@@ -1,6 +1,7 @@
 'use client';
 
 
+import { BillStamp } from '@/app/_components/bill-stamp';
 import {
   startTransition,
   useActionState,
@@ -77,7 +78,7 @@ export function ReceiptWizardDialog({
       <DialogTrigger render={trigger} />
       <DialogContent className={`max-h-[90dvh] overflow-y-auto sm:max-w-3xl ${demo ? 'guest-check' : ''}`}>
         <DialogHeader>
-          {demo && <span className="guest-stamp">Guest check</span>}
+          {demo && <BillStamp />}
           <DialogTitle>
             {existingReceipt ? 'Receipt' : 'Attach receipt'}
           </DialogTitle>

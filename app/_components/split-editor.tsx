@@ -1,5 +1,6 @@
 'use client';
 
+import { BillStamp } from '@/app/_components/bill-stamp';
 import { useActionState, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ChevronDown, Split as SplitIcon, Trash2 } from 'lucide-react';
@@ -115,7 +116,7 @@ export function SplitDialog({
       <DialogContent placement={demo ? 'right' : 'center'} className={demo ? 'ledger-drawer guest-check' : 'sm:max-w-lg'}>
         {demo ? <>
           <DialogHeader>
-            <span className="guest-stamp">Guest check</span>
+            <BillStamp />
             <DialogTitle>{receipt?.merchant || description}</DialogTitle>
             <DialogDescription className="flex items-baseline justify-between gap-3">
               <time dateTime={date}>{date}</time>

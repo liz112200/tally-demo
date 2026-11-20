@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="48" viewBox="0 0 96 48">
+  <defs><g id="fan" fill="none" stroke-width="1.7">
+    <path d="M-24 0a24 24 0 0 1 48 0m-42 0a18 18 0 0 1 36 0m-30 0a12 12 0 0 1 24 0m-18 0a6 6 0 0 1 12 0"/>
+  </g></defs>
+  <g stroke="#739fba"><use href="#fan" x="24" y="24"/><use href="#fan" x="72" y="24"/></g>
+  <g stroke="#6a9d99"><use href="#fan" y="48"/><use href="#fan" x="48" y="48"/><use href="#fan" x="96" y="48"/></g>
+</svg>

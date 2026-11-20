@@ -324,15 +324,42 @@ html[data-demo] .shared-check section h2 { font: italic 1.2rem Georgia,serif; te
 .bill-proof h3 { margin: .65rem 0; font: italic 1.65rem/1.15 Georgia, serif; overflow-wrap: anywhere }
 .bill-proof p { display: flex; justify-content: space-between; gap: .5rem; align-items: baseline; border-top: 1px dotted var(--ticket-rule); padding-top: .65rem }
 .bill-proof strong { font-family: var(--font-mono), monospace }
-.bill-swatches { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem }
-.bill-swatches label { display: flex; align-items: center; gap: .5rem; border: 1px solid var(--border); border-radius: .4rem; padding: .65rem; cursor: pointer }
+/* Keep the preview and Done button in view while browsing the papers. */
+.bill-picker { max-height: 90dvh; grid-template-rows: auto minmax(0,1fr) auto }
+.bill-picker-content { display: grid; grid-template-columns: minmax(0,.85fr) minmax(0,1.25fr); min-height: 0; gap: 1rem }
+.bill-picker .bill-proof { align-self: start }
+.bill-swatches { min-width: 0; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); align-content: start; gap: .45rem; padding: 2px }
+.bill-swatches label { display: grid; align-content: start; border: 1px solid var(--border); border-radius: .4rem; overflow: hidden; cursor: pointer }
+.bill-swatch-art { height: 2rem; background: var(--ticket) var(--paper-pattern, none) repeat-x center / auto 100%; border-bottom: 1px solid var(--border) }
+.bill-swatch-caption { display: flex; align-items: center; gap: .3rem; padding: .35rem; font-size: .74rem; line-height: 1.2 }
 .bill-swatches label:has(:checked) { border-color: var(--stamp); background: var(--ticket) }
-.bill-swatches input { accent-color: var(--stamp) }
+.bill-swatches label:has(:focus-visible) { outline: 2px solid var(--ring); outline-offset: 0 }
+.bill-swatches input { accent-color: var(--stamp); flex: none }
+@media (max-width: 640px) {
+  .bill-picker-content { grid-template-columns: 1fr; grid-template-rows: auto minmax(0,1fr); gap: .65rem }
+  .bill-picker .bill-proof-body { padding: .9rem 1.3rem }
+  .bill-swatches { max-height: 38dvh }
+}
+@media (max-height: 500px) {
+  .bill-picker { display: block; overflow-y: auto }
+  .bill-picker-content { margin: .6rem 0 }
+  .bill-swatches { max-height: none }
+}
 
-/* A single ink layer wraps the edges and fades behind both preview and bill. */
+/* Swatches and full bills take their ink from the same tile. */
 .bill-paper { position: relative; isolation: isolate }
-.bill-paper[data-paper=flowers] { --paper-pattern: url('/demo/paper/flowers.svg') }
-.bill-paper[data-paper=paws] { --paper-pattern: url('/demo/paper/paws.svg') }
+[data-paper=flowers] { --paper-pattern: url('/demo/paper/flowers.svg') }
+[data-paper=paws] { --paper-pattern: url('/demo/paper/paws.svg') }
+[data-paper=citrus] { --paper-pattern: url('/demo/paper/citrus.svg') }
+[data-paper=koi] { --paper-pattern: url('/demo/paper/koi.svg') }
+[data-paper=postage] { --paper-pattern: url('/demo/paper/postage.svg') }
+[data-paper=night-sky] { --paper-pattern: url('/demo/paper/night-sky.svg') }
+[data-paper=gingham] { --paper-pattern: url('/demo/paper/gingham.svg') }
+[data-paper=coffee] { --paper-pattern: url('/demo/paper/coffee.svg') }
+[data-paper=waves] { --paper-pattern: url('/demo/paper/waves.svg') }
+[data-paper=cranes] { --paper-pattern: url('/demo/paper/cranes.svg') }
+[data-paper=berries] { --paper-pattern: url('/demo/paper/berries.svg') }
+[data-paper=vinyl] { --paper-pattern: url('/demo/paper/vinyl.svg') }
 .bill-paper::before {
   content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
   background-image: var(--paper-pattern, none); background-size: 7rem auto;

@@ -1,3 +1,4 @@
+import { BillStamp } from '@/app/_components/bill-stamp';
 import type { Metadata } from 'next';
 import { guestCopy, demoSharingNote } from '@/lib/bill-design';
 import { isDemoMode } from '@/lib/demo-mode';
@@ -118,7 +119,7 @@ export default async function SharedListPage({
   return (
     <main data-paper={demo ? snapshot.paper : undefined} className={demo ? "shared-check bill-paper" : "mx-auto max-w-lg px-5 py-10"}>
       <header className="mb-5">
-        {demo && <span className="guest-stamp">Guest check</span>}
+        {demo && <BillStamp />}
         <h1 className="text-lg font-semibold tracking-tight">
           {demo ? guestCopy.heading(personName) : `Where we’re at, ${personName}`}
         </h1>
