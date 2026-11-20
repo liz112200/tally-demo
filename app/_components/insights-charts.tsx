@@ -12,7 +12,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { formatUSD, toCents } from '@/lib/money';
+import { formatUSD, MINOR_UNITS_PER_DOLLAR, toCents } from '@/lib/money';
 import { monthLabel, type CategorySlice, type TrendPoint } from '@/lib/insights';
 import { categoryColorVar } from '@/app/_components/category-tag';
 
@@ -155,4 +155,18 @@ export function SpendTrendSparkline({ points }: { points: TrendPoint[] }) {
       </LineChart>
     </ResponsiveContainer>
   );
+}
+
+export function SpendingPace({ points }: { points: ReturnType<typeof import('@/lib/insights').spendingProfile>['pace'] }) {
+  return <ResponsiveContainer width="100%" height={215}>
+    <LineChart data={points} margin={{ top: 12, right: 12, bottom: 0, left: 0 }}>
+      <XAxis dataKey="day" tickLine={false} minTickGap={20} tick={{ fontSize: 11 }} />
+      <YAxis width={55} tickLine={false} axisLine={false} tick={{ fontSize: 11 }}
+        tickFormatter={value => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact' }).format(value / MINOR_UNITS_PER_DOLLAR)} />
+      <Tooltip labelFormatter={day => 'Day ' + day} formatter={value => formatUSD(toCents(Number(value)))}
+        contentStyle={{ background: 'var(--popover)', borderColor: 'var(--border)' }} />
+      <Line dataKey="previous" name="Previous month" type="stepAfter" stroke="var(--muted-foreground)" strokeDasharray="5 4" dot={false} isAnimationActive={false} />
+      <Line dataKey="current" name="Selected month" type="stepAfter" stroke="var(--stamp)" strokeWidth={2.5} dot={points.filter(p => p.current !== null).length === 1} isAnimationActive={false} />
+    </LineChart>
+  </ResponsiveContainer>;
 }

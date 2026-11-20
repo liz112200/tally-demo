@@ -35,7 +35,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   return (
     <main className="mx-auto max-w-6xl space-y-5 px-4 py-6 sm:px-6 sm:py-8">
       <NeedsYouBand items={items} />
-      {demo ? <div className="passbook-spread">
+      {demo ? <div className="passbook-spread" data-long-register={board.cards.length + board.unmapped.length > 4 || undefined}>
         <section className="passbook-cover">
           <div className="passbook-seal" aria-hidden="true">
             {Array.from({ length: 24 }, (_, i) => <i key={i} style={{ transform: `rotate(${i * 7.5}deg)` }} />)}
@@ -50,12 +50,12 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
             <a href="/accounts/logins">Bank logins →</a>
           </div>
           <PassbookRegister cards={board.cards} unmapped={board.unmapped} />
-          <dl className="ledger-metrics" aria-label="Outstanding balances">
-            <div><dt>Owed to you</dt><dd>{formatUSD(toCents(balances.reduce((sum, b) => sum + Math.max(0, b.netCents), 0)))}</dd></div>
-            <div><dt>You owe</dt><dd>{formatUSD(toCents(balances.reduce((sum, b) => sum + Math.max(0, -b.netCents), 0)))}</dd></div>
-            <div><dt>Shared transactions</dt><dd>{Object.keys(board.view.splitsByTransaction).length}</dd></div>
-          </dl>
         </section>
+        <dl className="ledger-metrics" aria-label="Outstanding balances">
+          <div><dt>Owed to you</dt><dd>{formatUSD(toCents(balances.reduce((sum, b) => sum + Math.max(0, b.netCents), 0)))}</dd></div>
+          <div><dt>You owe</dt><dd>{formatUSD(toCents(balances.reduce((sum, b) => sum + Math.max(0, -b.netCents), 0)))}</dd></div>
+          <div><dt>Shared transactions</dt><dd>{Object.keys(board.view.splitsByTransaction).length}</dd></div>
+        </dl>
       </div> : <>
         <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
           <h1 className="text-2xl font-bold tracking-tight">Accounts</h1>

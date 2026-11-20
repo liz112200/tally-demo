@@ -7,6 +7,7 @@ import {
   monthlySpending,
   spendingDelta,
   spendingTrend,
+  spendingProfile,
   topMerchants,
   type InsightRow,
 } from './insights';
@@ -188,3 +189,29 @@ describe('transfers (categories that do not count as spending)', () => {
   });
 });
 
+
+describe('spendingProfile', () => {
+  it('compares elapsed days and includes all eligible categories', () => {
+    const result = spendingProfile([
+      row({ date: '2026-10-02', amountCents: 1100 }),
+      row({ date: '2026-10-30', amountCents: 9000 }),
+      row({ date: '2026-11-02', amountCents: 2100, categoryIsSplittable: false }),
+      row({ date: '2026-11-05', amountCents: -400 }),
+      row({ date: '2026-11-10', countsAsSpending: false }),
+      row({ date: '2026-11-25', amountCents: 8000 }),
+    ], '2026-11', '2026-11-20');
+    expect(result.total).toBe(2100);
+    expect(result.difference).toBe(1000);
+    expect(result.purchaseCount).toBe(1);
+    expect(result.weekdays[0].count).toBe(1);
+    expect(result.categories[0].totalCents).toBe(2100);
+    expect(result.pace[29]).toEqual({ day: 30, current: null, previous: 10100 });
+  });
+
+  it('aligns unequal month lengths and leaves absent comparison data unavailable', () => {
+    const rows = [row({ date: '2024-02-29' }), row({ date: '2024-03-30' })];
+    expect(spendingProfile(rows, '2024-03', '2024-04-01').cutoff).toBe(29);
+    expect(spendingProfile(rows, '2024-03', '2024-04-01').difference).toBe(-1000);
+    expect(spendingProfile(rows, '2024-02', '2024-04-01').difference).toBeNull();
+  });
+});

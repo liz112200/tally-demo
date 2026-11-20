@@ -89,6 +89,7 @@ export type CategorySlice = {
 export function categoryBreakdown(
   rows: readonly InsightRow[],
   month: string,
+  scope: 'splittable' | 'all' = 'splittable',
 ): CategorySlice[] {
   const byName = new Map<string, number>();
   let uncategorized = 0;
@@ -96,7 +97,7 @@ export function categoryBreakdown(
     if (row.amountCents <= 0 || !row.countsAsSpending || !inMonth(row, month)) continue;
     if (row.categoryId === null) {
       uncategorized += row.amountCents;
-    } else if (row.categoryIsSplittable && row.categoryName !== null) {
+    } else if ((scope === 'all' || row.categoryIsSplittable) && row.categoryName !== null) {
       byName.set(row.categoryName, (byName.get(row.categoryName) ?? 0) + row.amountCents);
     }
   }
@@ -150,4 +151,49 @@ export function spendingTrend(
     points.push({ month, totalCents: monthlySpending(rows, month) });
   }
   return points;
+}
+
+// Calendar-day totals keep a partial month comparable to the same span of
+// the previous month. Missing days after a cutoff are gaps in the chart.
+export function spendingProfile(rows: readonly InsightRow[], month: string, today: string) {
+  const previousMonth = addMonths(month, -1);
+  function observedDays(key: string) {
+    const last = new Date(addMonths(key, 1) + '-01T00:00:00Z');
+    last.setUTCDate(0);
+    if (key > monthOf(today)) return 0;
+    return key === monthOf(today) ? Number(today.slice(8)) : last.getUTCDate();
+  }
+  const days = observedDays(month);
+  const previousDays = observedDays(previousMonth);
+  const daily = Array<number>(days).fill(0);
+  const previousDaily = Array<number>(previousDays).fill(0);
+  const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(label => ({ label, count: 0 }));
+  const purchases: InsightRow[] = [];
+  let previousPurchases = 0;
+  for (const row of rows) {
+    if (!row.countsAsSpending || row.amountCents <= 0 || row.date > today) continue;
+    const day = Number(row.date.slice(8)) - 1;
+    const key = monthOf(row.date);
+    if (key === previousMonth) {
+      previousDaily[day] += row.amountCents;
+      previousPurchases++;
+    }
+    if (key !== month) continue;
+    purchases.push(row);
+    daily[day] += row.amountCents;
+    weekdays[(new Date(row.date + 'T00:00:00Z').getUTCDay() + 6) % 7].count++;
+  }
+  let total = 0;
+  let prior = 0;
+  const pace = Array.from({ length: Math.max(days, previousDays) }, (_, i) => {
+    total += daily[i] ?? 0;
+    prior += previousDaily[i] ?? 0;
+    return { day: i + 1, current: i < days ? total : null, previous: previousPurchases && i < previousDays ? prior : null };
+  });
+  const cutoff = Math.min(days, previousDays);
+  const comparison = pace[cutoff - 1];
+  const difference = comparison?.current != null && comparison.previous != null ? comparison.current - comparison.previous : null;
+  const categories = categoryBreakdown(purchases, month, 'all').sort((a, b) => b.totalCents - a.totalCents);
+  const merchants = topMerchants(purchases, month, 5);
+  return { days, cutoff, difference, total, pace, weekdays, categories, merchants, purchaseCount: purchases.length };
 }

@@ -1,4 +1,6 @@
 import Link from 'next/link';
+import { isDemoMode } from '@/lib/demo-mode';
+import { SpendingReport } from '@/app/_components/spending-report';
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -12,6 +14,7 @@ import { getInsightRows } from '@/db/queries';
 import {
   addMonths,
   categoryBreakdown,
+  type InsightRow,
   isMonthKey,
   monthLabel,
   monthShortLabel,
@@ -29,12 +32,11 @@ import { requireUser } from '@/app/_lib/session';
 // calendar month (America/New_York), not UTC's, which flips early on
 // evenings at month boundaries. Transaction dates themselves are plain
 // YYYY-MM-DD strings, so this is the only timezone decision on the page.
-function currentMonth(): string {
+function currentDay(): string {
   return new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/New_York',
   })
-    .format(new Date())
-    .slice(0, 7);
+    .format(new Date());
 }
 
 function Card({
@@ -67,17 +69,13 @@ export default async function InsightsPage({
 }) {
   await requireUser();
   const params = await searchParams;
-  const thisMonth = currentMonth();
+  const today = currentDay();
+  const thisMonth = today.slice(0, 7);
+  const demo = isDemoMode();
   const month =
     params.month && isMonthKey(params.month) ? params.month : thisMonth;
 
   const rows = await getInsightRows();
-  const delta = spendingDelta(rows, month);
-  const breakdown = categoryBreakdown(rows, month);
-  const merchants = topMerchants(rows, month, 5);
-  const trend = spendingTrend(rows, month, 6);
-  const hasSpending = delta.currentCents > 0 || breakdown.length > 0;
-
   const prevMonth = addMonths(month, -1);
   const nextMonth = addMonths(month, 1);
 
@@ -87,7 +85,7 @@ export default async function InsightsPage({
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Insights</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            By transaction month
+            {demo ? 'Monthly spending report' : 'By transaction month'}
           </p>
         </div>
         <nav
@@ -120,7 +118,22 @@ export default async function InsightsPage({
         </nav>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      {demo
+        ? <SpendingReport rows={rows} month={month} today={today} />
+        : <MonthlyOverview rows={rows} month={month} />}
+    </main>
+  );
+}
+
+function MonthlyOverview({ rows, month }: { rows: InsightRow[]; month: string }) {
+  const delta = spendingDelta(rows, month);
+  const breakdown = categoryBreakdown(rows, month);
+  const merchants = topMerchants(rows, month, 5);
+  const trend = spendingTrend(rows, month, 6);
+  const hasSpending = delta.currentCents > 0 || breakdown.length > 0;
+  const prevMonth = addMonths(month, -1);
+  return (
+    <div className="grid gap-4 lg:grid-cols-3">
         <Card title={`${monthLabel(month)} spending`}>
           {hasSpending || delta.previousCents > 0 ? (
             <div className="space-y-2">
@@ -190,7 +203,6 @@ export default async function InsightsPage({
             <NoSpending />
           )}
         </Card>
-      </div>
-    </main>
+    </div>
   );
 }

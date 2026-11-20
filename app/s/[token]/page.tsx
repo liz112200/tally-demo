@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { isDemoMode } from '@/lib/demo-mode';
 import { notFound } from 'next/navigation';
 import { getShareLinkByToken, type ShareSnapshotLine } from '@/db/queries';
 import { formatPayableUSD as formatUSD, toCents } from '@/lib/money';
@@ -110,13 +111,15 @@ export default async function SharedListPage({
   if (!snapshot) notFound();
 
   const { personName, owed, owing, owedCents, owingCents, netCents } = snapshot;
+  const demo = isDemoMode();
   const itemCount = owed.length + owing.length;
 
   return (
-    <main className="mx-auto max-w-lg px-5 py-10">
+    <main className={demo ? "shared-check" : "mx-auto max-w-lg px-5 py-10"}>
       <header className="mb-5">
+        {demo && <span className="guest-stamp">Guest check</span>}
         <h1 className="text-lg font-semibold tracking-tight">
-          Where we&rsquo;re at, {personName}
+          {demo ? `Shared balance for ${personName}` : `Where we’re at, ${personName}`}
         </h1>
         <p className="mt-0.5 text-sm text-muted-foreground">
           {itemCount} item{itemCount === 1 ? '' : 's'} · shared{' '}

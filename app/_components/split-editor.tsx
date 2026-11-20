@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Split as SplitIcon, Trash2 } from 'lucide-react';
+import { ChevronDown, Split as SplitIcon, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -172,10 +172,13 @@ function LedgerSplitEditor({ receipt, openReceipt, ...props }: SplitFormProps & 
   return <>
     <label className="grid gap-1 text-xs font-medium text-muted-foreground">
       Split method
-      <select className="ledger-method text-sm" value={method} onChange={(event) => setMethod(event.target.value as SplitMethodDisplay)}>
-        {SPLIT_METHODS.map((m) => <option key={m} value={m}>{METHOD_LABELS[m]}</option>)}
-        {receipt && <option value="item">By item</option>}
-      </select>
+      <span className="relative block">
+        <select className="ledger-method text-sm" value={method} onChange={(event) => setMethod(event.target.value as SplitMethodDisplay)}>
+          {SPLIT_METHODS.map((m) => <option key={m} value={m}>{METHOD_LABELS[m]}</option>)}
+          {receipt && <option value="item">By item</option>}
+        </select>
+        <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2" />
+      </span>
     </label>
     {receipt && <div hidden={method !== 'item'}>
       <ReceiptSplit receipt={receipt} persons={props.persons} amountCents={props.amountCents} onSaved={props.onSaved} embedded />

@@ -154,7 +154,7 @@ html[data-demo] main table th { color: var(--muted-foreground); font-weight: 600
 [data-slot="dialog-portal"]:has(.ledger-drawer) [data-slot="dialog-overlay"] { backdrop-filter: none; background: rgb(0 0 0 / 14%) }
 .ledger-receipt { display: grid; gap: 1rem; min-width: 0 }
 .ledger-receipt > section { min-width: 0 }
-.ledger-drawer .ledger-method { min-height: 2.5rem; width: 100%; border: 1px solid var(--input); border-radius: .4rem; background: var(--card); color: var(--foreground); padding: .4rem .6rem }
+.ledger-drawer .ledger-method { min-height: 2.5rem; width: 100%; border: 1px solid var(--input); border-radius: .4rem; background: var(--card); color: var(--foreground); appearance: none; padding: .4rem 2.6rem .4rem .75rem }
 html[data-demo] button[aria-label^="Split "] { opacity: 1 }
 html[data-demo] th.sticky.top-12 { top: 0 }
 @media (max-width: 849px) {
@@ -246,9 +246,75 @@ html[data-demo] .guest-check[data-slot="dialog-content"] {
   html[data-demo] .guest-check[data-slot="dialog-content"] { border-left: 1px solid var(--ticket-rule) }
 }
 .guest-check [data-slot="dialog-header"] { border-bottom: 2px dotted var(--ticket-rule); padding-bottom: 1rem }
-.guest-stamp { align-self: start; width: fit-content; padding: .14rem .4rem; color: var(--stamp); border: 1px solid currentColor; font: 600 .75rem/1.35 var(--font-mono), monospace; text-transform: uppercase; letter-spacing: .13em; transform: rotate(-2deg) }
+.guest-stamp { align-self: start; width: fit-content; display: inline-block; padding: .24rem .55rem; color: var(--stamp); border: 1px solid currentColor; font: 650 .92rem/1.35 var(--font-mono), monospace; text-transform: uppercase; letter-spacing: .13em; transform: rotate(-2deg) }
 .guest-check [data-slot="dialog-title"] { font: italic 2rem/1.05 Georgia, serif; letter-spacing: -.04em }
 .guest-check time, [data-guest-receipt] dd { font-family: var(--font-mono), monospace; font-variant-numeric: tabular-nums }
 [data-guest-receipt] h2, [data-guest-receipt] h3 { font: italic 1.35rem/1.15 Georgia, serif }
 [data-guest-receipt] section > ul, [data-guest-receipt] section > dl > div:last-child { border-color: var(--ticket-rule); border-style: dashed }
 [data-guest-receipt] section[aria-label="Split preview"] { padding-top: .9rem; border-top: 3px dotted var(--ticket-rule) }
+
+.demo-tour-trigger { anchor-name: --tour-button; display: inline-flex; align-items: center; gap: .5rem; min-height: 2.5rem; padding-inline: .65rem; border-radius: .4rem; font-size: .875rem }
+.demo-tour-trigger:hover, .demo-tour:has(:popover-open) .demo-tour-trigger { background: var(--accent) }
+#demo-shortcuts { margin: auto; width: min(17rem, calc(100vw - 2rem)); border: 1px solid var(--border); border-radius: .5rem; padding: .35rem; color: var(--foreground); background: var(--popover); box-shadow: 0 8px 28px #0002 }
+@supports (position-area: bottom) {
+  #demo-shortcuts { position-anchor: --tour-button; position-area: bottom span-right; justify-self: start; align-self: start; margin: .25rem 0; position-try-fallbacks: flip-inline, flip-block }
+}
+#demo-shortcuts a { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: .75rem; padding: .75rem .6rem; font-size: .86rem; border-radius: .25rem }
+#demo-shortcuts a:hover, #demo-shortcuts a:focus-visible { background: var(--accent) }
+#demo-shortcuts a svg { color: var(--stamp) }
+@media (min-width: 741px) {
+  .passbook-spread { row-gap: 0 }
+  .passbook-register { align-self: stretch; display: flex; flex-direction: column }
+  .passbook-register .register-entries { flex: 1; display: flex; flex-direction: column }
+  .passbook-register .register-entries > li { flex: 1 }
+  .passbook-cover { min-height: 0; gap: .9rem; align-self: stretch }
+  .passbook-spread[data-long-register] .passbook-cover { max-height: 26rem }
+  .passbook-spread > .ledger-metrics { grid-column: 2 }
+}
+html[data-demo] main.shared-check { width: min(34rem, calc(100% - 2rem)); margin: 2rem auto; padding: clamp(1rem,4vw,2rem); background: var(--ticket); border: 1px solid var(--border); border-bottom: 4px dotted var(--ticket-rule); box-shadow: 0 4px 18px #0001 }
+.shared-check header { border-bottom: 2px dotted var(--ticket-rule); padding-bottom: 1rem }
+html[data-demo] .shared-check h1 { margin-top: .8rem; font: italic 2rem/1.15 Georgia,serif; overflow-wrap: anywhere }
+.shared-check header p { font-family: var(--font-mono), monospace; font-size: .8rem }
+.shared-check > div, .shared-check section > .rounded-xl { border: 0; padding-inline: 0; border-radius: 0; background: transparent }
+.shared-check section { border-top: 1px dashed var(--ticket-rule); padding-top: .8rem }
+html[data-demo] .shared-check section h2 { font: italic 1.2rem Georgia,serif; text-transform: none; letter-spacing: normal }
+.shared-check > p:last-child { padding-top: 1rem; border-top: 2px dotted var(--ticket-rule) }
+
+.spending-report { display: grid; gap: 1.8rem }
+.spending-report > section, .report-columns > section, .report-empty { min-width: 0; border-top: 1px solid var(--border); padding-top: .8rem }
+.spending-report h2, .report-empty h2 { font-size: 1.5rem; line-height: 1.2 }
+.spending-report section > p, .report-empty p { margin: .4rem 0 .85rem; font-size: .88rem; color: var(--muted-foreground) }
+.report-head { display: flex; flex-wrap: wrap; align-items: end; gap: .9rem 2.5rem; padding: 1.2rem 0; border-top: 2px solid var(--foreground) }
+.report-head > div:first-child { margin-right: auto }
+.report-head span { display: block; color: var(--muted-foreground); font-size: .8rem }
+.report-head strong, .report-head b { display: block; font: normal 1.75rem Georgia,serif; font-variant-numeric: tabular-nums }
+.report-head strong { font-size: clamp(2.5rem, 5vw, 4rem); line-height: 1.1 }
+.report-columns { display: grid; grid-template-columns: 1.25fr 1fr; gap: 2rem }
+.pace-key { display: flex; flex-wrap: wrap; gap: 1rem; font-size: .8rem }
+.pace-key span::before { content: ''; display: inline-block; width: 1.2rem; margin-right: .4rem; vertical-align: middle; border-top: 2px solid var(--stamp) }
+.pace-key span + span::before { border-top: 2px dashed var(--muted-foreground) }
+.report-pace details { font-size: .8rem; color: var(--muted-foreground) }
+.report-pace summary { width: fit-content; padding: .5rem 0; cursor: pointer }
+.report-pace table { width: min(100%, 30rem); text-align: right; border-collapse: collapse }
+.report-pace :is(td,th) { padding: .2rem .5rem; border-bottom: 1px solid var(--border) }
+.weekday-chart { display: grid; gap: .35rem }
+.weekday-chart li { display: grid; grid-template-columns: 3ch minmax(0,1fr) 4ch; align-items: center; gap: .65rem; font-size: .8rem }
+.weekday-chart i { display: block; height: .55rem; background: var(--stamp) }
+.weekday-chart b, .merchant-ranks b { text-align: right; font-variant-numeric: tabular-nums }
+.merchant-ranks { margin-top: .65rem }
+.merchant-ranks li { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; border-bottom: 1px solid var(--border); padding: .6rem 0; font-size: .85rem }
+.merchant-ranks span { overflow-wrap: anywhere }
+@media (max-width: 700px) { .report-columns { grid-template-columns: 1fr; gap: 1.5rem } }
+
+.monthly-bars { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(5.5rem, 100%), 1fr)); gap: .65rem }
+.monthly-bars li { display: grid; grid-template-rows: 5rem auto auto; text-align: center; font-size: .8rem; min-width: 0 }
+.monthly-bars i { height: var(--month-share); align-self: end; width: 48%; margin: 0 auto; background: var(--primary) }
+.monthly-bars span { border-top: 1px solid var(--border); padding-top: .25rem; color: var(--muted-foreground) }
+.monthly-bars b { font-variant-numeric: tabular-nums; overflow-wrap: anywhere }
+@media (max-width: 600px) {
+  .monthly-bars { display: flex; flex-direction: column; gap: .35rem }
+  .monthly-bars li { display: grid; grid-template-columns: 2.5rem minmax(0,1fr) auto; grid-template-rows: auto; gap: .5rem; align-items: center; text-align: left }
+  .monthly-bars i { grid-column: 2; grid-row: 1; align-self: center; margin: 0; height: .65rem; width: var(--month-share) }
+  .monthly-bars span { grid-column: 1; grid-row: 1; border: 0; padding: 0 }
+  .monthly-bars b { min-width: 5.75rem; text-align: right }
+}
