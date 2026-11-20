@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getShareLinkByToken } from '@/db/queries';
-import { SharedBill } from '@/lib/shared-bill';
+import { SharedBill } from '@/share/app/_components/shared-bill';
 import { isDemoMode } from '@/lib/demo-mode';
 import { demoSharingNote } from '@/lib/bill-design';
 

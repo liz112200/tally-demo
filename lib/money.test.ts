@@ -257,7 +257,7 @@ describe('distributeRemainder', () => {
 // reader is asked to pay. Everything else shows the exact value.
 describe('formatPayableUSD is used only by share links', () => {
   it('is imported nowhere else', () => {
-    const allowed = new Set(['lib/money.ts', 'lib/share-summary.ts', 'lib/shared-bill.tsx']);
+    const allowed = new Set(['lib/money.ts', 'lib/share-summary.ts', 'share/app/_components/shared-bill.tsx']);
     const walk = (dir: string): string[] =>
       readdirSync(join(process.cwd(), dir), { withFileTypes: true }).flatMap((e) =>
         e.isDirectory()

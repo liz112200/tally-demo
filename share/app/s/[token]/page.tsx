@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getSnapshot } from '@/db';
-import { SharedBill } from '@shared/shared-bill';
+import { SharedBill } from '@/app/_components/shared-bill';
 
 export const dynamic = 'force-dynamic';
 

@@ -1,7 +1,5 @@
 @import "tailwindcss";
 
-@source "../../lib/shared-bill.tsx";
-
 :root {
   color-scheme: light;
   --background: #f9f7f0;

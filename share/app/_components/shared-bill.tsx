@@ -1,6 +1,6 @@
-import { guestCopy } from './bill-design';
-import type { BillSnapshot, ShareSnapshotLine } from './bill-snapshot';
-import { formatPayableUSD as formatUSD, toCents } from './money';
+import { guestCopy } from '../../../lib/bill-design';
+import type { BillSnapshot, ShareSnapshotLine } from '../../../lib/bill-snapshot';
+import { formatPayableUSD as formatUSD, toCents } from '../../../lib/money';
 
 function monthDay(date: string): string {
   const [, m, d] = date.split('-');
