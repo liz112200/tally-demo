@@ -1,7 +1,9 @@
 import Link from 'next/link';
 import { SpendingReport } from '@/app/_components/spending-report';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { getInsightRows } from '@/db/queries';
+import { isDemoMode } from '@/lib/demo-mode';
+import type { SpendingView } from '@/lib/insights';
+import { getInsightRows, getMyShareRows } from '@/db/queries';
 import { addMonths, isMonthKey, monthLabel } from '@/lib/insights';
 import { requireUser } from '@/app/_lib/session';
 
@@ -19,7 +21,7 @@ function currentDay(): string {
 export default async function InsightsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string }>;
+  searchParams: Promise<{ month?: string; view?: string }>;
 }) {
   await requireUser();
   const params = await searchParams;
@@ -28,7 +30,12 @@ export default async function InsightsPage({
   const month =
     params.month && isMonthKey(params.month) ? params.month : thisMonth;
 
-  const rows = await getInsightRows();
+  const demo = isDemoMode();
+  const view: SpendingView = demo && params.view === 'share' ? 'share' : 'paid';
+  const rows = view === 'share' ? await getMyShareRows() : await getInsightRows();
+  function reportUrl(key: string, mode: SpendingView) {
+    return `/insights?month=${key}${mode === 'share' ? '&view=share' : ''}`;
+  }
   const prevMonth = addMonths(month, -1);
   const nextMonth = addMonths(month, 1);
 
@@ -38,7 +45,8 @@ export default async function InsightsPage({
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Insights</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Monthly spending report
+            {demo ? view === 'share' ? 'Your portion, including purchases others covered.' : 'Purchases you covered, before splitting.'
+              : 'Monthly spending report'}
           </p>
         </div>
         <nav
@@ -46,7 +54,7 @@ export default async function InsightsPage({
           className="flex items-center gap-1 text-sm"
         >
           <Link
-            href={`/insights?month=${prevMonth}`}
+            href={reportUrl(prevMonth, view)}
             aria-label="Previous month"
             className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
@@ -57,7 +65,7 @@ export default async function InsightsPage({
           </span>
           {month < thisMonth ? (
             <Link
-              href={`/insights?month=${nextMonth}`}
+              href={reportUrl(nextMonth, view)}
               aria-label="Next month"
               className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
@@ -71,7 +79,14 @@ export default async function InsightsPage({
         </nav>
       </div>
 
-      <SpendingReport rows={rows} month={month} today={today} />
+      {demo && <nav aria-label="Spending view" className="spend-switch">
+        {(['paid', 'share'] as const).map(mode =>
+          <Link key={mode} scroll={false} aria-current={view === mode ? 'page' : undefined} href={reportUrl(month, mode)}>
+            {mode === 'paid' ? 'What I paid' : 'My share'}
+          </Link>
+        )}
+      </nav>}
+      <SpendingReport view={demo ? view : undefined} rows={rows} month={month} today={today} />
     </main>
   );
 }

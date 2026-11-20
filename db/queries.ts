@@ -46,7 +46,7 @@ import { formatUSD, toCents } from '@/lib/money';
 import { planSync, referencedPendingIds, syncedRowValues, type StoredRow, type SyncCounts } from '@/lib/bank-sync/plan';
 import { BOUNDARY_DAYS, MATCH_DAYS, addDays, setAsideValues, splitAtCutover, type Cutover } from '@/lib/bank-sync/cutover';
 import type { BankProviderName, ProviderTransaction, RemovedTransaction } from '@/lib/bank-sync/provider';
-import type { InsightRow } from '@/lib/insights';
+import type { InsightExpense } from '@/lib/insights';
 
 type TransactionSource = (typeof transactions.source.enumValues)[number];
 type CategorySource = (typeof transactions.categorySource.enumValues)[number];
@@ -1742,39 +1742,69 @@ export async function deleteReceiptByTransactionId(
 
 // ---- Insights (phase 7) ----
 
-// Every non-deleted transaction in the shape lib/insights.ts aggregates.
-// The dashboard is server-rendered, so raw rows never reach the client —
-// only the computed aggregates do.
-export async function getInsightRows(): Promise<InsightRow[]> {
-  const rows = await db
-    .select({
-      date: transactions.date,
-      amountCents: transactions.amountCents,
-      categoryId: transactions.categoryId,
-      categoryName: categories.name,
-      categoryIsSplittable: categories.isSplittable,
-      countsAsSpending: categories.countsAsSpending,
-      merchantNormalized: transactions.merchantNormalized,
-    })
+// Both views use posted purchases from verified bank accounts, CSV imports and manual entries.
+function insightPurchases() {
+  return db.select({
+    id: transactions.id,
+    description: transactions.descriptionRaw,
+    date: transactions.date,
+    amountCents: transactions.amountCents,
+    categoryId: transactions.categoryId,
+    categoryName: categories.name,
+    categoryIsSplittable: sql<boolean>`coalesce(${categories.isSplittable}, true)`.as('splittable'),
+    countsAsSpending: sql<boolean>`coalesce(${categories.countsAsSpending}, true)`.as('spending'),
+    merchantNormalized: transactions.merchantNormalized,
+  })
     .from(transactions)
     .leftJoin(categories, eq(transactions.categoryId, categories.id))
     .leftJoin(bankAccounts, eq(bankAccounts.id, transactions.bankAccountId))
-    // Pending rows are provisional: their posted row is the one that counts.
-    // A synced row counts once its bank account is verified against a
-    // statement (REAL-ACCOUNTS.md); CSV and manual rows always count.
-    .where(
-      and(
-        isNull(transactions.deletedAt),
-        eq(transactions.pending, false),
-        sql`(${transactions.bankAccountId} is null or ${bankAccounts.verifiedAt} is not null)`,
-      ),
-    );
-  return rows.map((row) => ({
-    ...row,
-    categoryIsSplittable: row.categoryIsSplittable ?? true,
-    // Uncategorized rows count as spending.
-    countsAsSpending: row.countsAsSpending ?? true,
-  }));
+    .where(and(
+      isNull(transactions.deletedAt),
+      eq(transactions.pending, false),
+      or(isNull(transactions.bankAccountId), isNotNull(bankAccounts.verifiedAt)),
+    ));
+}
+
+export async function getInsightRows(): Promise<InsightExpense[]> {
+  const rows = await insightPurchases();
+  return rows.map(row => ({ ...row, paidCents: row.amountCents, payerName: null }));
+}
+
+export async function getMyShareRows(): Promise<InsightExpense[]> {
+  const purchase = insightPurchases().as('purchase');
+  // Saved shares include tax, tip and rounding. A settlement changes the balance
+  // between people, never the original cost of the purchase.
+  const ownerShares = db.select({ splitId: splitShares.splitId, amount: splitShares.amountCents })
+    .from(splitShares).innerJoin(persons, eq(persons.id, splitShares.personId))
+    .where(eq(persons.isOwner, true)).as('owner_shares');
+  const ownerPaid = db.select({
+    id: purchase.id, description: purchase.description, date: purchase.date,
+    amountCents: sql<number>`case when ${splits.id} is null then ${purchase.amountCents}
+      else coalesce(${ownerShares.amount}, 0) end`.mapWith(Number),
+    categoryId: purchase.categoryId, categoryName: purchase.categoryName,
+    categoryIsSplittable: purchase.categoryIsSplittable, countsAsSpending: purchase.countsAsSpending,
+    merchantNormalized: purchase.merchantNormalized,
+    paidCents: purchase.amountCents, payerName: sql<string | null>`null::text`,
+  }).from(purchase)
+    .leftJoin(splits, eq(splits.transactionId, purchase.id))
+    .leftJoin(ownerShares, eq(ownerShares.splitId, splits.id))
+    .where(sql`${purchase.amountCents} > 0`);
+
+  const paidByOthers = db.select({
+    id: splits.id, description: sql<string>`coalesce(${splits.description}, 'Shared expense')`,
+    date: sql<string>`coalesce(${splits.date}, (${splits.createdAt} at time zone 'UTC')::date)`,
+    amountCents: ownerShares.amount,
+    categoryId: sql<string | null>`null::uuid`, categoryName: sql<string | null>`null::text`,
+    categoryIsSplittable: sql<boolean>`true`, countsAsSpending: sql<boolean>`true`,
+    merchantNormalized: sql<string>`coalesce(${splits.description}, 'Shared expense')`,
+    paidCents: sql<number>`0::bigint`, payerName: persons.name,
+  }).from(splits)
+    .innerJoin(ownerShares, eq(ownerShares.splitId, splits.id))
+    .innerJoin(persons, eq(persons.id, splits.payerPersonId))
+    .where(and(isNull(splits.transactionId), eq(persons.isOwner, false)));
+
+  // Read the two kinds of purchase in one database snapshot.
+  return ownerPaid.unionAll(paidByOthers);
 }
 
 // ---- Imports (phase 7) ----

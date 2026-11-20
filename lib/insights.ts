@@ -20,6 +20,16 @@ export type InsightRow = {
   merchantNormalized: string;
 };
 
+export type SpendingView = 'paid' | 'share';
+
+export type InsightExpense = InsightRow & {
+  id: string;
+  description: string;
+  // Zero when another person covered the purchase.
+  paidCents: number;
+  payerName: string | null;
+};
+
 const MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 export function isMonthKey(value: string): boolean {
@@ -155,7 +165,7 @@ export function spendingTrend(
 
 // Calendar-day totals keep a partial month comparable to the same span of
 // the previous month. Missing days after a cutoff are gaps in the chart.
-export function spendingProfile(rows: readonly InsightRow[], month: string, today: string) {
+export function spendingProfile<Row extends InsightRow>(rows: readonly Row[], month: string, today: string) {
   const previousMonth = addMonths(month, -1);
   function observedDays(key: string) {
     const last = new Date(addMonths(key, 1) + '-01T00:00:00Z');
@@ -168,7 +178,7 @@ export function spendingProfile(rows: readonly InsightRow[], month: string, toda
   const daily = Array<number>(days).fill(0);
   const previousDaily = Array<number>(previousDays).fill(0);
   const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(label => ({ label, count: 0 }));
-  const purchases: InsightRow[] = [];
+  const purchases: Row[] = [];
   let previousPurchases = 0;
   for (const row of rows) {
     if (!row.countsAsSpending || row.amountCents <= 0 || row.date > today) continue;
@@ -195,5 +205,5 @@ export function spendingProfile(rows: readonly InsightRow[], month: string, toda
   const difference = comparison?.current != null && comparison.previous != null ? comparison.current - comparison.previous : null;
   const categories = categoryBreakdown(purchases, month, 'all').sort((a, b) => b.totalCents - a.totalCents);
   const merchants = topMerchants(purchases, month, 5);
-  return { days, cutoff, difference, total, pace, weekdays, categories, merchants, purchaseCount: purchases.length };
+  return { days, cutoff, difference, total, pace, weekdays, categories, merchants, purchases, purchaseCount: purchases.length };
 }

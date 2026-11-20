@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { eq, sql } from 'drizzle-orm';
 import { db } from './index';
 import { bankAccounts, bankConnections, categories, splitShares, splits, syncSkippedRows, transactions } from './schema';
-import { getBankConnections } from './queries';
+import { getBankConnections, getInsightRows, getMyShareRows } from './queries';
 import { TABLES, UNNAMED_TABLES, wipeDemoTables, writeDemoSeed } from './demo-reset';
 import { boundaryReview, lastCsvDates } from './ledger';
 import { buildDemoSeed, type DemoSeed } from '@/lib/demo/seed';
@@ -49,6 +49,35 @@ describe('the demo reset', () => {
     // It looked: the migrated database has its tables.
     expect(present.length).toBeGreaterThanOrEqual(26);
     expect([...TABLES, ...UNNAMED_TABLES].sort()).toEqual(present);
+  });
+});
+
+describe('demo spending views', () => {
+  it('uses original owner shares even after payments, plus expenses covered by others', async () => {
+    const [paid, share] = await Promise.all([getInsightRows(), getMyShareRows()]);
+    const amounts = new Map(share.map(row => [row.id, row]));
+    const purchases = paid.filter(row => row.amountCents > 0);
+    expect(purchases.length).toBeGreaterThan(10);
+    expect(seed.settlementAllocations.length).toBeGreaterThan(0);
+    for (const row of purchases) {
+      const split = seed.splits.find(s => s.transactionId === row.id);
+      const owner = split && seed.splitShares.find(s => s.splitId === split.id && s.personId === seed.ownerId);
+      expect(amounts.get(row.id)).toMatchObject({
+        paidCents: row.amountCents, amountCents: split ? owner?.amountCents ?? 0 : row.amountCents,
+        categoryId: row.categoryId, countsAsSpending: row.countsAsSpending, date: row.date,
+      });
+    }
+    const external = seed.splits.filter(s => !s.transactionId);
+    expect(external.length).toBeGreaterThan(0);
+    for (const split of external) {
+      const owner = seed.splitShares.find(s => s.splitId === split.id && s.personId === seed.ownerId)!;
+      expect(paid.some(row => row.id === split.id)).toBe(false);
+      expect(amounts.get(split.id)).toMatchObject({
+        amountCents: owner.amountCents, paidCents: 0, categoryId: null, date: split.date,
+        payerName: seed.persons.find(p => p.id === split.payerPersonId)!.name,
+      });
+    }
+    expect(share).toHaveLength(purchases.length + external.length);
   });
 });
 

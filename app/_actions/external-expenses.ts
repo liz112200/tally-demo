@@ -67,6 +67,7 @@ export async function createExternalExpense(
   });
 
   revalidatePath('/people');
+  revalidatePath('/insights');
   return { ok: true, message: `Expense saved: ${payer.name} paid ${formatUSD(toCents(amountCents))} for you.` };
 }
 
@@ -82,6 +83,7 @@ export async function deleteExternalExpense(splitId: string): Promise<ActionResu
       return { error: 'That expense was not found; it may already be deleted.' };
     }
     revalidatePath('/people');
+    revalidatePath('/insights');
     return { ok: true, message: 'Expense deleted. Any payment applied to it is credit again.' };
   });
 }
