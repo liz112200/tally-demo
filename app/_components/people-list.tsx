@@ -16,7 +16,7 @@ import {
 } from '@/app/_actions/people';
 import { createSettlement, deleteSettlement } from '@/app/_actions/settlements';
 import { deleteExternalExpense } from '@/app/_actions/external-expenses';
-import { ExternalExpenseDialog } from '@/app/_components/external-expense-dialog';
+import { ExternalExpenseDialog, type ExpenseCategory } from '@/app/_components/external-expense-dialog';
 import {
   SettleAllocatorDialog,
   type AllocatorShare,
@@ -159,6 +159,7 @@ const initialPersonState: PersonFormState = {};
 const initialSettlementState: SettlementFormState = {};
 
 export function PeopleList({
+  categories,
   owner,
   rows,
   owedToOwnerCents,
@@ -167,6 +168,7 @@ export function PeopleList({
   creditorCount,
   today,
 }: {
+  categories?: ExpenseCategory[];
   owner: PersonView;
   rows: PersonView[];
   owedToOwnerCents: number;
@@ -230,6 +232,7 @@ export function PeopleList({
             {sorted.map((person) => (
               <PersonLine
                 key={person.id}
+                categories={categories}
                 person={person}
                 today={today}
                 open={expandedId === person.id}
@@ -872,11 +875,13 @@ function AllocationLines({
 }
 
 function PersonLine({
+  categories,
   person,
   today,
   open,
   onToggle,
 }: {
+  categories?: ExpenseCategory[];
   person: PersonView;
   today: string;
   open: boolean;
@@ -1029,13 +1034,14 @@ function PersonLine({
                   You owe them
                 </h3>
                 <ExternalExpenseDialog
+                  categories={categories}
                   personId={person.id}
                   personName={person.name}
                   today={today}
                   trigger={
                     <Button type="button" variant="outline" size="sm" className="h-7">
                       <HandCoins data-icon="inline-start" />
-                      Log expense you paid
+                      {categories ? `Log expense ${person.name} paid` : 'Log expense you paid'}
                     </Button>
                   }
                 />

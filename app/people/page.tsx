@@ -1,6 +1,8 @@
 import { Suspense } from 'react';
+import { isDemoMode } from '@/lib/demo-mode';
 import {
   getAllPersons,
+  getCategories,
   getDebtShares,
   getSettlements,
   getSettlementAllocationDetails,
@@ -32,11 +34,12 @@ export const dynamic = 'force-dynamic';
 // owner owes them, share by share, minus settlement allocations.
 export default async function PeoplePage() {
   await requireUser();
-  const [persons, debtShares, settlements, allocationDetails] = await Promise.all([
+  const [persons, debtShares, settlements, allocationDetails, categories] = await Promise.all([
     getAllPersons(),
     getDebtShares(),
     getSettlements(),
     getSettlementAllocationDetails(),
+    isDemoMode() ? getCategories() : undefined,
   ]);
 
   const balances = new Map(
@@ -205,6 +208,7 @@ export default async function PeoplePage() {
         // boundary to prerender; params resolve client-side on hydration.
         <Suspense>
           <PeopleList
+            categories={categories?.filter(c => c.countsAsSpending).map(({ id, name }) => ({ id, name }))}
             owner={toView(owner)}
             rows={rows}
             owedToOwnerCents={owedToOwner}

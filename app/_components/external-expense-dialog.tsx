@@ -14,8 +14,10 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { createExternalExpense } from '@/app/_actions/external-expenses';
-import type { ExternalExpenseFormState } from '@/app/_lib/schema';
+import { UNCATEGORIZED, type ExternalExpenseFormState } from '@/app/_lib/schema';
 import { useReportSuccess } from './page-result';
+
+export type ExpenseCategory = { id: string; name: string };
 
 const initialState: ExternalExpenseFormState = {};
 
@@ -24,11 +26,13 @@ const initialState: ExternalExpenseFormState = {};
 // /people expanded view. `personName` is only for labeling; the payer is bound
 // by the hidden personId field.
 export function ExternalExpenseDialog({
+  categories,
   personId,
   personName,
   today,
   trigger,
 }: {
+  categories?: ExpenseCategory[];
   personId: string;
   personName: string;
   today: string;
@@ -40,14 +44,15 @@ export function ExternalExpenseDialog({
       <DialogTrigger render={trigger} />
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Log an expense you paid</DialogTitle>
+          <DialogTitle>{categories ? `Expense paid by ${personName}` : 'Log an expense you paid'}</DialogTitle>
           <DialogDescription>
-            Record something {personName} paid for that you owe them a share of.
-            It shows up here under what you owe them, not on Expenses.
+            {categories ? 'Enter your portion of the expense.' :
+              `Record something ${personName} paid for that you owe them a share of. It shows up here under what you owe them, not on Expenses.`}
           </DialogDescription>
         </DialogHeader>
         {open && (
           <ExternalExpenseForm
+            categories={categories}
             personId={personId}
             personName={personName}
             today={today}
@@ -60,11 +65,13 @@ export function ExternalExpenseDialog({
 }
 
 function ExternalExpenseForm({
+  categories,
   personId,
   personName,
   today,
   onSaved,
 }: {
+  categories?: ExpenseCategory[];
   personId: string;
   personName: string;
   today: string;
@@ -132,6 +139,27 @@ function ExternalExpenseForm({
           <p className="text-xs text-destructive">{state.errors.date}</p>
         )}
       </div>
+      {categories && (
+        <div className="grid gap-1.5">
+          <Label htmlFor={`ext-category-${personId}`} className="text-xs text-muted-foreground">
+            Category
+          </Label>
+          <select
+            id={`ext-category-${personId}`}
+            name="categoryId"
+            defaultValue={UNCATEGORIZED}
+            className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm"
+            aria-invalid={!!state.errors?.categoryId}
+            aria-describedby={state.errors?.categoryId ? `ext-category-error-${personId}` : undefined}
+          >
+            <option value={UNCATEGORIZED}>Uncategorized</option>
+            {categories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}
+          </select>
+          {state.errors?.categoryId && (
+            <p id={`ext-category-error-${personId}`} className="text-xs text-destructive">{state.errors.categoryId}</p>
+          )}
+        </div>
+      )}
       {state.errors?.payerPersonId && (
         <p className="text-xs text-destructive">{state.errors.payerPersonId}</p>
       )}

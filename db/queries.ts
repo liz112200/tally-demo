@@ -228,6 +228,8 @@ export async function getCategories() {
   return db.select().from(categories).orderBy(categories.name);
 }
 
+export class UnavailableExpenseCategoryError extends Error {}
+
 // Create a category. Names are unique; onConflictDoNothing turns a repeat
 // into a no-op so the caller can report "already exists" instead of a 500.
 // `created` is false when the name was taken.
@@ -614,8 +616,15 @@ export async function insertExternalExpense(input: {
   amountCents: number;
   date: string;
   description: string;
+  categoryId?: string | null;
 }): Promise<{ shareId: string }> {
   return db.transaction(async (tx) => {
+    if (input.categoryId) {
+      const [category] = await tx.select({ id: categories.id }).from(categories)
+        .where(and(eq(categories.id, input.categoryId), eq(categories.countsAsSpending, true)))
+        .for('share');
+      if (!category) throw new UnavailableExpenseCategoryError();
+    }
     const [split] = await tx
       .insert(splits)
       .values({
@@ -626,6 +635,7 @@ export async function insertExternalExpense(input: {
         tipCents: 0,
         date: input.date,
         description: input.description,
+        categoryId: input.categoryId,
       })
       .returning({ id: splits.id });
     const [share] = await tx
@@ -1032,8 +1042,7 @@ export type DebtShareRow = {
   // by (already applied in the ORDER BY here).
   createdAt: Date;
   effectiveDate: string;
-  // Display/detail fields for /people. All null for external splits, which
-  // have no backing transaction to read a category, total, or note from.
+  // Category of the bank transaction or manually logged external expense.
   categoryName: string | null;
   // The whole transaction's amount, so the detail popup can frame this
   // person's share against what was actually spent.
@@ -1076,7 +1085,7 @@ export async function getDebtShares(): Promise<DebtShareRow[]> {
     JOIN persons o ON o.is_owner = true
     JOIN persons cp ON cp.id = (CASE WHEN sp.payer_person_id = o.id THEN ss.person_id ELSE sp.payer_person_id END)
     LEFT JOIN transactions t ON t.id = sp.transaction_id
-    LEFT JOIN categories c ON c.id = t.category_id
+    LEFT JOIN categories c ON c.id = COALESCE(t.category_id, sp.category_id)
     LEFT JOIN (
       SELECT split_share_id, SUM(amount_cents) AS total
       FROM settlement_allocations
@@ -1794,13 +1803,15 @@ export async function getMyShareRows(): Promise<InsightExpense[]> {
     id: splits.id, description: sql<string>`coalesce(${splits.description}, 'Shared expense')`,
     date: sql<string>`coalesce(${splits.date}, (${splits.createdAt} at time zone 'UTC')::date)`,
     amountCents: ownerShares.amount,
-    categoryId: sql<string | null>`null::uuid`, categoryName: sql<string | null>`null::text`,
-    categoryIsSplittable: sql<boolean>`true`, countsAsSpending: sql<boolean>`true`,
+    categoryId: splits.categoryId, categoryName: categories.name,
+    categoryIsSplittable: sql<boolean>`coalesce(${categories.isSplittable}, true)`,
+    countsAsSpending: sql<boolean>`coalesce(${categories.countsAsSpending}, true)`,
     merchantNormalized: sql<string>`coalesce(${splits.description}, 'Shared expense')`,
     paidCents: sql<number>`0::bigint`, payerName: persons.name,
   }).from(splits)
     .innerJoin(ownerShares, eq(ownerShares.splitId, splits.id))
     .innerJoin(persons, eq(persons.id, splits.payerPersonId))
+    .leftJoin(categories, eq(categories.id, splits.categoryId))
     .where(and(isNull(splits.transactionId), eq(persons.isOwner, false)));
 
   // Read the two kinds of purchase in one database snapshot.

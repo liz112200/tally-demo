@@ -127,6 +127,8 @@ export const splits = pgTable('splits', {
   // for owner-paid splits, whose date/description come from the transaction.
   date: date('date', { mode: 'string' }),
   description: text('description'),
+  // External expenses carry their own category. Bank splits use the transaction's.
+  categoryId: uuid('category_id').references(() => categories.id, { onDelete: 'set null' }),
   method: splitMethod('method').notNull(),
   // Tax and tip are carved out of the transaction total, divided equally
   // among all participants regardless of method, and added back onto each

@@ -380,6 +380,7 @@ export type SettlementFormState = {
 // and bounds only.
 export const EXTERNAL_EXPENSE_DESC_MAX = 120;
 export const externalExpenseSchema = z.object({
+  categoryId: z.string().uuid('Choose an available category').nullish(),
   payerPersonId: z.string().uuid(),
   amount: z.string().refine((v) => {
     const cents = tryParseDollars(v);

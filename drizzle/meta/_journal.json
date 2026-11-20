@@ -274,6 +274,13 @@
       "when": 1795188474610,
       "tag": "0038_share_bill_paper",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1795198766893,
+      "tag": "0039_external_expense_category",
+      "breakpoints": true
     }
   ]
 }

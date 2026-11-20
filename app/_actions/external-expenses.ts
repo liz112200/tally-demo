@@ -3,15 +3,18 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import type { ActionResult } from '@/lib/action-result';
+import { isDemoMode } from '@/lib/demo-mode';
 import { attempt } from './attempt';
 import { formatUSD, parseDollars, toCents } from '@/lib/money';
 import {
   deleteExternalSplit,
   getPersons,
   insertExternalExpense,
+  UnavailableExpenseCategoryError,
 } from '@/db/queries';
 import {
   externalExpenseSchema,
+  sentinelToCategoryId,
   type ExternalExpenseFormState,
 } from '@/app/_lib/schema';
 import { requireUser } from '@/app/_lib/session';
@@ -19,14 +22,14 @@ import { requireUser } from '@/app/_lib/session';
 // Log an expense someone else paid that the owner owes a share of. Creates an
 // external split (no bank transaction) with the payer set to that person and a
 // single owner share; any outgoing credit the owner already holds toward them
-// auto-applies. External splits live only on /people (fork 3), so only that
-// page revalidates.
+// auto-applies.
 export async function createExternalExpense(
   _prev: ExternalExpenseFormState,
   formData: FormData,
 ): Promise<ExternalExpenseFormState> {
   await requireUser();
   const parsed = externalExpenseSchema.safeParse({
+    categoryId: isDemoMode() ? sentinelToCategoryId(String(formData.get('categoryId') ?? '')) : null,
     payerPersonId: formData.get('payerPersonId'),
     amount: formData.get('amount'),
     date: formData.get('date'),
@@ -58,13 +61,21 @@ export async function createExternalExpense(
   }
 
   const amountCents = parseDollars(parsed.data.amount);
-  await insertExternalExpense({
-    payerPersonId: payer.id,
-    ownerId: owner.id,
-    amountCents,
-    date: parsed.data.date,
-    description: parsed.data.description,
-  });
+  try {
+    await insertExternalExpense({
+      payerPersonId: payer.id,
+      ownerId: owner.id,
+      amountCents,
+      date: parsed.data.date,
+      description: parsed.data.description,
+      categoryId: parsed.data.categoryId,
+    });
+  } catch (error) {
+    if (error instanceof UnavailableExpenseCategoryError) {
+      return { errors: { categoryId: 'That category is unavailable. Choose another.' } };
+    }
+    throw error;
+  }
 
   revalidatePath('/people');
   revalidatePath('/insights');

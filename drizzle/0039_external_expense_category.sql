@@ -1,0 +1,2 @@
+ALTER TABLE "splits" ADD COLUMN "category_id" uuid;--> statement-breakpoint
+ALTER TABLE "splits" ADD CONSTRAINT "splits_category_id_categories_id_fk" FOREIGN KEY ("category_id") REFERENCES "public"."categories"("id") ON DELETE set null ON UPDATE no action;
