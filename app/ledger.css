@@ -318,3 +318,19 @@ html[data-demo] .shared-check section h2 { font: italic 1.2rem Georgia,serif; te
   .monthly-bars span { grid-column: 1; grid-row: 1; border: 0; padding: 0 }
   .monthly-bars b { min-width: 5.75rem; text-align: right }
 }
+
+.bill-proof { background: var(--ticket); border: 1px solid var(--ticket-rule); border-bottom-style: dashed; overflow: hidden }
+.bill-proof-body { padding: 1rem }
+.bill-proof h3 { margin: .65rem 0; font: italic 1.65rem/1.15 Georgia, serif; overflow-wrap: anywhere }
+.bill-proof p { display: flex; justify-content: space-between; gap: .5rem; align-items: baseline; border-top: 1px dotted var(--ticket-rule); padding-top: .65rem }
+.bill-proof strong { font-family: var(--font-mono), monospace }
+.bill-swatches { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem }
+.bill-swatches label { display: flex; align-items: center; gap: .5rem; border: 1px solid var(--border); border-radius: .4rem; padding: .65rem; cursor: pointer }
+.bill-swatches label:has(:checked) { border-color: var(--stamp); background: var(--ticket) }
+.bill-swatches input { accent-color: var(--stamp) }
+.bill-trim, html[data-demo] main.shared-check > .bill-trim { height: 3.4rem; background: var(--ticket) center bottom / auto 100% repeat-x; border-bottom: 1px dotted var(--ticket-rule) }
+.bill-trim[data-paper=classic] { height: .45rem; background: var(--stamp) }
+.bill-trim[data-paper=flowers], html[data-demo] main.shared-check > [data-paper=flowers] { background-image: url('/demo/paper/flowers.svg') }
+.bill-trim[data-paper=paws], html[data-demo] main.shared-check > [data-paper=paws] { background-image: url('/demo/paper/paws.svg') }
+.bill-trim[data-paper=chiikawa], html[data-demo] main.shared-check > [data-paper=chiikawa] { background-image: url('/demo/paper/chiikawa.svg') }
+.shared-check > .bill-trim { margin-bottom: 1.25rem }

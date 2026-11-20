@@ -9,6 +9,7 @@
 // The output is deliberately plain — no markdown, no column alignment. SMS
 // and messenger clients reflow text in proportional fonts, so padded columns
 // arrive ragged; one item per line survives everywhere.
+import { guestCopy, type BillDesign } from './bill-design';
 import { formatPayableUSD as formatUSD, toCents } from './money';
 
 export type ShareLine = {
@@ -46,6 +47,7 @@ export type ShareSummaryInput = {
   limit?: number;
   // Where the full snapshot lives. Appended once, at the end.
   linkUrl?: string;
+  guestCheck?: boolean;
 };
 
 function renderSection(
@@ -95,6 +97,7 @@ export function buildShareSummary({
   groupBy = null,
   limit,
   linkUrl,
+  guestCheck = false,
 }: ShareSummaryInput): string {
   if (owed.length === 0 && owing.length === 0) return '';
 
@@ -102,20 +105,20 @@ export function buildShareSummary({
   const owingTotal = sumLines(owing);
   const net = owedTotal - owingTotal;
 
-  const out: string[] = [`Hi ${personName} — here's where we're at:`, ''];
+  const out: string[] = guestCheck ? [`Hey ${personName}! Here’s our little tab. You can put the calculator away.`, ''] : [`Hi ${personName} — here's where we're at:`, ''];
 
   const count = (n: number) => `${n} item${n === 1 ? '' : 's'}`;
 
   if (owed.length > 0) {
     out.push(
-      `What you owe me (${count(owed.length)}) — ${formatUSD(toCents(owedTotal))}`,
+      `${guestCheck ? guestCopy.coveredByMe : 'What you owe me'} (${count(owed.length)}) — ${formatUSD(toCents(owedTotal))}`,
     );
     out.push(...renderSection(owed, groupBy, limit));
     out.push('');
   }
   if (owing.length > 0) {
     out.push(
-      `What I owe you (${count(owing.length)}) — ${formatUSD(toCents(owingTotal))}`,
+      `${guestCheck ? guestCopy.coveredByYou : 'What I owe you'} (${count(owing.length)}) — ${formatUSD(toCents(owingTotal))}`,
     );
     out.push(...renderSection(owing, groupBy, limit));
     out.push('');
@@ -123,7 +126,9 @@ export function buildShareSummary({
 
   // The net is the point of the message, so it is stated in words rather
   // than left for the reader to subtract.
-  if (net > 0) {
+  if (guestCheck) {
+    out.push(net === 0 ? 'All square! The calculator can clock out.' : `${guestCheckBalance(net)} — ${guestCopy.balance(net).toLowerCase()}.`);
+  } else if (net > 0) {
     out.push(`Net: you owe me ${formatUSD(toCents(net))}`);
   } else if (net < 0) {
     out.push(`Net: I owe you ${formatUSD(toCents(-net))}`);
@@ -131,14 +136,18 @@ export function buildShareSummary({
     out.push('Net: we’re settled up');
   }
 
-  // Only worth linking when the message actually withheld something.
+  // A decorated guest check also needs its link when all items fit inline.
   const withheld =
     limit !== undefined && (limit < owed.length || limit < owing.length);
-  if (linkUrl && withheld) {
-    out.push('', `Full list: ${linkUrl}`);
+  if (linkUrl && (withheld || guestCheck)) {
+    out.push('', guestCheck ? `Our guest check: ${linkUrl}` : `Full list: ${linkUrl}`);
   }
 
   return out.join('\n');
+}
+
+export function guestCheckBalance(net: number): string {
+  return formatUSD(toCents(Math.abs(net)));
 }
 
 // Absolute URL for a published snapshot.
@@ -149,10 +158,10 @@ export function buildShareSummary({
 // plausible-looking URL, but messaging apps will not reliably turn it into a
 // tappable link, leaving the recipient to copy it into a browser by hand. So
 // the scheme is normalized here rather than assumed of the environment.
-export function absoluteShareUrl(base: string, token: string): string {
+export function absoluteShareUrl(base: string, token: string, design: BillDesign = 'classic'): string {
   const trimmed = base.trim().replace(/\/+$/, '');
   // An explicit scheme is preserved, so http://localhost keeps working in
   // development; anything else is assumed to be a bare host.
   const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
-  return `${withScheme}/s/${token}`;
+  return `${withScheme}/s/${token}${design === 'classic' ? '' : `?paper=${design}`}`;
 }

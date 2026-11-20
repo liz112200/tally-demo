@@ -1,11 +1,15 @@
 'use client';
 
 import { useState } from 'react';
+import { useIsDemo } from '@/app/_lib/use-demo';
+import { BillDesignPicker } from './bill-design-picker';
+import type { BillDesign } from '@/lib/bill-design';
 import { Check, Link2, Share2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import {
   absoluteShareUrl,
+  sumLines,
   buildShareSummary,
   type ShareLine,
 } from '@/lib/share-summary';
@@ -34,8 +38,9 @@ export function ShareListButton({
   groupBy: 'category' | null;
   className?: string;
 }) {
+  const demo = useIsDemo();
   const [status, setStatus] = useState<
-    'idle' | 'working' | 'copied' | 'failed'
+    'idle' | 'working' | 'copied' | 'failed' | 'publishFailed'
   >('idle');
 
   // A list this size or smaller travels whole: the recipient reads it without
@@ -47,11 +52,12 @@ export function ShareListButton({
   // the wall of text the link exists to avoid.
   const TEASER_LINES = 3;
 
-  const needsLink = owed.length + owing.length > INLINE_LIMIT;
+  const [design, setDesign] = useState<BillDesign>('classic');
+  const needsLink = owed.length + owing.length > INLINE_LIMIT || design !== 'classic';
   // What the message looks like with no link — also exactly what is sent when
   // the list is short. Used for the disabled check, which must not depend on
   // a link that has not been published yet.
-  const text = buildShareSummary({ personName, owed, owing, groupBy });
+  const text = buildShareSummary({ personName, owed, owing, groupBy, guestCheck: demo });
 
   // navigator.share can hang: where the API exists but no share sheet can be
   // presented (automation, some embedded webviews, desktop builds without a
@@ -91,9 +97,9 @@ export function ShareListButton({
       owed,
       owing,
     });
-    return published.ok
-      ? absoluteShareUrl(process.env.NEXT_PUBLIC_SHARE_BASE_URL || window.location.origin, published.token)
-      : null;
+    if (!published.ok) return null;
+    const base = demo ? window.location.origin : process.env.NEXT_PUBLIC_SHARE_BASE_URL || window.location.origin;
+    return absoluteShareUrl(base, published.token, design);
   }
 
   // The link on its own, whatever the list's length: for a short list the
@@ -123,11 +129,15 @@ export function ShareListButton({
     if (needsLink) {
       setStatus('working');
       const url = await publishLink();
+      if (!url && design !== 'classic') {
+        setStatus('publishFailed');
+        return;
+      }
       setStatus('idle');
       // If publishing fails, fall back to sending the list inline rather
       // than sending nothing — long is better than lost.
       message = url
-        ? buildShareSummary({ personName, owed, owing, groupBy, limit: TEASER_LINES, linkUrl: url })
+        ? buildShareSummary({ personName, owed, owing, groupBy, guestCheck: demo, limit: TEASER_LINES, linkUrl: url })
         : text;
     }
 
@@ -167,7 +177,8 @@ export function ShareListButton({
   }
 
   return (
-    <span className={cn('inline-flex gap-1', className)}>
+    <span className={cn('inline-flex gap-1', className, demo && 'h-auto flex-wrap items-center')}>
+      {demo && text && <BillDesignPicker design={design} onChange={setDesign} name={personName} net={sumLines(owed) - sumLines(owing)} />}
       <Button
         type="button"
         variant="outline"
@@ -187,6 +198,8 @@ export function ShareListButton({
             <Check data-icon="inline-start" />
             Copied
           </>
+        ) : status === 'publishFailed' ? (
+          'Couldn’t create link · Retry'
         ) : status === 'failed' ? (
           'Copy failed'
         ) : (

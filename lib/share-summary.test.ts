@@ -158,3 +158,15 @@ describe('absoluteShareUrl', () => {
     expect(absoluteShareUrl('x.app///', 'abc')).toBe('https://x.app/s/abc');
   });
 });
+
+describe('demo guest checks', () => {
+  it('keeps the direction clear and links a decorated check even for a single item', () => {
+    const link = absoluteShareUrl('https://demo.test', 'abc', 'flowers');
+    const text = summary({ guestCheck: true, owing: [line()], limit: 3, linkUrl: link });
+    expect(text).toContain('You picked these up for me');
+    expect(text).toContain('$24.50 — coming your way.');
+    expect(text).toContain('https://demo.test/s/abc?paper=flowers');
+    expect(summary({ guestCheck: true, owed: [line()] })).toContain('$24.50 — to send my way.');
+    expect(summary({ guestCheck: true, owed: [line()], owing: [line()] })).toContain('All square!');
+  });
+});
