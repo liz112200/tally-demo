@@ -58,6 +58,7 @@ export const ENV_VARS: Record<string, EnvUse & { why: string }> = {
   DEMO_ENV: { optional: true, why: 'demo scripts: "local" reads .env.demo-local instead of .env.demo (lib/demo/env-file.ts)' },
   NEXT_PUBLIC_OWNER_NAME: { optional: true, why: "db/seed.ts: the owner's name in a fresh database" },
   NODE_ENV: { platform: true, why: 'set by Next.js' },
+  VERCEL_URL: { platform: true, why: 'identifies the private deployment hostname when checking bill links' },
   VERCEL_ENV: { platform: true, why: 'set by Vercel' },
   GITHUB_TOKEN: { platform: true, why: "set by GitHub Actions; scripts/ci/wait-deployments.mjs reads Vercel's deployment statuses with it" },
 };

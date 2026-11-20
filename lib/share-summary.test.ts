@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { absoluteShareUrl, buildShareSummary, type ShareLine } from './share-summary';
+import { billHref, billViewerOrigin, buildShareSummary, type ShareLine } from './share-summary';
 
 // Amounts are mills (1 dollar = 1000 units), per the money invariant.
 const line = (over: Partial<ShareLine> = {}): ShareLine => ({
@@ -137,31 +137,30 @@ describe('buildShareSummary', () => {
   });
 });
 
-describe('absoluteShareUrl', () => {
-  // The bug: Vercel shows domains without a scheme, and a scheme-less link
-  // arrives in a message as unclickable text.
-  it('adds https:// to a bare host', () => {
-    expect(absoluteShareUrl('share-snowy-seven.vercel.app', 'abc')).toBe(
-      'https://share-snowy-seven.vercel.app/s/abc',
-    );
+describe('bill destinations', () => {
+  const appHosts = ['private.test', 'app-alias.test'];
+  it.each(['bill.test', '  https://bill.test/  '])('opens and copies the stored token on the viewer at %s', base => {
+    const origin = billViewerOrigin(base, appHosts);
+    expect(origin).toBe('https://bill.test');
+    expect(billHref(origin!, 'saved-token')).toBe('https://bill.test/s/saved-token');
   });
 
-  it('keeps an explicit scheme, so localhost stays http', () => {
-    expect(absoluteShareUrl('http://localhost:3000', 'abc')).toBe(
-      'http://localhost:3000/s/abc',
-    );
-    expect(absoluteShareUrl('https://x.app', 'abc')).toBe('https://x.app/s/abc');
-  });
+  it.each([undefined, 'private.test', 'APP-ALIAS.test.', 'https://private.test:443', 'http://bill.test',
+    'https://me@bill.test', 'https://bill.test/people', 'https://bill.test?paper=koi', 'bad host'])(
+    'rejects an unavailable or unsafe personal viewer (%s)', base => {
+      expect(billViewerOrigin(base, appHosts)).toBeNull();
+    },
+  );
 
-  it('tolerates a trailing slash and stray whitespace', () => {
-    expect(absoluteShareUrl('  https://x.app/  ', 'abc')).toBe('https://x.app/s/abc');
-    expect(absoluteShareUrl('x.app///', 'abc')).toBe('https://x.app/s/abc');
+  it('allows the demo path and a separate local viewer in development', () => {
+    expect(billHref('', 'saved-token')).toBe('/s/saved-token');
+    expect(billViewerOrigin('http://localhost:3001', ['localhost:3000'], true)).toBe('http://localhost:3001');
   });
 });
 
 describe('demo guest checks', () => {
   it('leads with the net and labels each side from the sender’s perspective', () => {
-    const link = absoluteShareUrl('https://demo.test', 'abc');
+    const link = billHref('https://demo.test', 'abc');
     const text = summary({ guestCheck: true, owing: [line()], limit: 3, linkUrl: link });
     expect(text.split('\n')[0]).toBe('Total: $24.50 · to you');
     expect(text).toContain('What you paid (1 item)');

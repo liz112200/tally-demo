@@ -4,7 +4,8 @@ import { ArrowLeft } from 'lucide-react';
 import { z } from 'zod';
 import { requireUser } from '@/app/_lib/session';
 import { getSharedBillHistory } from '@/db/queries';
-import { isDemoMode } from '@/lib/demo-mode';
+import { getBillLinkBase } from '@/app/_lib/bill-links';
+import { billHref } from '@/lib/share-summary';
 import { billDesigns, readBillDesign } from '@/lib/bill-design';
 import { formatUSD, toCents } from '@/lib/money';
 import { BillLinkActions } from './bill-link-actions';
@@ -21,10 +22,9 @@ export default async function SharedBillHistoryPage({ searchParams }: {
   searchParams: Promise<{ before?: string }>;
 }) {
   await requireUser();
-  if (!isDemoMode()) notFound();
   const { before } = await searchParams;
   if (before !== undefined && !z.string().uuid().safeParse(before).success) notFound();
-  const { bills, olderThan } = await getSharedBillHistory(before);
+  const [{ bills, olderThan }, base] = await Promise.all([getSharedBillHistory(before), getBillLinkBase()]);
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-8">
@@ -62,7 +62,7 @@ export default async function SharedBillHistoryPage({ searchParams }: {
                 </p>
                 <div className="col-span-2">
                   {bill.revokedAt ? <span className="text-xs text-muted-foreground">Link off</span> :
-                    <BillLinkActions id={bill.id} token={bill.token} personName={bill.personName} />}
+                    <BillLinkActions id={bill.id} href={base === null ? null : billHref(base, bill.token)} personName={bill.personName} />}
                 </div>
               </li>
             );

@@ -8,7 +8,6 @@ import { Check, Link2, Share2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import {
-  absoluteShareUrl,
   sumLines,
   buildShareSummary,
   type ShareLine,
@@ -84,19 +83,8 @@ export function ShareListButton({
     }
   }
 
-  // Publish this list as a snapshot and return its address, or null when
-  // publishing failed. Snapshots are served by a separate Vercel project
-  // whose only routes are /s/[token] and a dead end, so trimming a shared
-  // link reveals no ledger. Falls back to this origin in local dev, where the
-  // app still serves /s/ itself. absoluteShareUrl supplies the scheme, which
-  // the dashboard-copied value omits.
   async function publishLink(): Promise<string | null> {
     try {
-      const base = demo ? window.location.origin : process.env.NEXT_PUBLIC_SHARE_BASE_URL
-        || (process.env.NODE_ENV === 'development' ? window.location.origin : undefined);
-      if (!base) return null;
-      const origin = new URL(absoluteShareUrl(base, 'bill')).origin;
-      if (!demo && process.env.NODE_ENV === 'production' && origin === window.location.origin) return null;
       const published = await createShareLink({
         personName,
         paper: design,
@@ -104,7 +92,7 @@ export function ShareListButton({
         owed,
         owing,
       });
-      return published.ok ? absoluteShareUrl(base, published.token) : null;
+      return published.ok ? new URL(published.href, window.location.origin).href : null;
     } catch {
       return null;
     }

@@ -150,18 +150,32 @@ export function guestCheckBalance(net: number): string {
   return formatUSD(toCents(Math.abs(net)));
 }
 
-// Absolute URL for a published snapshot.
-//
-// The base comes from NEXT_PUBLIC_SHARE_BASE_URL, which is pasted by hand
-// from the Vercel dashboard — and the dashboard displays domains without a
-// scheme ("share-snowy-seven.vercel.app"). A scheme-less string still forms a
-// plausible-looking URL, but messaging apps will not reliably turn it into a
-// tappable link, leaving the recipient to copy it into a browser by hand. So
-// the scheme is normalized here rather than assumed of the environment.
-export function absoluteShareUrl(base: string, token: string): string {
-  const trimmed = base.trim().replace(/\/+$/, '');
-  // An explicit scheme is preserved, so http://localhost keeps working in
-  // development; anything else is assumed to be a bare host.
-  const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
-  return `${withScheme}/s/${token}`;
+// Vercel may supply a bare domain. Only accept a viewer origin, never a
+// private app hostname (including its production alias) or a path or query.
+export function billViewerOrigin(
+  configured: string | undefined,
+  appHosts: (string | null | undefined)[],
+  development = false,
+): string | null {
+  const base = configured?.trim();
+  if (!base) return null;
+  try {
+    const url = new URL(/^https?:\/\//i.test(base) ? base : `https://${base}`);
+    if (url.protocol !== 'https:' && !(development && url.protocol === 'http:')) return null;
+    if (url.username || url.password || url.pathname.replace(/\//g, '') || url.search || url.hash) return null;
+    const matchesApp = appHosts.some(host => {
+      if (!host) return false;
+      const app = new URL(`https://${host}`);
+      return development ? app.host === url.host :
+        app.hostname.replace(/\.$/, '') === url.hostname.replace(/\.$/, '');
+    });
+    return matchesApp ? null : url.origin;
+  } catch {
+    return null;
+  }
+}
+
+// An empty base is the explicitly same-site demo or local viewer.
+export function billHref(base: string, token: string): string {
+  return `${base}/s/${encodeURIComponent(token)}`;
 }
