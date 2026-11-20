@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { cookies } from 'next/headers';
 import './globals.css';
 import './ledger.css';
+import '../lib/bill-paper.css';
 import { DemoProvider } from './_lib/use-demo';
 import { Geist, Geist_Mono } from 'next/font/google';
 import { cn } from '@/lib/utils';
@@ -22,7 +23,7 @@ export const metadata: Metadata = {
 // Applies the stored (or system) theme before first paint so neither theme
 // flashes. Runs inline in <head>; localStorage may be unavailable in some
 // contexts, hence the try/catch.
-const themeInit = `try{var p=localStorage.getItem("ledger-dark-palette");if(document.documentElement.dataset.demo&&p)document.documentElement.dataset.darkPalette=p;var t=localStorage.getItem("theme");if(t==="dark"||(!t&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.classList.add("dark")}catch(e){}`;
+const themeInit = `try{var p=localStorage.getItem("ledger-dark-palette");if(p)document.documentElement.dataset.darkPalette=p;var t=localStorage.getItem("theme");if(t==="dark"||(!t&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.classList.add("dark")}catch(e){}`;
 
 export default async function RootLayout({
   children,
@@ -36,6 +37,7 @@ export default async function RootLayout({
     <html
       lang="en"
       className={cn('font-sans', geist.variable, geistMono.variable)}
+      data-passbook=""
       data-demo={isDemoMode() ? '1' : undefined}
       suppressHydrationWarning
     >

@@ -38,7 +38,7 @@ export function DarkPalettes() {
   return <section id="appearance" aria-labelledby="appearance-heading" className="space-y-3">
     <div>
       <h2 id="appearance-heading" className="text-lg font-semibold tracking-tight">Appearance</h2>
-      <p className="text-sm text-muted-foreground">Choose a dark palette to try it across the demo.</p>
+      <p className="text-sm text-muted-foreground">Choose a palette for dark mode.</p>
     </div>
     <div className="grid grid-cols-[repeat(auto-fit,minmax(min(9.5rem,100%),1fr))] gap-2">
       {palettes.map(([id, name, description]) => (

@@ -54,7 +54,7 @@ export default async function SettingsPage() {
     <main className="mx-auto max-w-4xl space-y-10 px-4 py-6 sm:px-6 sm:py-8">
       <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
 
-      {demo && <DarkPalettes />}
+      <DarkPalettes />
 
       <section id="rules" className="scroll-mt-16 space-y-6">
         <div className="flex flex-wrap items-end justify-between gap-4">

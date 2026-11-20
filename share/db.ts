@@ -1,3 +1,5 @@
+import { readBillDesign } from '@shared/bill-design';
+import type { BillSnapshot, ShareSnapshotLine } from '@shared/bill-snapshot';
 import { and, eq, isNull } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
@@ -18,6 +20,7 @@ import {
 // parent app; migrations are owned there and never run from this project.
 const shareLinks = pgTable('share_links', {
   id: uuid('id').primaryKey(),
+  paper: text('paper').notNull().default('classic'),
   token: text('token').notNull(),
   personName: text('person_name').notNull(),
   totalCents: integer('total_cents').notNull(),
@@ -35,40 +38,23 @@ if (!connectionString) throw new Error('DATABASE_URL is not set');
 // prepare: false is required behind Neon's pooled endpoint.
 const db = drizzle(postgres(connectionString, { prepare: false }));
 
-export type SnapshotLine = {
-  date: string;
-  description: string;
-  outstandingCents: number;
-  category: string | null;
-};
-
-export type Snapshot = {
-  personName: string;
-  groupedByCategory: boolean;
-  createdAt: Date;
-  owedCents: number;
-  owed: SnapshotLine[];
-  owingCents: number;
-  owing: SnapshotLine[];
-  netCents: number;
-};
-
 // A revoked link reads as missing, so the page treats null as "not found"
 // without a second case.
-export async function getSnapshot(token: string): Promise<Snapshot | null> {
+export async function getSnapshot(token: string): Promise<BillSnapshot | null> {
   const [row] = await db
     .select()
     .from(shareLinks)
     .where(and(eq(shareLinks.token, token), isNull(shareLinks.revokedAt)));
   if (!row) return null;
   return {
+    paper: readBillDesign(row.paper),
     personName: row.personName,
     groupedByCategory: row.groupedByCategory,
     createdAt: row.createdAt,
     owedCents: row.totalCents,
-    owed: row.lines as SnapshotLine[],
+    owed: row.lines as ShareSnapshotLine[],
     owingCents: row.owingCents,
-    owing: row.owingLines as SnapshotLine[],
+    owing: row.owingLines as ShareSnapshotLine[],
     netCents: row.totalCents - row.owingCents,
   };
 }

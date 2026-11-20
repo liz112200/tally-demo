@@ -1,23 +1,30 @@
 @import "tailwindcss";
 
-/* Standalone theme. The app's globals.css pulls in shadcn and tw-animate;
-   this page needs neither, so it declares the handful of tokens it uses and
-   nothing else. */
+@source "../../lib/shared-bill.tsx";
+
 :root {
-  --background: oklch(0.985 0.002 260);
-  --foreground: oklch(0.21 0.01 260);
-  --card: oklch(1 0 0);
-  --muted-foreground: oklch(0.55 0.012 260);
-  --border: oklch(0.92 0.004 260);
+  color-scheme: light;
+  --background: #f9f7f0;
+  --foreground: #242322;
+  --card: #fffdf7;
+  --muted-foreground: #625e58;
+  --border: #cec8bb;
+  --ticket: #fff9ee;
+  --ticket-rule: #b6a694;
+  --stamp: #923d2d;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: oklch(0.17 0.008 260);
-    --foreground: oklch(0.95 0.003 260);
-    --card: oklch(0.21 0.01 260);
-    --muted-foreground: oklch(0.68 0.012 260);
-    --border: oklch(0.29 0.008 260);
+    color-scheme: dark;
+    --background: #101010;
+    --foreground: #f0f0f0;
+    --card: #202020;
+    --muted-foreground: #bcbcbc;
+    --border: #434343;
+    --ticket: #272320;
+    --ticket-rule: #78665b;
+    --stamp: #efa68c;
   }
 }
 

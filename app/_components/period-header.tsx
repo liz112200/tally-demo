@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useIsDemo } from '@/app/_lib/use-demo';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { recordStatementReview } from '@/app/_actions/reviews';
@@ -49,7 +48,6 @@ export function PeriodHeader({
   today: string;
 }) {
   const Chevron = collapsed ? ChevronRight : ChevronDown;
-  const demo = useIsDemo();
   const [showDifference, setShowDifference] = useState(false);
   const day = (iso: string) => {
     const d = new Date(`${iso}T00:00:00Z`);
@@ -133,7 +131,7 @@ export function PeriodHeader({
             <span className="font-mono tabular-nums">{usd(group.chargesCents)}</span> {out} ·{' '}
             <span className="font-mono tabular-nums">{usd(group.creditsCents)}</span> {back}
           </span>
-          {demo && differs && chip ? (
+          {differs && chip ? (
             <button type="button" aria-expanded={showDifference} onClick={() => setShowDifference(!showDifference)}
               className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs ${chipTone.warn}`}>
               {chip.text} · {reviewApplies(note?.review ?? undefined, comparison!) ? 'Reviewed' : 'Review difference'}
@@ -142,7 +140,7 @@ export function PeriodHeader({
           ) : chip && <span className={`whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-medium ${chipTone[chip.tone]}`}>{chip.text}</span>}
         </div>
         {differs && s && (
-          <div hidden={demo && !showDifference}>
+          <div hidden={!showDifference}>
             {explained && <p className="pl-7 pt-1 text-xs text-amber-800 dark:text-amber-300">{explained}</p>}
             <DifferenceReview
               ledgerId={ledgerId}

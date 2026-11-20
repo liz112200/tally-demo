@@ -1,7 +1,6 @@
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import { requireUser } from '@/app/_lib/session';
-import { isDemoMode } from '@/lib/demo-mode';
 import { loadLedgerView } from '@/app/_lib/ledger-view';
 import { boundaryReview, ledgerStateFor } from '@/db/ledger';
 import { currentCycle } from '@/lib/statement-cycles';
@@ -178,11 +177,11 @@ export default async function AccountPage({
 
       {reviews.size > 0 && (
         <section id="review" className="scroll-mt-16 space-y-2 text-xs">
-          <h2 className="text-base font-semibold">{isDemoMode() ? 'Bank import review' : 'Rows to answer'}</h2>
+          <h2 className="text-base font-semibold">Bank import review</h2>
           {[...reviews].map(([bankId, review]) => {
             const s = states.get(bankId)!;
             return review ? (
-              <BoundaryReviewBlock key={bankId} accountId={bankId} review={review} reviewedAt={s.boundaryReviewedAt} heldCount={s.heldCount} />
+              <BoundaryReviewBlock key={bankId} accountId={bankId} review={review} reviewedAt={s.boundaryReviewedAt} />
             ) : null;
           })}
         </section>

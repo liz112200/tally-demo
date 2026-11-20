@@ -57,7 +57,7 @@ export function ShareListButton({
   // What the message looks like with no link — also exactly what is sent when
   // the list is short. Used for the disabled check, which must not depend on
   // a link that has not been published yet.
-  const text = buildShareSummary({ personName, owed, owing, groupBy, guestCheck: demo });
+  const text = buildShareSummary({ personName, owed, owing, groupBy, guestCheck: true });
 
   // navigator.share can hang: where the API exists but no share sheet can be
   // presented (automation, some embedded webviews, desktop builds without a
@@ -91,16 +91,23 @@ export function ShareListButton({
   // app still serves /s/ itself. absoluteShareUrl supplies the scheme, which
   // the dashboard-copied value omits.
   async function publishLink(): Promise<string | null> {
-    const published = await createShareLink({
-      personName,
-      paper: design,
-      groupedByCategory: groupBy === 'category',
-      owed,
-      owing,
-    });
-    if (!published.ok) return null;
-    const base = demo ? window.location.origin : process.env.NEXT_PUBLIC_SHARE_BASE_URL || window.location.origin;
-    return absoluteShareUrl(base, published.token);
+    try {
+      const base = demo ? window.location.origin : process.env.NEXT_PUBLIC_SHARE_BASE_URL
+        || (process.env.NODE_ENV === 'development' ? window.location.origin : undefined);
+      if (!base) return null;
+      const origin = new URL(absoluteShareUrl(base, 'bill')).origin;
+      if (!demo && process.env.NODE_ENV === 'production' && origin === window.location.origin) return null;
+      const published = await createShareLink({
+        personName,
+        paper: design,
+        groupedByCategory: groupBy === 'category',
+        owed,
+        owing,
+      });
+      return published.ok ? absoluteShareUrl(base, published.token) : null;
+    } catch {
+      return null;
+    }
   }
 
   // The link on its own, whatever the list's length: for a short list the
@@ -138,7 +145,7 @@ export function ShareListButton({
       // If publishing fails, fall back to sending the list inline rather
       // than sending nothing — long is better than lost.
       message = url
-        ? buildShareSummary({ personName, owed, owing, groupBy, guestCheck: demo, limit: TEASER_LINES, linkUrl: url })
+        ? buildShareSummary({ personName, owed, owing, groupBy, guestCheck: true, limit: TEASER_LINES, linkUrl: url })
         : text;
     }
 
@@ -178,8 +185,8 @@ export function ShareListButton({
   }
 
   return (
-    <span className={cn('inline-flex gap-1', className, demo && 'h-auto w-full flex-wrap items-center justify-end')}>
-      {demo && text && <BillDesignPicker design={design} onChange={setDesign} name={personName} net={sumLines(owed) - sumLines(owing)} />}
+    <span className={cn('inline-flex gap-1', className, 'h-auto w-full flex-wrap items-center justify-end')}>
+      {text && <BillDesignPicker design={design} onChange={setDesign} name={personName} net={sumLines(owed) - sumLines(owing)} />}
       <Button
         type="button"
         variant="outline"
@@ -234,7 +241,7 @@ export function ShareListButton({
           </>
         )}
       </Button>
-      {demo && text && <small className="w-full text-right text-xs text-muted-foreground">{demoSharingNote}</small>}
+      {text && <small className="w-full text-right text-xs text-muted-foreground">{demo ? demoSharingNote : 'This link opens only the shared bill on a separate site.'}</small>}
     </span>
   );
 }

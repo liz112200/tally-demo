@@ -13,8 +13,11 @@ test('the recipient opens the paper chosen in People in light and dark', async (
     await picker.getByRole('radio', { name }).check();
     await expect(picker.locator('.bill-proof')).toHaveAttribute('data-paper', paper);
     if (paper !== 'classic') {
-      await expect(picker.locator(`.bill-swatch-art[data-paper="${paper}"]`)).toHaveCSS('background-image', 'url("' + new URL(`/demo/paper/${paper}.svg`, page.url()).href + '")');
-      expect((await page.request.get(`/demo/paper/${paper}.svg`)).ok()).toBe(true);
+      const tile = await picker.locator(`.bill-swatch-art[data-paper="${paper}"]`).evaluate(
+        (swatch) => getComputedStyle(swatch).backgroundImage.match(/^url\("(.*)"\)$/)?.[1],
+      );
+      expect(tile).toBeTruthy();
+      expect((await page.request.get(tile!)).ok()).toBe(true);
     }
   }
   await picker.getByRole('radio', { name: 'Vinyl records' }).check();

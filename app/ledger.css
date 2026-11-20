@@ -1,6 +1,5 @@
-/* The Passbook preview runs on the demo deployment. Keep its palette on the
-   document so portaled menus, dialogs and tooltips share the same tokens. */
-html[data-demo] {
+/* Passbook tokens also style portaled controls and dialogs. */
+html[data-passbook] {
   color-scheme: light;
   --background: #f9f7f0;
   --foreground: #242322;
@@ -27,7 +26,7 @@ html[data-demo] {
   --ticket: #fff9ee;
   --ticket-rule: #b6a694;
 }
-html.dark[data-demo], .palette-preview {
+html.dark[data-passbook], .palette-preview {
   color-scheme: dark;
   --background: #101010;
   --foreground: #f0f0f0;
@@ -47,7 +46,7 @@ html.dark[data-demo], .palette-preview {
   --ticket: #272320;
   --ticket-rule: #78665b;
 }
-html.dark[data-demo][data-dark-palette="pine"], .palette-preview[data-dark-palette="pine"] {
+html.dark[data-passbook][data-dark-palette="pine"], .palette-preview[data-dark-palette="pine"] {
   --background: #151c20;
   --foreground: #e9efee;
   --card: #1e292d;
@@ -62,7 +61,7 @@ html.dark[data-demo][data-dark-palette="pine"], .palette-preview[data-dark-palet
   --input: #536965;
   --ledger-rail: #132522;
 }
-html.dark[data-demo][data-dark-palette="graphite"], .palette-preview[data-dark-palette="graphite"] {
+html.dark[data-passbook][data-dark-palette="graphite"], .palette-preview[data-dark-palette="graphite"] {
   --background: #171719;
   --foreground: #e9e9eb;
   --card: #202023;
@@ -77,7 +76,7 @@ html.dark[data-demo][data-dark-palette="graphite"], .palette-preview[data-dark-p
   --input: #66666f;
   --ledger-rail: #111113;
 }
-html.dark[data-demo][data-dark-palette="ink"], .palette-preview[data-dark-palette="ink"] {
+html.dark[data-passbook][data-dark-palette="ink"], .palette-preview[data-dark-palette="ink"] {
   --background: #080808;
   --foreground: #f4f4f4;
   --card: #141414;
@@ -92,7 +91,7 @@ html.dark[data-demo][data-dark-palette="ink"], .palette-preview[data-dark-palett
   --input: #696969;
   --ledger-rail: #040404;
 }
-html.dark[data-demo][data-dark-palette="slate"], .palette-preview[data-dark-palette="slate"] {
+html.dark[data-passbook][data-dark-palette="slate"], .palette-preview[data-dark-palette="slate"] {
   --background: #15171c;
   --foreground: #e8ecf2;
   --card: #1e222a;
@@ -107,7 +106,7 @@ html.dark[data-demo][data-dark-palette="slate"], .palette-preview[data-dark-pale
   --input: #606a7b;
   --ledger-rail: #101217;
 }
-html.dark[data-demo][data-dark-palette="cinder"], .palette-preview[data-dark-palette="cinder"] {
+html.dark[data-passbook][data-dark-palette="cinder"], .palette-preview[data-dark-palette="cinder"] {
   --background: #1a1817;
   --foreground: #f1ebe6;
   --card: #24211f;
@@ -140,9 +139,9 @@ html.dark[data-demo][data-dark-palette="cinder"], .palette-preview[data-dark-pal
 .ledger-identity { display: flex; align-items: center; gap: .6rem; font-size: .85rem }
 .ledger-identity > span { display: grid; place-items: center; width: 1.8rem; height: 1.8rem; border-radius: 50%; background: var(--accent); color: var(--accent-foreground) }
 .ledger-identity button { margin-left: auto }
-html[data-demo] main h1 { font-size: clamp(1.65rem, 3.5vw, 2.65rem); letter-spacing: -.05em; line-height: 1.12; font-family: Georgia, serif; font-weight: 400; overflow-wrap: anywhere }
-html[data-demo] main :is(a,button).text-blue-700 { color: var(--primary) }
-html[data-demo] main table th { color: var(--muted-foreground); font-weight: 600 }
+html[data-passbook] main h1 { font-size: clamp(1.65rem, 3.5vw, 2.65rem); letter-spacing: -.05em; line-height: 1.12; font-family: Georgia, serif; font-weight: 400; overflow-wrap: anywhere }
+html[data-passbook] main :is(a,button).text-blue-700 { color: var(--primary) }
+html[data-passbook] main table th { color: var(--muted-foreground); font-weight: 600 }
 .ledger-drawer[data-slot="dialog-content"] {
   max-width: min(100%, 28rem); height: 100dvh; max-height: 100dvh;
   display: flex; flex-direction: column; gap: 1rem; border-radius: 0;
@@ -155,26 +154,26 @@ html[data-demo] main table th { color: var(--muted-foreground); font-weight: 600
 .ledger-receipt { display: grid; gap: 1rem; min-width: 0 }
 .ledger-receipt > section { min-width: 0 }
 .ledger-drawer .ledger-method { min-height: 2.5rem; width: 100%; border: 1px solid var(--input); border-radius: .4rem; background: var(--card); color: var(--foreground); appearance: none; padding: .4rem 2.6rem .4rem .75rem }
-html[data-demo] button[aria-label^="Split "] { opacity: 1 }
-html[data-demo] th.sticky.top-12 { top: 0 }
+html[data-passbook] button[aria-label^="Split "] { opacity: 1 }
+html[data-passbook] th.sticky.top-12 { top: 0 }
 @media (max-width: 849px) {
   .ledger-nav { flex-wrap: wrap; justify-content: space-between }
   .ledger-nav nav { order: 2; width: 100%; justify-content: space-between }
   .ledger-nav nav a { padding: .45rem .3rem; min-height: 2.45rem; font-size: .8rem }
   .ledger-nav nav svg { display: none }
-  html[data-demo] th.sticky.top-12 { top: 0 }
+  html[data-passbook] th.sticky.top-12 { top: 0 }
 }
 /* The cover and facing register share the proportions of an open passbook. */
 .passbook-spread { display: grid; grid-template-columns: minmax(0, .84fr) minmax(0, 1.16fr); gap: clamp(1.5rem, 4vw, 3.5rem); align-items: start }
 .passbook-cover { position: relative; isolation: isolate; overflow: hidden; border-radius: 3px 12px 12px 3px; background: var(--cover); color: #faf3df; border-left: 8px double #959997; padding: 1.45rem 1.7rem; min-height: 19rem; display: flex; flex-direction: column; justify-content: space-between; gap: 1.8rem }
 .passbook-cover time, .passbook-imprint { font: .78rem/1.4 var(--font-mono), monospace }
-html[data-demo] .passbook-cover h1 { color: inherit; font: normal clamp(2.8rem, 5vw, 4.4rem)/.95 Georgia, serif; letter-spacing: -.055em }
+html[data-passbook] .passbook-cover h1 { color: inherit; font: normal clamp(2.8rem, 5vw, 4.4rem)/.95 Georgia, serif; letter-spacing: -.055em }
 .passbook-imprint, .register-heading { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: .5rem }
 .passbook-imprint { border-top: 1px solid #faf3df66; padding-top: .7rem }
 .passbook-seal { position: absolute; z-index: -1; right: -1.9rem; top: -2.4rem; width: 10rem; height: 10rem; color: #dfc598; opacity: .7; pointer-events: none }
 .passbook-seal i { position: absolute; inset: 0 35%; border: 1px solid; border-radius: 50% }
 .register-heading { border-bottom: 2px solid var(--foreground); padding-bottom: .65rem }
-html[data-demo] main h2 { font-family: Georgia, serif; font-weight: 500 }
+html[data-passbook] main h2 { font-family: Georgia, serif; font-weight: 500 }
 .register-heading h2 { font-size: 1.85rem; letter-spacing: -.045em }
 .register-heading a, .register-entries summary { font-size: .8rem; text-decoration: underline; text-underline-offset: .22em }
 .register-entries > li { border-bottom: 1px solid var(--border); padding-block: .65rem }
@@ -190,16 +189,16 @@ html[data-demo] main h2 { font-family: Georgia, serif; font-weight: 500 }
 .ledger-metrics { display: flex; flex-wrap: wrap; margin-top: 1.1rem; gap: .8rem 1.5rem }
 .ledger-metrics dt { font-size: .78rem; color: var(--muted-foreground) }
 .ledger-metrics dd { font: normal 1.65rem/1.2 Georgia, serif; font-variant-numeric: tabular-nums }
-html[data-demo] section[aria-labelledby="needs-you"] { border-inline: 0; border-radius: 0; background: var(--background) }
+html[data-passbook] section[aria-labelledby="needs-you"] { border-inline: 0; border-radius: 0; background: var(--background) }
 @media (min-width: 850px) {
-  html[data-demo] section[aria-labelledby="needs-you"] { display: grid; grid-template-columns: minmax(8rem, 1fr) 6fr }
-  html[data-demo] #needs-you { color: var(--stamp); font-size: 1.15rem }
-  html[data-demo] section[aria-labelledby="needs-you"] li { padding: .25rem 0 }
-  html[data-demo] section[aria-labelledby="needs-you"] li:first-child { border-top: 0 }
+  html[data-passbook] section[aria-labelledby="needs-you"] { display: grid; grid-template-columns: minmax(8rem, 1fr) 6fr }
+  html[data-passbook] #needs-you { color: var(--stamp); font-size: 1.15rem }
+  html[data-passbook] section[aria-labelledby="needs-you"] li { padding: .25rem 0 }
+  html[data-passbook] section[aria-labelledby="needs-you"] li:first-child { border-top: 0 }
 }
-html[data-demo] .ledger-table { border-radius: .25rem; border-inline: 0 }
-html[data-demo] .ledger-table thead th { font-family: var(--font-mono), monospace; letter-spacing: .055em }
-html[data-demo] section:has(> div > h1) { border-radius: .25rem }
+html[data-passbook] .ledger-table { border-radius: .25rem; border-inline: 0 }
+html[data-passbook] .ledger-table thead th { font-family: var(--font-mono), monospace; letter-spacing: .055em }
+html[data-passbook] section:has(> div > h1) { border-radius: .25rem }
 @media (max-width: 740px) {
   .passbook-spread { grid-template-columns: 1fr; gap: 1.25rem }
   .passbook-cover { min-height: 13rem; gap: 1rem; padding: 1rem 1.25rem }
@@ -207,30 +206,30 @@ html[data-demo] section:has(> div > h1) { border-radius: .25rem }
 @media (max-width: 420px) {
   .register-entry { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto }
 }
-html[data-demo] .ledger-summary { padding: .85rem 1rem; gap: .5rem 1rem; border: 1px solid var(--border); border-radius: .5rem; background: var(--card); font-size: .75rem }
-html[data-demo] main > section:has(> div > h1) { border-top: 1px solid var(--border) }
-html[data-demo] main #rules, html[data-demo] main #devices { border-top: 1px solid var(--border); padding-top: 1.5rem }
-html[data-demo] main:has(> h1) { width: 100% }
+html[data-passbook] .ledger-summary { padding: .85rem 1rem; gap: .5rem 1rem; border: 1px solid var(--border); border-radius: .5rem; background: var(--card); font-size: .75rem }
+html[data-passbook] main > section:has(> div > h1) { border-top: 1px solid var(--border) }
+html[data-passbook] main #rules, html[data-passbook] main #devices { border-top: 1px solid var(--border); padding-top: 1.5rem }
+html[data-passbook] main:has(> h1) { width: 100% }
 @media (min-width: 850px) {
-  html[data-demo] main:is(.max-w-4xl,.max-w-3xl) { max-width: 72rem; }
+  html[data-passbook] main:is(.max-w-4xl,.max-w-3xl) { max-width: 72rem; }
 }
 .ledger-columns, .ledger-row-date { display: none }
 @media (max-width: 849px) {
-  html[data-demo] .ledger-table { max-width: 100%; overflow-x: auto }
-  html[data-demo] .ledger-columns { display: inline-flex; align-items: center; min-height: 2.25rem; font-size: .8rem; color: var(--primary) }
-  html[data-demo] .ledger-table[data-full] > table { min-width: 48rem }
-  html[data-demo] .ledger-table:not([data-full]) [data-column]:is([data-column=date], [data-column=category], [data-column=source]) { display: none }
-  html[data-demo] .ledger-table:not([data-full]) [data-column] { padding-inline: .35rem }
-  html[data-demo] .ledger-table:not([data-full]) th[data-column=select] { width: 1.9rem }
-  html[data-demo] .ledger-table:not([data-full]) th[data-column=split] { width: 3.65rem }
-  html[data-demo] .ledger-table:not([data-full]) th[data-column=amountCents] { width: 5.5rem }
-  html[data-demo] .ledger-table:not([data-full]) .ledger-row-date { display: block; font-size: .7rem; color: var(--muted-foreground) }
+  html[data-passbook] .ledger-table { max-width: 100%; overflow-x: auto }
+  html[data-passbook] .ledger-columns { display: inline-flex; align-items: center; min-height: 2.25rem; font-size: .8rem; color: var(--primary) }
+  html[data-passbook] .ledger-table[data-full] > table { min-width: 48rem }
+  html[data-passbook] .ledger-table:not([data-full]) [data-column]:is([data-column=date], [data-column=category], [data-column=source]) { display: none }
+  html[data-passbook] .ledger-table:not([data-full]) [data-column] { padding-inline: .35rem }
+  html[data-passbook] .ledger-table:not([data-full]) th[data-column=select] { width: 1.9rem }
+  html[data-passbook] .ledger-table:not([data-full]) th[data-column=split] { width: 3.65rem }
+  html[data-passbook] .ledger-table:not([data-full]) th[data-column=amountCents] { width: 5.5rem }
+  html[data-passbook] .ledger-table:not([data-full]) .ledger-row-date { display: block; font-size: .7rem; color: var(--muted-foreground) }
 }
 
-html.dark[data-demo] [data-slot="dialog-portal"]:has(.ledger-drawer) [data-slot="dialog-overlay"] { background: #0005 }
+html.dark[data-passbook] [data-slot="dialog-portal"]:has(.ledger-drawer) [data-slot="dialog-overlay"] { background: #0005 }
 
 /* The receipt editor has its own paper and ink, including when it is portaled. */
-html[data-demo] :is(.guest-check, [data-guest-receipt]) {
+html[data-passbook] :is(.guest-check, [data-guest-receipt]) {
   --card: var(--ticket);
   --primary: var(--stamp);
   --primary-foreground: #fffaf5;
@@ -238,15 +237,14 @@ html[data-demo] :is(.guest-check, [data-guest-receipt]) {
   --accent-foreground: var(--foreground);
   --ring: var(--stamp);
 }
-html.dark[data-demo] :is(.guest-check, [data-guest-receipt]) { --primary-foreground: #231914 }
-html[data-demo] .guest-check[data-slot="dialog-content"] {
+html.dark[data-passbook] :is(.guest-check, [data-guest-receipt]) { --primary-foreground: #231914 }
+html[data-passbook] .guest-check[data-slot="dialog-content"] {
   background: var(--ticket); border-top: 1px solid var(--ticket-rule); box-shadow: -6px 0 20px rgb(0 0 0 / 16%);
 }
 @media (width > 28rem) {
-  html[data-demo] .guest-check[data-slot="dialog-content"] { border-left: 1px solid var(--ticket-rule) }
+  html[data-passbook] .guest-check[data-slot="dialog-content"] { border-left: 1px solid var(--ticket-rule) }
 }
 .guest-check [data-slot="dialog-header"] { border-bottom: 2px dotted var(--ticket-rule); padding-bottom: 1rem }
-.guest-stamp { align-self: start; width: fit-content; display: inline-block; padding: .24rem .55rem; color: var(--stamp); border: 1px solid currentColor; font: 650 .92rem/1.35 var(--font-mono), monospace; text-transform: uppercase; letter-spacing: .13em; transform: rotate(-2deg) }
 .guest-check [data-slot="dialog-title"] { font: italic 2rem/1.05 Georgia, serif; letter-spacing: -.04em }
 .guest-check time, [data-guest-receipt] dd { font-family: var(--font-mono), monospace; font-variant-numeric: tabular-nums }
 [data-guest-receipt] h2, [data-guest-receipt] h3 { font: italic 1.35rem/1.15 Georgia, serif }
@@ -271,14 +269,6 @@ html[data-demo] .guest-check[data-slot="dialog-content"] {
   .passbook-spread[data-long-register] .passbook-cover { max-height: 26rem }
   .passbook-spread > .ledger-metrics { grid-column: 2 }
 }
-html[data-demo] main.shared-check { width: min(34rem, calc(100% - 2rem)); margin: 2rem auto; padding: clamp(1rem,4vw,2rem); background: var(--ticket); border: 1px solid var(--border); border-bottom: 4px dotted var(--ticket-rule); box-shadow: 0 4px 18px #0001 }
-.shared-check header { border-bottom: 2px dotted var(--ticket-rule); padding-bottom: 1rem }
-html[data-demo] .shared-check h1 { margin-top: .8rem; font: italic 2rem/1.15 Georgia,serif; overflow-wrap: anywhere }
-.shared-check header p { font-family: var(--font-mono), monospace; font-size: .8rem }
-.shared-check > div, .shared-check section > .rounded-xl { border: 0; padding-inline: 0; border-radius: 0; background: transparent }
-.shared-check section { border-top: 1px dashed var(--ticket-rule); padding-top: .8rem }
-html[data-demo] .shared-check section h2 { font: italic 1.2rem Georgia,serif; text-transform: none; letter-spacing: normal }
-.shared-check > p:last-child { padding-top: 1rem; border-top: 2px dotted var(--ticket-rule) }
 
 .spending-report { display: grid; gap: 1.8rem }
 .spending-report > section, .report-columns > section, .report-empty { min-width: 0; border-top: 1px solid var(--border); padding-top: .8rem }
@@ -346,27 +336,5 @@ html[data-demo] .shared-check section h2 { font: italic 1.2rem Georgia,serif; te
   .bill-swatches { max-height: none }
 }
 
-/* Swatches and full bills take their ink from the same tile. */
-.bill-paper { position: relative; isolation: isolate }
-[data-paper=flowers] { --paper-pattern: url('/demo/paper/flowers.svg') }
-[data-paper=paws] { --paper-pattern: url('/demo/paper/paws.svg') }
-[data-paper=citrus] { --paper-pattern: url('/demo/paper/citrus.svg') }
-[data-paper=koi] { --paper-pattern: url('/demo/paper/koi.svg') }
-[data-paper=postage] { --paper-pattern: url('/demo/paper/postage.svg') }
-[data-paper=night-sky] { --paper-pattern: url('/demo/paper/night-sky.svg') }
-[data-paper=gingham] { --paper-pattern: url('/demo/paper/gingham.svg') }
-[data-paper=coffee] { --paper-pattern: url('/demo/paper/coffee.svg') }
-[data-paper=waves] { --paper-pattern: url('/demo/paper/waves.svg') }
-[data-paper=cranes] { --paper-pattern: url('/demo/paper/cranes.svg') }
-[data-paper=berries] { --paper-pattern: url('/demo/paper/berries.svg') }
-[data-paper=vinyl] { --paper-pattern: url('/demo/paper/vinyl.svg') }
-.bill-paper::before {
-  content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
-  background-image: var(--paper-pattern, none); background-size: 7rem auto;
-  opacity: .65;
-  mask-image: linear-gradient(to right, black, transparent 1.5rem, transparent calc(100% - 1.5rem), black),
-    linear-gradient(to bottom, black, #0002 1.8rem, #0002 calc(100% - 1.8rem), black);
-}
-html[data-demo] .shared-check.bill-paper:not([data-paper=classic]) { padding: clamp(1.65rem, 6vw, 2.5rem) }
 .bill-proof:not([data-paper=classic]) .bill-proof-body { padding: 1.5rem }
 .bill-proof strong small { font: normal .75rem var(--font-sans), sans-serif; color: var(--muted-foreground) }

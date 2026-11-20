@@ -128,6 +128,7 @@ function ConnectionDetails({ connection, ledger, lastCsv }: {
       return <div key={account.id} className="my-2 space-y-1">
         <p>{account.name} · {account.subtype ?? account.type} · {rowsPhrase(account.rowCount)}</p>
         {last && <p>CSV history through {last}</p>}
+        {state?.ledgerName && <p>Ledger · {state.ledgerName}</p>}
         {state?.cutoverDate && <p>Bank history from {state.cutoverDate}</p>}
         {state?.verifiedAt && <p>Statement verified {formatDay(state.verifiedAt)}</p>}
       </div>;
@@ -146,54 +147,25 @@ function LedgerLines({
   hasRows,
   replacesName,
   linked,
-  compact,
 }: {
   accountId: string;
   state: LedgerState | undefined;
   hasRows: boolean;
   replacesName: string | null;
   linked: boolean;
-  compact: boolean;
 }) {
   if (!state) return null;
   if (state.replacesAccountId && replacesName && linked) return <ReissuedChoice accountId={accountId} replaces={replacesName} />;
   if (!state.ledgerAccountId) return null;
-  if (compact) {
-    const needsVerification = !state.verifiedAt && (hasRows || state.heldCount > 0);
-    return <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 py-1 text-xs">
-      {needsVerification && (linked
-        ? <a href={`/accounts/verify/${accountId}`} className="font-medium text-warning underline underline-offset-2">Verify statement to count rows</a>
-        : <span className="text-warning">Unverified · rows excluded</span>)}
-      <a href={`/accounts/${state.ledgerAccountId}`} className="font-medium text-primary underline-offset-2 hover:underline">
-        {state.heldCount > 0 ? `Review ${state.heldCount} held row${state.heldCount === 1 ? '' : 's'} →` : 'Open account →'}
-      </a>
-    </div>;
-  }
-  return (
-    <div className="space-y-1 text-xs">
-      <div className="text-muted-foreground">
-        Into {state.ledgerName}
-        {state.cutoverDate ? <> · from {state.cutoverDate}; earlier bank rows are never added</> : <> · full history</>}
-      </div>
-      {state.verifiedAt ? (
-        <div className="text-muted-foreground">Verified against a statement {formatDay(state.verifiedAt)}; its rows count.</div>
-      ) : hasRows || state.heldCount > 0 ? (
-        <div className="text-amber-700 dark:text-amber-400">
-          Awaiting verification: its synced rows are not counted or splittable yet.{' '}
-          {linked && (
-            <a href={`/accounts/verify/${accountId}`} className="underline underline-offset-2">
-              Check against a statement
-            </a>
-          )}
-        </div>
-      ) : null}
-      <a href={`/accounts/${state.ledgerAccountId}`} className="inline-flex min-h-8 items-center text-blue-700 underline-offset-2 hover:underline dark:text-blue-400">
-        {state.heldCount > 0
-          ? `${state.heldCount === 1 ? '1 held row' : `${state.heldCount} held rows`} to answer on ${state.ledgerName}'s page →`
-          : `${state.ledgerName}: cycle, statements and periods →`}
-      </a>
-    </div>
-  );
+  const needsVerification = !state.verifiedAt && (hasRows || state.heldCount > 0);
+  return <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 py-1 text-xs">
+    {needsVerification && (linked
+      ? <a href={`/accounts/verify/${accountId}`} className="font-medium text-warning underline underline-offset-2">Verify statement to count rows</a>
+      : <span className="text-warning">Unverified · rows excluded</span>)}
+    <a href={`/accounts/${state.ledgerAccountId}`} className="font-medium text-primary underline-offset-2 hover:underline">
+      {state.heldCount > 0 ? `Review ${state.heldCount} held row${state.heldCount === 1 ? '' : 's'} →` : 'Open account →'}
+    </a>
+  </div>;
 }
 
 export default async function BankLoginsPage() {
@@ -234,7 +206,7 @@ export default async function BankLoginsPage() {
   const [ledger, choices, lastCsv] = await Promise.all([
     ledgerStateFor(allAccounts.map((a) => a.id)),
     ledgerChoices(),
-    demo ? lastCsvDates() : new Map<string, string>(),
+    lastCsvDates(),
   ]);
   const optionsFor = (accountId: string): LedgerOption[] =>
     choicesFor(choices, accountId).map((o) => ({
@@ -322,10 +294,6 @@ export default async function BankLoginsPage() {
                       {c.institutionName ?? 'Unknown institution'}
                       {healthBadge(c)}
                     </h2>
-                    {!demo && <div className="text-xs text-muted-foreground">
-                      Linked {formatDay(c.createdAt)}
-                      {c.healthCheckedAt && linked && <> · checked {formatSynced(c.healthCheckedAt)}</>}
-                    </div>}
                     {!linked && (
                       <p className="text-xs text-muted-foreground">
                         Plaid&apos;s access ended and the token was erased. Its {rowsPhrase(rows)} stay in the ledger.
@@ -402,13 +370,7 @@ export default async function BankLoginsPage() {
                           </span>
                           {a.mask && <span className="ml-2 font-mono text-xs text-muted-foreground">•• {a.mask}</span>}
                           <div className="text-xs text-muted-foreground">
-                            {demo
-                              ? (a.lastSyncedAt ? `Last synced ${formatSynced(a.lastSyncedAt)}` : 'No sync yet')
-                              : <>{a.subtype ?? a.type}
-                                {a.lastSyncedAt && <> · last synced {formatSynced(a.lastSyncedAt)}</>}
-                                {a.syncEnabled && !a.lastSyncedAt && <> · not synced yet</>}
-                                {a.rowCount > 0 && <> · {rowsPhrase(a.rowCount)}</>}
-                              </>}
+                            {a.lastSyncedAt ? `Last synced ${formatSynced(a.lastSyncedAt)}` : 'No sync yet'}
                           </div>
                           {a.unsharedAt && (
                             <div className="text-xs text-muted-foreground">
@@ -426,7 +388,6 @@ export default async function BankLoginsPage() {
                             hasRows={a.rowCount > 0}
                             replacesName={ledger.get(a.id)?.replacesAccountId ? nameOf(ledger.get(a.id)!.replacesAccountId!) : null}
                             linked={linked && canSync}
-                            compact={demo}
                           />
                         </div>
                         {!linked ? null : SYNCABLE.has(a.type) ? (
@@ -457,7 +418,7 @@ export default async function BankLoginsPage() {
                     ))}
                   </ul>
                 )}
-                {demo && <ConnectionDetails connection={c} ledger={ledger} lastCsv={lastCsv} />}
+                <ConnectionDetails connection={c} ledger={ledger} lastCsv={lastCsv} />
                 {configured && c.status !== 'removed' && (
                   <details className="border-t">
                     <summary className="cursor-pointer px-4 py-2 text-xs text-muted-foreground">Manage this login</summary>

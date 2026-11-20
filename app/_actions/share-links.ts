@@ -4,10 +4,7 @@ import { insertShareLink } from '@/db/queries';
 import { shareLinkSchema } from '@/app/_lib/schema';
 import { requireUser } from '@/app/_lib/session';
 
-// Publish a snapshot of one person's outstanding list and return its token.
-// The caller builds the absolute URL from window.location.origin, so the
-// link is correct on localhost, a preview deployment, and production alike
-// without the server needing to know its own public hostname.
+// The caller builds the link on the separate bill site, or on the demo's origin.
 //
 // The lines come from the client because the snapshot should preserve the
 // sort and grouping the user is looking at, which is client state. They are

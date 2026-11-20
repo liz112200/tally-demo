@@ -44,7 +44,6 @@ import { foldEmptyPeriods, groupByPeriod, type PeriodStatement } from '@/lib/sta
 import { groupByMonth } from '@/lib/month-groups';
 import { FoldedPeriodsRow, PeriodHeader, type PeriodNote } from '@/app/_components/period-header';
 import type { ImportGroupMeta } from '@/lib/import-groups';
-import { useIsDemo } from '@/app/_lib/use-demo';
 import { useTableState } from '@/app/_lib/use-table-state';
 import { SortHeaderButton } from '@/app/_components/sort-controls';
 import { showAllImports } from '@/app/_actions/import';
@@ -536,9 +535,8 @@ export function TransactionTable({
   // bring it into view. Manual toggles clear the param so a later reload
   // reflects what is actually open.
   const txParam = params.get('tx');
-  const demo = useIsDemo();
   const [allColumns, setAllColumns] = useState(false);
-  const directSplit = demo && params.get('split') === 'item' && txParam && receiptsByTransaction[txParam]
+  const directSplit = params.get('split') === 'item' && txParam && receiptsByTransaction[txParam]
     ? data.find((row) => row.id === txParam && row.isSplittable) : undefined;
   useEffect(() => {
     if (!txParam) return;
@@ -725,8 +723,8 @@ export function TransactionTable({
           apply(filterPatch({ ...filters, review: filters.review === 'flagged' ? 'all' : 'flagged' }))
         }
       />
-      {demo && <button className="ledger-columns" type="button" aria-pressed={allColumns}
-        onClick={() => setAllColumns(!allColumns)}>{allColumns ? 'Show compact view' : 'Show all columns'}</button>}
+      <button className="ledger-columns" type="button" aria-pressed={allColumns}
+        onClick={() => setAllColumns(!allColumns)}>{allColumns ? 'Show compact view' : 'Show all columns'}</button>
       <div className="ledger-table rounded-xl border bg-card" data-full={allColumns || undefined}>
         {/* table-fixed so the sized columns keep their widths and the
             description column absorbs only the remaining space (truncating

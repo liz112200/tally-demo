@@ -35,7 +35,7 @@ export const ENV_VARS: Record<string, EnvUse & { why: string }> = {
   },
   NEXT_PUBLIC_SHARE_BASE_URL: {
     required: ['app'],
-    why: 'share links point at the share project; unset, they point at the app, which recipients cannot open',
+    why: 'the personal app publishes links on the separate bill viewer',
   },
   BANK_TOKEN_KEY: { required: ['app'], why: 'seals Plaid access tokens (BANK-SYNC.md); backed up outside Vercel' },
   PLAID_CLIENT_ID: { required: ['app'], why: 'Plaid' },

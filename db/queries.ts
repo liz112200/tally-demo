@@ -1,3 +1,4 @@
+import type { BillSnapshot, ShareSnapshotLine } from '../lib/bill-snapshot';
 import { readBillDesign, type BillDesign } from '@/lib/bill-design';
 import 'server-only';
 import {
@@ -2150,28 +2151,8 @@ export async function restoreImportById(id: string): Promise<{ rows: number } | 
 
 // ---- Share links ----
 
-export type ShareSnapshotLine = {
-  date: string;
-  description: string;
-  outstandingCents: number;
-  category: string | null;
-};
-
-export type ShareLinkView = {
-  paper: BillDesign;
-  token: string;
-  personName: string;
-  groupedByCategory: boolean;
-  createdAt: Date;
-  // What the person owes the owner.
-  owedCents: number;
-  owed: ShareSnapshotLine[];
-  // What the owner owes the person.
-  owingCents: number;
-  owing: ShareSnapshotLine[];
-  // owedCents - owingCents; positive means the person owes the owner.
-  netCents: number;
-};
+export type { ShareSnapshotLine } from '../lib/bill-snapshot';
+export type ShareLinkView = BillSnapshot & { token: string };
 
 // 16 base64url characters from 96 random bits. Short enough not to dominate
 // a text message, far too large to enumerate. crypto.randomUUID would be

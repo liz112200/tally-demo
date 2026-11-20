@@ -2,7 +2,6 @@
 
 import { BillStamp } from '@/app/_components/bill-stamp';
 import { useActionState, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { ChevronDown, Split as SplitIcon, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -34,7 +33,6 @@ import {
   type SplitMethodDisplay,
   type SplitFormState,
 } from '@/app/_lib/schema';
-import { useIsDemo } from '@/app/_lib/use-demo';
 import { ReceiptSplit } from './receipt-split';
 import { useReportSuccess } from './page-result';
 
@@ -103,7 +101,6 @@ export function SplitDialog({
   openReceipt?: boolean;
   onClosed?: () => void;
 }) {
-  const demo = useIsDemo();
   const [open, setOpen] = useState(!!openReceipt);
   function changeOpen(value: boolean) {
     setOpen(value);
@@ -113,50 +110,16 @@ export function SplitDialog({
   return (
     <Dialog open={open} onOpenChange={changeOpen}>
       {trigger && <DialogTrigger render={trigger} />}
-      <DialogContent placement={demo ? 'right' : 'center'} className={demo ? 'ledger-drawer guest-check' : 'sm:max-w-lg'}>
-        {demo ? <>
-          <DialogHeader>
-            <BillStamp />
-            <DialogTitle>{receipt?.merchant || description}</DialogTitle>
-            <DialogDescription className="flex items-baseline justify-between gap-3">
-              <time dateTime={date}>{date}</time>
-              <strong className="font-mono text-xl tracking-tight text-foreground">{formatUSD(toCents(amountCents))}</strong>
-            </DialogDescription>
-          </DialogHeader>
-          {open && <LedgerSplitEditor {...formProps} receipt={receipt} openReceipt={openReceipt} onSaved={() => changeOpen(false)} />}
-        </> : <>
+      <DialogContent placement="right" className="ledger-drawer guest-check">
         <DialogHeader>
-          <DialogTitle>{existing ? 'Edit split' : 'Split transaction'}</DialogTitle>
-          <DialogDescription className="flex items-start justify-between gap-3">
-            {/* Clamp to two lines: the full description stays visible in the
-                expanded row detail, so losing the tail here is fine. */}
-            <span className="min-w-0 line-clamp-2">{description}</span>
-            <span className="shrink-0 font-mono text-foreground">
-              {formatUSD(toCents(amountCents))}
-              <span className="ml-2 text-xs text-muted-foreground">{date}</span>
-            </span>
+          <BillStamp />
+          <DialogTitle>{receipt?.merchant || description}</DialogTitle>
+          <DialogDescription className="flex items-baseline justify-between gap-3">
+            <time dateTime={date}>{date}</time>
+            <strong className="font-mono text-xl tracking-tight text-foreground">{formatUSD(toCents(amountCents))}</strong>
           </DialogDescription>
         </DialogHeader>
-        {/* Keyed so reopening starts from the saved split, not stale edits. */}
-        {open &&
-          (existing?.method === 'item' && receipt ? (
-            <ItemSplitView
-              transactionId={transactionId}
-              existing={existing}
-              receipt={receipt}
-              onRemoved={() => setOpen(false)}
-            />
-          ) : (
-            <SplitForm
-              transactionId={transactionId}
-              amountCents={amountCents}
-              persons={persons}
-              existing={existing}
-              defaultParticipantIds={defaultParticipantIds}
-              onSaved={() => setOpen(false)}
-            />
-          ))}
-        </>}
+        {open && <LedgerSplitEditor {...formProps} receipt={receipt} openReceipt={openReceipt} onSaved={() => changeOpen(false)} />}
       </DialogContent>
     </Dialog>
   );
@@ -188,7 +151,7 @@ function LedgerSplitEditor({ receipt, openReceipt, ...props }: SplitFormProps & 
         {props.existing && <RemoveSplitButton transactionId={props.transactionId} onRemoved={props.onSaved} />}
       </div>
     </div>}
-    <div hidden={method === 'item'}><SplitForm {...props} ledgerMethod={method === 'item' ? 'equal' : method} /></div>
+    <div hidden={method === 'item'}><SplitForm {...props} method={method === 'item' ? 'equal' : method} /></div>
   </>;
 }
 
@@ -208,16 +171,10 @@ function SplitForm({
   existing,
   defaultParticipantIds,
   onSaved,
-  ledgerMethod,
-}: SplitFormProps & { ledgerMethod?: SplitMethodInput }) {
+  method,
+}: SplitFormProps & { method: SplitMethodInput }) {
   const [state, formAction, pending] = useActionState(saveSplit, initialState);
-  useReportSuccess(state, ledgerMethod ? '/people' : undefined);
-  // 'item' splits never reach this form (the dialog branches to the
-  // itemized view first), but the type admits them, so guard anyway.
-  const [localMethod, setMethod] = useState<SplitMethodInput>(
-    existing && existing.method !== 'item' ? existing.method : 'equal',
-  );
-  const method = ledgerMethod ?? localMethod;
+  useReportSuccess(state, '/people');
   const [selected, setSelected] = useState<Set<string>>(() => {
     const activeIds = new Set(persons.map((p) => p.id));
     const fromExisting = existing?.shares
@@ -392,30 +349,10 @@ function SplitForm({
       {/* For the Remove-split formAction; saveSplit reads only `payload`. */}
       <input type="hidden" name="transactionId" value={transactionId} />
 
-      {/* Method segmented control */}
-      {!ledgerMethod && <div className="grid grid-cols-3 gap-1 rounded-lg bg-muted p-1 text-[13px]">
-        {SPLIT_METHODS.map((m) => (
-          <button
-            key={m}
-            type="button"
-            onClick={() => setMethod(m)}
-            aria-pressed={method === m}
-            className={cn(
-              'rounded-md px-2 py-1 transition-colors',
-              method === m
-                ? 'bg-card font-medium shadow-sm'
-                : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            {METHOD_LABELS[m]}
-          </button>
-        ))}
-      </div>}
-
       {/* Participants, with per-person inputs for amount/percent methods */}
       <fieldset className="overflow-hidden rounded-lg border">
         <legend className="sr-only">Participants</legend>
-        {ledgerMethod && persons.length > 0 && (
+        {persons.length > 0 && (
           <div className="flex items-center justify-between gap-2 border-b bg-muted/40 px-3 py-1">
             <span className="text-xs text-muted-foreground" aria-live="polite">{participants.length} of {persons.length} selected</span>
             <button type="button" disabled={pending} className="min-h-9 rounded px-2 text-xs font-semibold text-primary hover:underline pointer-coarse:min-h-11"
@@ -573,79 +510,6 @@ function SplitForm({
         </Button>
       </div>
     </form>
-  );
-}
-
-// Read-only view of an item split: the itemized breakdown with assignee
-// names, the equal tax/tip note, resolved shares, and the receipt image on
-// demand (short-lived presigned URL minted server-side). Editing goes
-// through the receipt wizard (the rcpt badge); here a split can only be
-// removed, which keeps the receipt attached.
-function ItemSplitView({
-  transactionId,
-  existing,
-  receipt,
-  onRemoved,
-}: {
-  transactionId: string;
-  existing: SplitSummary;
-  receipt: ReceiptView;
-  onRemoved: () => void;
-}) {
-  const nameByPerson = new Map(
-    existing.shares.map((s) => [s.personId, displayShareName(s)]),
-  );
-
-  return (
-    <div className="grid gap-3">
-      <div className="overflow-hidden rounded-lg border">
-        <ul className="divide-y">
-          {receipt.items.map((item) => (
-            <li key={item.id} className="flex items-baseline gap-2 px-3 py-1.5 text-[13px]">
-              <span className="min-w-0 flex-1 truncate">{item.description}</span>
-              <span className="shrink-0 text-[11px] text-muted-foreground">
-                {item.assignedPersonIds.length === 0
-                  ? 'yours'
-                  : item.assignedPersonIds
-                      .map((id) => nameByPerson.get(id) ?? '(deleted person)')
-                      .join(' · ')}
-              </span>
-              <span className="shrink-0 font-mono text-xs">
-                {formatUSD(toCents(item.amountCents))}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </div>
-      {(existing.taxCents > 0 || existing.tipCents > 0) && (
-        <p className="text-[11px] text-muted-foreground">
-          Tax {formatUSD(toCents(existing.taxCents))} + tip{' '}
-          {formatUSD(toCents(existing.tipCents))}, split equally among
-          participants.
-        </p>
-      )}
-
-      <div className="rounded-lg bg-muted/60 px-3 py-2">
-        <p className="mb-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-          Resolved shares
-        </p>
-        <ul className="grid gap-0.5">
-          {existing.shares.map((s) => (
-            <li key={s.personId} className="flex items-baseline justify-between text-xs">
-              <span>{displayShareName(s)}</span>
-              <span className="font-mono">{formatUSD(toCents(s.amountCents))}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      <ReceiptImages receipt={receipt} transactionId={transactionId} />
-
-      <div className="flex justify-between">
-        <RemoveSplitButton transactionId={transactionId} onRemoved={onRemoved} />
-        <Link className="self-center text-sm underline underline-offset-2" href={`/expenses/receipt/${transactionId}`}>Edit item assignments</Link>
-      </div>
-    </div>
   );
 }
 

@@ -1,11 +1,9 @@
 import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
 import { notFound, redirect } from 'next/navigation';
 import { z } from 'zod';
 import { requireUser } from '@/app/_lib/session';
-import { ReceiptSplit } from '@/app/_components/receipt-split';
 import { demoDinnerTransactionId } from '@/db/demo-bank';
-import { getPersons, getReceiptByTransactionId, getTransactionForSplit } from '@/db/queries';
+import { getReceiptByTransactionId, getTransactionForSplit } from '@/db/queries';
 import { isDemoMode } from '@/lib/demo-mode';
 
 export const dynamic = 'force-dynamic';
@@ -23,19 +21,5 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
   }
   const [row, receipt] = await Promise.all([getTransactionForSplit(transactionId), getReceiptByTransactionId(transactionId)]);
   if (!row || !receipt || !row.isSplittable) notFound();
-  if (isDemoMode()) redirect(`/expenses?tx=${row.id}&split=item`);
-  const persons = await getPersons();
-  return (
-    <main className="mx-auto max-w-6xl space-y-4 px-4 py-6 sm:px-6 sm:py-8">
-      <div>
-        <Link href={sample ? '/' : `/expenses?tx=${row.id}`}
-          className="mb-2 inline-flex min-h-9 items-center gap-1.5 text-sm text-blue-700 hover:underline dark:text-blue-400">
-          <ArrowLeft className="size-4" aria-hidden />{sample ? 'Back to demo' : 'Back to expense'}
-        </Link>
-        <h1 className="text-xl font-semibold tracking-tight">Split a receipt</h1>
-      </div>
-      <ReceiptSplit key={receipt.id} sample={sample} receipt={receipt} amountCents={row.amountCents}
-        persons={persons.map(({ id, name, isOwner }) => ({ id, name, isOwner }))} />
-    </main>
-  );
+  redirect(`/expenses?tx=${row.id}&split=item`);
 }

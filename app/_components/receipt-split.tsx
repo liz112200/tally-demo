@@ -10,7 +10,6 @@ import { explainItemShares } from '@/lib/split';
 import { saveItemSplit } from '@/app/_actions/splits';
 import type { ItemSplitState } from '@/app/_lib/schema';
 import type { PersonOption } from './split-editor';
-import { useIsDemo } from '@/app/_lib/use-demo';
 import { ItemAssignees, assignmentLabel } from './item-assignees';
 import { useReportSuccess } from './page-result';
 
@@ -26,7 +25,6 @@ export function ReceiptSplit({ receipt, persons, amountCents, sample = false, em
   onBack?: () => void;
   onSaved?: () => void;
 }) {
-  const demo = useIsDemo();
   const [beforeBulk, setBeforeBulk] = useState<Map<string, string[]> | null>(null);
   const owner = persons.find((p) => p.isOwner);
   const [assignments, setAssignments] = useState(() => new Map(receipt.items.map((item) =>
@@ -38,7 +36,7 @@ export function ReceiptSplit({ receipt, persons, amountCents, sample = false, em
   const [state, dispatch, pending] = useActionState(saveItemSplit, initial);
   // The wizard closes on success and reports to its parent page. The standalone
   // editor stays here with a persistent confirmation and navigation.
-  useReportSuccess(onSaved ? state : initial, demo ? '/people' : undefined);
+  useReportSuccess(onSaved ? state : initial, '/people');
   const savedHeading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     if (!state.ok) return;
@@ -48,15 +46,13 @@ export function ReceiptSplit({ receipt, persons, amountCents, sample = false, em
 
   const names = new Map(persons.map((p) => [p.id, p.isOwner ? 'You' : p.name]));
   const name = (id: string) => names.get(id) ?? 'Inactive person';
-  const originalGuests = persons.filter((p) => !p.isOwner && receipt.items.some((item) => item.assignedPersonIds.includes(p.id)));
-  const partner = originalGuests.length === 1 ? originalGuests[0] : !originalGuests.length && persons.length === 2 ? persons.find((p) => !p.isOwner) : undefined;
   const itemTotal = receipt.items.reduce((sum, item) => sum + item.amountCents, receipt.taxCents + receipt.tipCents);
 
   let shares: ReturnType<typeof explainItemShares> = [];
   let problem: string | undefined;
   try {
     if (!owner) throw new Error('Owner person missing');
-    if (demo && receipt.items.some((item) => !assignments.get(item.id)?.length)) {
+    if (receipt.items.some((item) => !assignments.get(item.id)?.length)) {
       throw new Error('Choose at least one person for each item.');
     }
     if ([...assignments.values()].some((ids) => ids.some((id) => !names.has(id)))) {
@@ -76,7 +72,7 @@ export function ReceiptSplit({ receipt, persons, amountCents, sample = false, em
   const sharedTotal = guests.reduce((sum, s) => sum + s.amountCents, 0);
   function assign(itemId: string, ids: string[]) {
     setBeforeBulk(null);
-    setAssignments((prev) => new Map(prev).set(itemId, demo || ids.length ? ids : owner ? [owner.id] : []));
+    setAssignments((prev) => new Map(prev).set(itemId, ids));
   }
   function save() {
     const data = new FormData();
@@ -106,9 +102,8 @@ export function ReceiptSplit({ receipt, persons, amountCents, sample = false, em
     );
   }
 
-  const pill = 'min-h-9 rounded-lg border border-input px-3 text-sm font-medium hover:bg-muted aria-pressed:border-primary aria-pressed:bg-primary/10 aria-pressed:text-primary pointer-coarse:min-h-11';
   return (
-    <div data-guest-receipt={demo ? true : undefined} className={embedded ? "ledger-receipt" : "grid items-start gap-4 md:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]"}>
+    <div data-guest-receipt className={embedded ? "ledger-receipt" : "grid items-start gap-4 md:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]"}>
       <section aria-label="Itemized receipt" className={embedded ? "min-w-0" : "min-w-0 rounded-xl border bg-card p-4 sm:p-5"}>
         {embedded ? <h3 className="text-sm font-semibold">Receipt items</h3> : <>
         <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
@@ -121,49 +116,26 @@ export function ReceiptSplit({ receipt, persons, amountCents, sample = false, em
           {receipt.items.map((item, index) => {
             const ids = assignments.get(item.id) ?? [];
             const selected = editing === item.id;
-            const quickPair = owner && partner;
-            const picker = (
-              <div role="group" aria-label={'People sharing ' + item.description} className="flex flex-wrap gap-1.5 py-2">
-                {persons.map((p) => (
-                  <button className={pill} type="button" key={p.id} disabled={pending} aria-pressed={ids.includes(p.id)}
-                    onClick={() => assign(item.id, ids.includes(p.id) ? ids.filter((id) => id !== p.id && names.has(id)) : [...ids.filter((id) => names.has(id)), p.id])}>
-                    {name(p.id)}
-                  </button>
-                ))}
-                <button type="button" className="px-2 text-xs underline" disabled={pending}
-                  onClick={() => assign(item.id, persons.map((p) => p.id))}>Everyone</button>
-              </div>
-            );
             return (
               <li key={item.id}>
                 <button type="button" className="flex w-full items-center gap-3 py-3 text-left" aria-expanded={selected}
                   onClick={() => setEditing(selected ? undefined : item.id)}>
                   <span className="min-w-0 flex-1 break-words font-medium">{item.quantity !== 1 && <span>{item.quantity} × </span>}{item.description}
-                    <span className="block text-xs font-normal text-muted-foreground">{demo ? assignmentLabel(ids, persons) : ids.map(name).join(' · ') || 'You'}</span>
+                    <span className="block text-xs font-normal text-muted-foreground">{assignmentLabel(ids, persons)}</span>
                   </span>
                   <span className="font-mono text-sm">{money(item.amountCents)}</span>
                   <ChevronDown className={'size-4 text-muted-foreground ' + (selected ? 'rotate-180' : '')} aria-hidden />
                 </button>
                 {selected && <div className="space-y-2 pb-3">
-                  {demo ? <ItemAssignees mealGroup={mealGroup} persons={persons} ids={ids} item={item.description} pending={pending}
+                  <ItemAssignees mealGroup={mealGroup} persons={persons} ids={ids} item={item.description} pending={pending}
                     previous={index > 0 ? { description: receipt.items[index - 1].description, ids: assignments.get(receipt.items[index - 1].id) ?? [] } : undefined}
-                    onChange={(next) => assign(item.id, next)} /> : quickPair ? <>
-                    <div role="group" aria-label={'Assign ' + item.description} className="flex flex-wrap gap-1">
-                      {[{ label: 'You', group: [owner.id] }, { label: 'Both', group: [owner.id, partner.id] },
-                        { label: partner.name, group: [partner.id] }].map(({ label, group }) => {
-                        return <button type="button" className={pill} key={group.join(',')} disabled={pending}
-                          aria-pressed={ids.length === group.length && group.every((id) => ids.includes(id))}
-                          onClick={() => assign(item.id, group)}>{label}</button>;
-                      })}
-                    </div>
-                    {persons.length > 2 && <details><summary className="cursor-pointer py-1 text-xs text-muted-foreground">More people</summary>{picker}</details>}
-                  </> : picker}
+                    onChange={(next) => assign(item.id, next)} />
                   <button type="button" className="text-xs text-muted-foreground underline underline-offset-2" disabled={pending}
                     onClick={() => {
-                      if (demo) setBeforeBulk((previous) => previous ?? assignments);
+                      setBeforeBulk((previous) => previous ?? assignments);
                       setAssignments(new Map(receipt.items.map((i) => [i.id, [...ids]])));
                     }}>Apply to all items</button>
-                  {demo && beforeBulk && <button type="button" className="ml-3 text-xs font-medium text-primary underline" disabled={pending}
+                  {beforeBulk && <button type="button" className="ml-3 text-xs font-medium text-primary underline" disabled={pending}
                     onClick={() => { setAssignments(beforeBulk); setBeforeBulk(null); }}>Undo</button>}
                 </div>}
               </li>
