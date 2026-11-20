@@ -112,10 +112,10 @@ export function SplitDialog({
   return (
     <Dialog open={open} onOpenChange={changeOpen}>
       {trigger && <DialogTrigger render={trigger} />}
-      <DialogContent placement={demo ? 'right' : 'center'} className={demo ? 'ledger-drawer' : 'sm:max-w-lg'}>
+      <DialogContent placement={demo ? 'right' : 'center'} className={demo ? 'ledger-drawer guest-check' : 'sm:max-w-lg'}>
         {demo ? <>
           <DialogHeader>
-            <span className="flex items-center gap-2 text-xs font-semibold text-primary"><SplitIcon className="size-4" />Split expense</span>
+            <span className="guest-stamp">Guest check</span>
             <DialogTitle>{receipt?.merchant || description}</DialogTitle>
             <DialogDescription className="flex items-baseline justify-between gap-3">
               <time dateTime={date}>{date}</time>

@@ -108,7 +108,7 @@ export function ReceiptSplit({ receipt, persons, amountCents, sample = false, em
 
   const pill = 'min-h-9 rounded-lg border border-input px-3 text-sm font-medium hover:bg-muted aria-pressed:border-primary aria-pressed:bg-primary/10 aria-pressed:text-primary pointer-coarse:min-h-11';
   return (
-    <div className={embedded ? "ledger-receipt" : "grid items-start gap-4 md:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]"}>
+    <div data-guest-receipt={demo ? true : undefined} className={embedded ? "ledger-receipt" : "grid items-start gap-4 md:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]"}>
       <section aria-label="Itemized receipt" className={embedded ? "min-w-0" : "min-w-0 rounded-xl border bg-card p-4 sm:p-5"}>
         {embedded ? <h3 className="text-sm font-semibold">Receipt items</h3> : <>
         <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">

@@ -70,12 +70,14 @@ export function ReceiptWizardDialog({
   existingReceipt: ReceiptView | null;
   trigger: React.ReactElement<Record<string, unknown>>;
 }) {
+  const demo = useIsDemo();
   const [open, setOpen] = useState(false);
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={trigger} />
-      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-3xl">
+      <DialogContent className={`max-h-[90dvh] overflow-y-auto sm:max-w-3xl ${demo ? 'guest-check' : ''}`}>
         <DialogHeader>
+          {demo && <span className="guest-stamp">Guest check</span>}
           <DialogTitle>
             {existingReceipt ? 'Receipt' : 'Attach receipt'}
           </DialogTitle>

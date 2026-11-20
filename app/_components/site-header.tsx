@@ -41,7 +41,7 @@ export function SiteHeader({ demo }: { demo: boolean }) {
   if (demo) {
     const icons = [Landmark, ReceiptText, UsersRound, ChartNoAxesColumn, Settings2];
     return <header className="ledger-nav">
-      <Link href="/" aria-label="Tally, home" className="ledger-brand"><TallyMark />Tally</Link>
+      <Link href="/" aria-label="Tally, home" className="ledger-brand">Tally<span aria-hidden="true">.</span></Link>
       <nav aria-label="Main navigation">
         {navFor(true).map(({ href, label }, i) => {
           const Icon = icons[i];

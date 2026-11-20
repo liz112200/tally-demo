@@ -78,3 +78,26 @@ export function AccountBoard({ cards, unmapped }: { cards: BoardCard[]; unmapped
     </div>
   );
 }
+
+export function PassbookRegister({ cards, unmapped }: Parameters<typeof AccountBoard>[0]) {
+  return <>
+    <ul className="register-entries">
+      {cards.map((card) => <li key={card.id}>
+        <a href={`/accounts/${card.id}`} className="register-entry">
+          <div><div className="text-xl">{card.name}</div><small>{card.kind}</small></div>
+          <div className="register-cycle" title={card.cycle?.reason}>
+            {card.cycle?.range ?? 'No statement recorded'}<small>{card.cycle?.count}</small>
+          </div>
+          <span aria-hidden="true">↗</span>
+        </a>
+        <details><summary>Account details</summary>
+          <dl>{card.figures.map((f) => <div key={f.label}><dt>{f.label}</dt><dd>{formatUSD(toCents(f.mills))}</dd></div>)}</dl>
+          <p>{card.chips.map((chip) => chip.label).join(' · ')}</p>
+          <p>{card.cycle?.left}{card.cycle && ' · '}{card.syncedAt ? <RelativeTime iso={card.syncedAt} prefix="synced " /> : card.lastImport ? `last CSV import ${card.lastImport}` : 'no rows yet'}</p>
+        </details>
+      </li>)}
+      {unmapped.map((account) => <li key={account.id}><a className="register-entry" href="/accounts/logins">{account.name} · Set up bank sync →</a></li>)}
+    </ul>
+    {!cards.length && !unmapped.length && <p className="py-4 text-muted-foreground">Import a CSV from Expenses or link a bank to add an account.</p>}
+  </>;
+}

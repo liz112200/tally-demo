@@ -1,27 +1,31 @@
-/* The Ledger review runs on the demo deployment. Keep its palette on the
+/* The Passbook preview runs on the demo deployment. Keep its palette on the
    document so portaled menus, dialogs and tooltips share the same tokens. */
 html[data-demo] {
   color-scheme: light;
-  --background: #f6f6f6;
-  --foreground: #202020;
-  --card: #fff;
-  --popover: #fff;
-  --primary: #292929;
-  --primary-foreground: #fff;
-  --muted: #efefef;
-  --muted-foreground: #5e5e5e;
-  --accent: #e7e7e7;
-  --accent-foreground: #202020;
+  --background: #f9f7f0;
+  --foreground: #242322;
+  --card: #fffdf7;
+  --popover: #fffdf7;
+  --primary: #293c50;
+  --primary-foreground: #fffdf7;
+  --muted: #f0ede4;
+  --muted-foreground: #625e58;
+  --accent: #eee9df;
+  --accent-foreground: #242322;
   --secondary: var(--muted);
   --secondary-foreground: var(--foreground);
   --card-foreground: var(--foreground);
   --popover-foreground: var(--foreground);
-  --border: #dcdcdc;
-  --input: #ababab;
+  --border: #cec8bb;
+  --input: #a59f92;
   --ring: var(--primary);
   --chart-1: var(--primary);
   --radius: .55rem;
-  --ledger-rail: #fff;
+  --ledger-rail: var(--background);
+  --cover: #293c50;
+  --stamp: #923d2d;
+  --ticket: #fff9ee;
+  --ticket-rule: #b6a694;
 }
 html.dark[data-demo], .palette-preview {
   color-scheme: dark;
@@ -37,7 +41,11 @@ html.dark[data-demo], .palette-preview {
   --accent-foreground: #f0f0f0;
   --border: #434343;
   --input: #646464;
-  --ledger-rail: #101010;
+  --ledger-rail: var(--background);
+  --cover: #2e3742;
+  --stamp: #efa68c;
+  --ticket: #272320;
+  --ticket-rule: #78665b;
 }
 html.dark[data-demo][data-dark-palette="pine"], .palette-preview[data-dark-palette="pine"] {
   --background: #151c20;
@@ -119,28 +127,22 @@ html.dark[data-demo][data-dark-palette="cinder"], .palette-preview[data-dark-pal
 .palette-preview b { position: absolute; inset: 20% 8% 18% 30%; border-radius: .25rem; background: var(--popover); border: 1px solid var(--border) }
 .palette-preview em { position: absolute; inset: auto 16% 31% auto; width: 20%; height: .35rem; border-radius: .2rem; background: var(--primary) }
 .ledger-nav {
-  background: var(--ledger-rail);
-  color: var(--foreground);
-  display: flex;
-  align-items: center;
-  gap: .4rem;
-  padding: .4rem .6rem;
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  padding: .8rem max(1rem, calc((100% - 69rem) / 2));
+  background: var(--ledger-rail); color: var(--foreground); border-bottom: 1px solid var(--border);
 }
-.ledger-brand { display: inline-flex; align-items: center; gap: .6rem; font-weight: 650; letter-spacing: -.045em; font-size: 1.45rem }
-.ledger-brand svg { background: var(--primary); color: var(--primary-foreground); width: 2rem; height: 2rem; padding: .35rem; border-radius: .5rem }
-.ledger-nav nav { display: flex; gap: .15rem; align-items: center }
-.ledger-nav nav a { display: flex; align-items: center; justify-content: center; gap: .7rem; border-radius: .45rem; font-size: .85rem; font-weight: 500; color: var(--muted-foreground); padding: .45rem .7rem }
-.ledger-nav nav a[aria-current], .ledger-nav nav a:hover { background: var(--accent); color: var(--accent-foreground) }
-.ledger-nav nav svg { width: 1rem; height: 1rem }
+.ledger-brand { font: bold 2.35rem/.95 Georgia, serif; letter-spacing: -.075em }
+.ledger-brand span { color: var(--stamp) }
+.ledger-nav nav { display: flex; flex-wrap: wrap; align-items: center; gap: .8rem }
+.ledger-nav nav a { display: inline-flex; align-items: center; gap: .4rem; padding: .45rem .15rem; font-size: .85rem; color: var(--muted-foreground); border-bottom: 2px solid transparent }
+.ledger-nav nav a:is([aria-current], :hover) { border-color: var(--stamp); color: var(--foreground) }
+.ledger-nav nav svg { width: .95rem; height: .95rem }
 .ledger-identity { display: flex; align-items: center; gap: .6rem; font-size: .85rem }
 .ledger-identity > span { display: grid; place-items: center; width: 1.8rem; height: 1.8rem; border-radius: 50%; background: var(--accent); color: var(--accent-foreground) }
 .ledger-identity button { margin-left: auto }
-html[data-demo] main h1 { font-size: clamp(1.65rem, 3.5vw, 2.65rem); letter-spacing: -.05em; line-height: 1.12; font-weight: 625; overflow-wrap: anywhere }
+html[data-demo] main h1 { font-size: clamp(1.65rem, 3.5vw, 2.65rem); letter-spacing: -.05em; line-height: 1.12; font-family: Georgia, serif; font-weight: 400; overflow-wrap: anywhere }
 html[data-demo] main :is(a,button).text-blue-700 { color: var(--primary) }
 html[data-demo] main table th { color: var(--muted-foreground); font-weight: 600 }
-html[data-demo] .ledger-card { border-radius: .7rem; border-top: 3px solid var(--primary) }
-html[data-demo] .ledger-card [aria-hidden] > div { background: var(--primary) }
-html[data-demo] .ledger-card dl { background: var(--background); padding: .6rem .75rem; border-radius: .4rem }
 .ledger-drawer[data-slot="dialog-content"] {
   max-width: min(100%, 28rem); height: 100dvh; max-height: 100dvh;
   display: flex; flex-direction: column; gap: 1rem; border-radius: 0;
@@ -154,14 +156,7 @@ html[data-demo] .ledger-card dl { background: var(--background); padding: .6rem 
 .ledger-receipt > section { min-width: 0 }
 .ledger-drawer .ledger-method { min-height: 2.5rem; width: 100%; border: 1px solid var(--input); border-radius: .4rem; background: var(--card); color: var(--foreground); padding: .4rem .6rem }
 html[data-demo] button[aria-label^="Split "] { opacity: 1 }
-@media (min-width: 850px) {
-  html[data-demo] body:has(.ledger-nav) { padding-left: 11rem }
-  .ledger-nav { position: fixed; inset: 0 auto 0 0; z-index: 40; width: 11rem; flex-direction: column; align-items: stretch; padding: 1.55rem .85rem; gap: 2rem }
-  .ledger-nav nav { flex-direction: column; align-items: stretch; gap: .25rem }
-  .ledger-nav nav a { justify-content: flex-start; padding: .65rem .75rem }
-  .ledger-identity { margin-top: auto; padding-top: 1rem; border-top: 1px solid var(--border) }
-  html[data-demo] th.sticky.top-12 { top: 0 }
-}
+html[data-demo] th.sticky.top-12 { top: 0 }
 @media (max-width: 849px) {
   .ledger-nav { flex-wrap: wrap; justify-content: space-between }
   .ledger-nav nav { order: 2; width: 100%; justify-content: space-between }
@@ -169,15 +164,51 @@ html[data-demo] button[aria-label^="Split "] { opacity: 1 }
   .ledger-nav nav svg { display: none }
   html[data-demo] th.sticky.top-12 { top: 0 }
 }
-.ledger-metrics {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
-  border: 1px solid var(--border); background: var(--card); border-radius: .7rem;
-  padding: .9rem 1.25rem; gap: 1rem;
+/* The cover and facing register share the proportions of an open passbook. */
+.passbook-spread { display: grid; grid-template-columns: minmax(0, .84fr) minmax(0, 1.16fr); gap: clamp(1.5rem, 4vw, 3.5rem); align-items: start }
+.passbook-cover { position: relative; isolation: isolate; overflow: hidden; border-radius: 3px 12px 12px 3px; background: var(--cover); color: #faf3df; border-left: 8px double #959997; padding: 1.45rem 1.7rem; min-height: 19rem; display: flex; flex-direction: column; justify-content: space-between; gap: 1.8rem }
+.passbook-cover time, .passbook-imprint { font: .78rem/1.4 var(--font-mono), monospace }
+html[data-demo] .passbook-cover h1 { color: inherit; font: normal clamp(2.8rem, 5vw, 4.4rem)/.95 Georgia, serif; letter-spacing: -.055em }
+.passbook-imprint, .register-heading { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: .5rem }
+.passbook-imprint { border-top: 1px solid #faf3df66; padding-top: .7rem }
+.passbook-seal { position: absolute; z-index: -1; right: -1.9rem; top: -2.4rem; width: 10rem; height: 10rem; color: #dfc598; opacity: .7; pointer-events: none }
+.passbook-seal i { position: absolute; inset: 0 35%; border: 1px solid; border-radius: 50% }
+.register-heading { border-bottom: 2px solid var(--foreground); padding-bottom: .65rem }
+html[data-demo] main h2 { font-family: Georgia, serif; font-weight: 500 }
+.register-heading h2 { font-size: 1.85rem; letter-spacing: -.045em }
+.register-heading a, .register-entries summary { font-size: .8rem; text-decoration: underline; text-underline-offset: .22em }
+.register-entries > li { border-bottom: 1px solid var(--border); padding-block: .65rem }
+.register-entry { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: .65rem; overflow-wrap: anywhere }
+.register-entry:hover .text-xl { text-decoration: underline; text-underline-offset: .18em }
+.register-entry .text-xl { font-family: Georgia, serif; line-height: 1.15 }
+.register-entry small { display: block; margin-top: .15rem; color: var(--muted-foreground); font-size: .75rem }
+.register-cycle { text-align: right; font-size: .85rem }
+.register-entries details { font-size: .8rem; color: var(--muted-foreground) }
+.register-entries summary { cursor: pointer; width: fit-content; padding: .3rem 0; font-size: .75rem }
+.register-entries dl { margin-block: .4rem; max-width: 22rem }
+.register-entries dl div { display: flex; justify-content: space-between; gap: .5rem }
+.ledger-metrics { display: flex; flex-wrap: wrap; margin-top: 1.1rem; gap: .8rem 1.5rem }
+.ledger-metrics dt { font-size: .78rem; color: var(--muted-foreground) }
+.ledger-metrics dd { font: normal 1.65rem/1.2 Georgia, serif; font-variant-numeric: tabular-nums }
+html[data-demo] section[aria-labelledby="needs-you"] { border-inline: 0; border-radius: 0; background: var(--background) }
+@media (min-width: 850px) {
+  html[data-demo] section[aria-labelledby="needs-you"] { display: grid; grid-template-columns: minmax(8rem, 1fr) 6fr }
+  html[data-demo] #needs-you { color: var(--stamp); font-size: 1.15rem }
+  html[data-demo] section[aria-labelledby="needs-you"] li { padding: .25rem 0 }
+  html[data-demo] section[aria-labelledby="needs-you"] li:first-child { border-top: 0 }
 }
-.ledger-metrics dt { font-size: .8rem; color: var(--muted-foreground) }
-.ledger-metrics dd { margin-top: .15rem; font-size: clamp(1.55rem, 2.5vw, 2rem); font-weight: 600; letter-spacing: -.05em }
+html[data-demo] .ledger-table { border-radius: .25rem; border-inline: 0 }
+html[data-demo] .ledger-table thead th { font-family: var(--font-mono), monospace; letter-spacing: .055em }
+html[data-demo] section:has(> div > h1) { border-radius: .25rem }
+@media (max-width: 740px) {
+  .passbook-spread { grid-template-columns: 1fr; gap: 1.25rem }
+  .passbook-cover { min-height: 13rem; gap: 1rem; padding: 1rem 1.25rem }
+}
+@media (max-width: 420px) {
+  .register-entry { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto }
+}
 html[data-demo] .ledger-summary { padding: .85rem 1rem; gap: .5rem 1rem; border: 1px solid var(--border); border-radius: .5rem; background: var(--card); font-size: .75rem }
-html[data-demo] main > section:has(> div > h1) { border-top: 3px solid var(--primary) }
+html[data-demo] main > section:has(> div > h1) { border-top: 1px solid var(--border) }
 html[data-demo] main #rules, html[data-demo] main #devices { border-top: 1px solid var(--border); padding-top: 1.5rem }
 html[data-demo] main:has(> h1) { width: 100% }
 @media (min-width: 850px) {
@@ -196,32 +227,28 @@ html[data-demo] main:has(> h1) { width: 100% }
   html[data-demo] .ledger-table:not([data-full]) .ledger-row-date { display: block; font-size: .7rem; color: var(--muted-foreground) }
 }
 
-html[data-demo]:not(.dark) {
-  & .ledger-drawer[data-slot="dialog-content"] {
-    border-top: 1px solid var(--border);
-    box-shadow: -6px 0 20px rgb(0 0 0 / 10%);
-  }
-  @media (width > 28rem) {
-    & .ledger-drawer[data-slot="dialog-content"] { border-left: 1px solid var(--border) }
-  }
-  @media (min-width: 850px) {
-    & .ledger-nav { border-right: 1px solid var(--border) }
-  }
-  @media (max-width: 849px) {
-    & .ledger-nav { border-bottom: 1px solid var(--border) }
-  }
-}
-html.dark[data-demo] [data-slot="dialog-portal"]:has(.ledger-drawer) [data-slot="dialog-overlay"] { background: #0004 }
+html.dark[data-demo] [data-slot="dialog-portal"]:has(.ledger-drawer) [data-slot="dialog-overlay"] { background: #0005 }
 
-html.dark[data-demo]:is(:not([data-dark-palette]), [data-dark-palette="carbon"]) {
-  @media (min-width: 850px) {
-    & .ledger-nav { border-right: 1px solid #414141 }
-  }
-  & .ledger-drawer[data-slot="dialog-content"] { border-top: 1px solid var(--border) }
-  @media (width > 28rem) {
-    & .ledger-drawer[data-slot="dialog-content"] {
-      border-left: 1px solid #545454;
-      box-shadow: -6px 0 20px rgb(0 0 0 / 22%);
-    }
-  }
+/* The receipt editor has its own paper and ink, including when it is portaled. */
+html[data-demo] :is(.guest-check, [data-guest-receipt]) {
+  --card: var(--ticket);
+  --primary: var(--stamp);
+  --primary-foreground: #fffaf5;
+  --accent: color-mix(in srgb, var(--stamp) 10%, var(--ticket));
+  --accent-foreground: var(--foreground);
+  --ring: var(--stamp);
 }
+html.dark[data-demo] :is(.guest-check, [data-guest-receipt]) { --primary-foreground: #231914 }
+html[data-demo] .guest-check[data-slot="dialog-content"] {
+  background: var(--ticket); border-top: 1px solid var(--ticket-rule); box-shadow: -6px 0 20px rgb(0 0 0 / 16%);
+}
+@media (width > 28rem) {
+  html[data-demo] .guest-check[data-slot="dialog-content"] { border-left: 1px solid var(--ticket-rule) }
+}
+.guest-check [data-slot="dialog-header"] { border-bottom: 2px dotted var(--ticket-rule); padding-bottom: 1rem }
+.guest-stamp { align-self: start; width: fit-content; padding: .14rem .4rem; color: var(--stamp); border: 1px solid currentColor; font: 600 .75rem/1.35 var(--font-mono), monospace; text-transform: uppercase; letter-spacing: .13em; transform: rotate(-2deg) }
+.guest-check [data-slot="dialog-title"] { font: italic 2rem/1.05 Georgia, serif; letter-spacing: -.04em }
+.guest-check time, [data-guest-receipt] dd { font-family: var(--font-mono), monospace; font-variant-numeric: tabular-nums }
+[data-guest-receipt] h2, [data-guest-receipt] h3 { font: italic 1.35rem/1.15 Georgia, serif }
+[data-guest-receipt] section > ul, [data-guest-receipt] section > dl > div:last-child { border-color: var(--ticket-rule); border-style: dashed }
+[data-guest-receipt] section[aria-label="Split preview"] { padding-top: .9rem; border-top: 3px dotted var(--ticket-rule) }

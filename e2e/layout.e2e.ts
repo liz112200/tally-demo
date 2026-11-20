@@ -56,20 +56,23 @@ test('the tips strip is in the server’s page in its final state, and dismissin
   await expect(page.getByText('More things to try')).toBeVisible();
 });
 
-test('demo palettes change the drawer and survive reload and light mode', async ({ page }) => {
+test('Passbook and Guest Check follow the theme across reloads and palette changes', async ({ page }) => {
   await page.goto('/settings#appearance');
   const carbon = page.getByRole('button', { name: /Carbon/ });
   await page.emulateMedia({ colorScheme: 'dark' });
   await page.reload();
   await expect(carbon).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(16, 16, 16)');
-  await expect(page.locator('.ledger-nav')).toHaveCSS('border-right', '1px solid rgb(65, 65, 65)');
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Account register' })).toBeVisible();
+  await expect(page.locator('.passbook-cover')).toHaveCSS('background-color', 'rgb(46, 55, 66)');
   await page.goto('/expenses/receipt/sample-dinner');
   const carbonDrawer = page.getByRole('dialog', { name: 'Dinner at Alba' });
-  await expect(carbonDrawer).toHaveCSS('background-color', 'rgb(32, 32, 32)');
-  await expect(carbonDrawer).toHaveCSS('border-left', '1px solid rgb(84, 84, 84)');
-  await expect(carbonDrawer).toHaveCSS('border-top', '1px solid rgb(67, 67, 67)');
-  await expect(carbonDrawer.getByRole('button', { name: 'Save split' })).toHaveCSS('background-color', 'rgb(219, 219, 219)');
+  await expect(carbonDrawer.getByText('Guest check', { exact: true })).toBeVisible();
+  await expect(carbonDrawer).toHaveCSS('background-color', 'rgb(39, 35, 32)');
+  await expect(carbonDrawer).toHaveCSS('border-left', '1px solid rgb(120, 102, 91)');
+  await expect(carbonDrawer).toHaveCSS('border-top', '1px solid rgb(120, 102, 91)');
+  await expect(carbonDrawer.getByRole('button', { name: 'Save split' })).toHaveCSS('background-color', 'rgb(239, 166, 140)');
   await page.goto('/settings#appearance');
   const palette = page.getByRole('button', { name: /Graphite/ });
   await palette.click();
@@ -80,19 +83,20 @@ test('demo palettes change the drawer and survive reload and light mode', async 
   expect(await background()).toBe('rgb(23, 23, 25)');
   await page.getByRole('button', { name: 'Toggle theme' }).click();
   await page.reload();
-  expect(await background()).toBe('rgb(246, 246, 246)');
-  await expect(page.locator('.ledger-nav')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
-  await expect(page.locator('.ledger-nav nav [aria-current]')).toHaveCSS('background-color', 'rgb(231, 231, 231)');
+  expect(await background()).toBe('rgb(249, 247, 240)');
+  await page.goto('/');
+  await expect(page.locator('.passbook-cover')).toHaveCSS('background-color', 'rgb(41, 60, 80)');
+  await expect(page.locator('.ledger-nav nav [aria-current]')).toHaveCSS('border-bottom-color', 'rgb(146, 61, 45)');
   await page.goto('/expenses/receipt/sample-dinner');
   const lightDrawer = page.getByRole('dialog', { name: 'Dinner at Alba' });
-  await expect(lightDrawer).toHaveCSS('border-top', '1px solid rgb(220, 220, 220)');
-  await expect(lightDrawer.getByRole('button', { name: 'Save split' })).toHaveCSS('background-color', 'rgb(41, 41, 41)');
+  await expect(lightDrawer).toHaveCSS('border-top', '1px solid rgb(182, 166, 148)');
+  await expect(lightDrawer.getByRole('button', { name: 'Save split' })).toHaveCSS('background-color', 'rgb(146, 61, 45)');
   await lightDrawer.getByRole('button', { name: 'Close', exact: true }).click();
   await page.getByRole('button', { name: 'Toggle theme' }).click();
   await page.goto('/expenses/receipt/sample-dinner');
   const drawer = page.getByRole('dialog', { name: 'Dinner at Alba' });
   await expect(drawer).toBeVisible();
-  expect(await drawer.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe('rgb(39, 39, 43)');
+  expect(await drawer.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe('rgb(39, 35, 32)');
 });
 
 test('bank import review shows decisions before history', async ({ page }) => {
