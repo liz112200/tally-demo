@@ -2,11 +2,11 @@ import type { CSSProperties } from 'react';
 import { addMonths, monthLabel, monthShortLabel, spendingTrend, spendingProfile, type InsightExpense, type SpendingView } from '@/lib/insights';
 import { formatUSD, toCents } from '@/lib/money';
 import { ExpenseCategories } from './expense-categories';
-import { CategoryBarChart, SpendingPace } from './insights-charts';
+import { SpendingPace } from './insights-charts';
 
 const money = (amount: number) => formatUSD(toCents(amount));
 
-export function SpendingReport({ rows, month, today, view }: { rows: InsightExpense[]; view?: SpendingView; month: string; today: string }) {
+export function SpendingReport({ rows, month, today, view }: { rows: InsightExpense[]; view: SpendingView; month: string; today: string }) {
   const report = spendingProfile(rows, month, today);
   if (!report.purchaseCount) return <section className="report-empty">
     <h2>{view === 'share' ? 'No personal share recorded for' : 'No spending recorded for'} {monthLabel(month)}</h2><p>Choose another month to see spending patterns.</p>
@@ -22,7 +22,7 @@ export function SpendingReport({ rows, month, today, view }: { rows: InsightExpe
   const peakDays = report.weekdays.filter(day => day.count === peakCount).map(day => day.label);
   return <article className="spending-report">
     <header className="report-head">
-      <div><span>{view === 'share' ? 'My share' : view === 'paid' ? 'What I paid' : 'Recorded spending'}{month === today.slice(0, 7) && ` through ${current} ${report.days}`}</span>
+      <div><span>{view === 'share' ? 'My share' : 'What I paid'}{month === today.slice(0, 7) && ` through ${current} ${report.days}`}</span>
         <strong>{money(report.total)}</strong></div>
       <div><span>Purchases</span><b>{report.purchaseCount}</b></div>
       <div><span>Average purchase</span><b>{(Number.isInteger(average) ? '' : '≈ ') + money(Math.round(average))}</b></div>
@@ -43,8 +43,7 @@ export function SpendingReport({ rows, month, today, view }: { rows: InsightExpe
     <div className="report-columns">
       <section><h2>Where your money went</h2>
         {largest && <p>{largestName} accounted for {Math.round(100 * largest.totalCents / report.total)}% of recorded spending.</p>}
-        {view ? <ExpenseCategories key={month + view} view={view} categories={report.categories} purchases={report.purchases} />
-          : <CategoryBarChart slices={report.categories} />}
+        <ExpenseCategories key={month + view} view={view} categories={report.categories} purchases={report.purchases} />
       </section>
       <section><h2>When you shop</h2>
         <p>{peakDays.length === 7 ? 'All seven days had the same purchase count.' : `${peakDays.join(', ')} had the most purchases${peakDays.length > 1 ? ' (tied)' : ''}.`}</p>

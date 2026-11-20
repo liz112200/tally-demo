@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import { SpendingReport } from '@/app/_components/spending-report';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { isDemoMode } from '@/lib/demo-mode';
 import type { SpendingView } from '@/lib/insights';
 import { getInsightRows, getMyShareRows } from '@/db/queries';
 import { addMonths, isMonthKey, monthLabel } from '@/lib/insights';
@@ -30,8 +29,7 @@ export default async function InsightsPage({
   const month =
     params.month && isMonthKey(params.month) ? params.month : thisMonth;
 
-  const demo = isDemoMode();
-  const view: SpendingView = demo && params.view === 'share' ? 'share' : 'paid';
+  const view: SpendingView = params.view === 'share' ? 'share' : 'paid';
   const rows = view === 'share' ? await getMyShareRows() : await getInsightRows();
   function reportUrl(key: string, mode: SpendingView) {
     return `/insights?month=${key}${mode === 'share' ? '&view=share' : ''}`;
@@ -45,8 +43,7 @@ export default async function InsightsPage({
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Insights</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            {demo ? view === 'share' ? 'Your portion, including purchases others covered.' : 'Purchases you covered, before splitting.'
-              : 'Monthly spending report'}
+            {view === 'share' ? 'Your portion, including purchases others covered.' : 'Purchases you covered, before splitting.'}
           </p>
         </div>
         <nav
@@ -79,14 +76,14 @@ export default async function InsightsPage({
         </nav>
       </div>
 
-      {demo && <nav aria-label="Spending view" className="spend-switch">
+      <nav aria-label="Spending view" className="spend-switch">
         {(['paid', 'share'] as const).map(mode =>
           <Link key={mode} scroll={false} aria-current={view === mode ? 'page' : undefined} href={reportUrl(month, mode)}>
             {mode === 'paid' ? 'What I paid' : 'My share'}
           </Link>
         )}
-      </nav>}
-      <SpendingReport view={demo ? view : undefined} rows={rows} month={month} today={today} />
+      </nav>
+      <SpendingReport view={view} rows={rows} month={month} today={today} />
     </main>
   );
 }

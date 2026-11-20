@@ -168,7 +168,7 @@ export function PeopleList({
   creditorCount,
   today,
 }: {
-  categories?: ExpenseCategory[];
+  categories: ExpenseCategory[];
   owner: PersonView;
   rows: PersonView[];
   owedToOwnerCents: number;
@@ -881,7 +881,7 @@ function PersonLine({
   open,
   onToggle,
 }: {
-  categories?: ExpenseCategory[];
+  categories: ExpenseCategory[];
   person: PersonView;
   today: string;
   open: boolean;
@@ -1041,7 +1041,7 @@ function PersonLine({
                   trigger={
                     <Button type="button" variant="outline" size="sm" className="h-7">
                       <HandCoins data-icon="inline-start" />
-                      {categories ? `Log expense ${person.name} paid` : 'Log expense you paid'}
+                      Log expense {person.name} paid
                     </Button>
                   }
                 />

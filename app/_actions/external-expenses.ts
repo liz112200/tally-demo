@@ -3,7 +3,6 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import type { ActionResult } from '@/lib/action-result';
-import { isDemoMode } from '@/lib/demo-mode';
 import { attempt } from './attempt';
 import { formatUSD, parseDollars, toCents } from '@/lib/money';
 import {
@@ -29,7 +28,7 @@ export async function createExternalExpense(
 ): Promise<ExternalExpenseFormState> {
   await requireUser();
   const parsed = externalExpenseSchema.safeParse({
-    categoryId: isDemoMode() ? sentinelToCategoryId(String(formData.get('categoryId') ?? '')) : null,
+    categoryId: sentinelToCategoryId(String(formData.get('categoryId') ?? '')),
     payerPersonId: formData.get('payerPersonId'),
     amount: formData.get('amount'),
     date: formData.get('date'),

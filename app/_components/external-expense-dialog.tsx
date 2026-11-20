@@ -32,7 +32,7 @@ export function ExternalExpenseDialog({
   today,
   trigger,
 }: {
-  categories?: ExpenseCategory[];
+  categories: ExpenseCategory[];
   personId: string;
   personName: string;
   today: string;
@@ -44,10 +44,9 @@ export function ExternalExpenseDialog({
       <DialogTrigger render={trigger} />
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{categories ? `Expense paid by ${personName}` : 'Log an expense you paid'}</DialogTitle>
+          <DialogTitle>Expense paid by {personName}</DialogTitle>
           <DialogDescription>
-            {categories ? 'Enter your portion of the expense.' :
-              `Record something ${personName} paid for that you owe them a share of. It shows up here under what you owe them, not on Expenses.`}
+            Enter your portion of the expense.
           </DialogDescription>
         </DialogHeader>
         {open && (
@@ -71,7 +70,7 @@ function ExternalExpenseForm({
   today,
   onSaved,
 }: {
-  categories?: ExpenseCategory[];
+  categories: ExpenseCategory[];
   personId: string;
   personName: string;
   today: string;
@@ -139,27 +138,25 @@ function ExternalExpenseForm({
           <p className="text-xs text-destructive">{state.errors.date}</p>
         )}
       </div>
-      {categories && (
-        <div className="grid gap-1.5">
-          <Label htmlFor={`ext-category-${personId}`} className="text-xs text-muted-foreground">
-            Category
-          </Label>
-          <select
-            id={`ext-category-${personId}`}
-            name="categoryId"
-            defaultValue={UNCATEGORIZED}
-            className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm"
-            aria-invalid={!!state.errors?.categoryId}
-            aria-describedby={state.errors?.categoryId ? `ext-category-error-${personId}` : undefined}
-          >
-            <option value={UNCATEGORIZED}>Uncategorized</option>
-            {categories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}
-          </select>
-          {state.errors?.categoryId && (
-            <p id={`ext-category-error-${personId}`} className="text-xs text-destructive">{state.errors.categoryId}</p>
-          )}
-        </div>
-      )}
+      <div className="grid gap-1.5">
+        <Label htmlFor={`ext-category-${personId}`} className="text-xs text-muted-foreground">
+          Category
+        </Label>
+        <select
+          id={`ext-category-${personId}`}
+          name="categoryId"
+          defaultValue={UNCATEGORIZED}
+          className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm"
+          aria-invalid={!!state.errors?.categoryId}
+          aria-describedby={state.errors?.categoryId ? `ext-category-error-${personId}` : undefined}
+        >
+          <option value={UNCATEGORIZED}>Uncategorized</option>
+          {categories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}
+        </select>
+        {state.errors?.categoryId && (
+          <p id={`ext-category-error-${personId}`} className="text-xs text-destructive">{state.errors.categoryId}</p>
+        )}
+      </div>
       {state.errors?.payerPersonId && (
         <p className="text-xs text-destructive">{state.errors.payerPersonId}</p>
       )}

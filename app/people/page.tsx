@@ -1,5 +1,4 @@
 import { Suspense } from 'react';
-import { isDemoMode } from '@/lib/demo-mode';
 import {
   getAllPersons,
   getCategories,
@@ -39,7 +38,7 @@ export default async function PeoplePage() {
     getDebtShares(),
     getSettlements(),
     getSettlementAllocationDetails(),
-    isDemoMode() ? getCategories() : undefined,
+    getCategories(),
   ]);
 
   const balances = new Map(
@@ -208,7 +207,7 @@ export default async function PeoplePage() {
         // boundary to prerender; params resolve client-side on hydration.
         <Suspense>
           <PeopleList
-            categories={categories?.filter(c => c.countsAsSpending).map(({ id, name }) => ({ id, name }))}
+            categories={categories.filter(c => c.countsAsSpending).map(({ id, name }) => ({ id, name }))}
             owner={toView(owner)}
             rows={rows}
             owedToOwnerCents={owedToOwner}
