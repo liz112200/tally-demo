@@ -160,13 +160,15 @@ describe('absoluteShareUrl', () => {
 });
 
 describe('demo guest checks', () => {
-  it('keeps the direction clear and links a decorated check even for a single item', () => {
-    const link = absoluteShareUrl('https://demo.test', 'abc', 'flowers');
+  it('leads with the net and labels each side from the sender’s perspective', () => {
+    const link = absoluteShareUrl('https://demo.test', 'abc');
     const text = summary({ guestCheck: true, owing: [line()], limit: 3, linkUrl: link });
-    expect(text).toContain('You picked these up for me');
-    expect(text).toContain('$24.50 — coming your way.');
-    expect(text).toContain('https://demo.test/s/abc?paper=flowers');
-    expect(summary({ guestCheck: true, owed: [line()] })).toContain('$24.50 — to send my way.');
-    expect(summary({ guestCheck: true, owed: [line()], owing: [line()] })).toContain('All square!');
+    expect(text.split('\n')[0]).toBe('Total: $24.50 · to you');
+    expect(text).toContain('What you paid (1 item)');
+    expect(text).toContain('Bill: https://demo.test/s/abc');
+    expect(summary({ guestCheck: true, owed: [line()] })).toContain('Total: $24.50 · to me');
+    const settled = summary({ guestCheck: true, owed: [line()], owing: [line()] });
+    expect(settled).toContain('Total: $0.00 · settled');
+    expect(settled).toContain('What I paid (1 item)');
   });
 });

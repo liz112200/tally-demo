@@ -18,12 +18,11 @@ export function BillDesignPicker({ design, onChange, name, net }: {
     </DialogTrigger>
     <DialogContent className="max-h-[90dvh] overflow-y-auto">
       <DialogTitle>Choose bill paper</DialogTitle>
-      <div className="bill-proof" aria-label="Bill preview">
-        <div className="bill-trim" data-paper={design} aria-hidden="true" />
+      <div className="bill-proof bill-paper" data-paper={design} aria-label="Bill preview">
         <div className="bill-proof-body">
           <span className="guest-stamp">Guest check</span>
           <h3>{guestCopy.heading(name)}</h3>
-          <p>{guestCopy.balance(net)} <strong>{guestCheckBalance(net)}</strong></p>
+          <p>Total: <strong>{guestCheckBalance(net)} <small>{guestCopy.balance(net)}</small></strong></p>
         </div>
       </div>
       <fieldset className="bill-swatches">

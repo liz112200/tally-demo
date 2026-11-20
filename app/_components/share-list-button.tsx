@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useIsDemo } from '@/app/_lib/use-demo';
 import { BillDesignPicker } from './bill-design-picker';
-import type { BillDesign } from '@/lib/bill-design';
+import { demoSharingNote, type BillDesign } from '@/lib/bill-design';
 import { Check, Link2, Share2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -93,13 +93,14 @@ export function ShareListButton({
   async function publishLink(): Promise<string | null> {
     const published = await createShareLink({
       personName,
+      paper: design,
       groupedByCategory: groupBy === 'category',
       owed,
       owing,
     });
     if (!published.ok) return null;
     const base = demo ? window.location.origin : process.env.NEXT_PUBLIC_SHARE_BASE_URL || window.location.origin;
-    return absoluteShareUrl(base, published.token, design);
+    return absoluteShareUrl(base, published.token);
   }
 
   // The link on its own, whatever the list's length: for a short list the
@@ -177,7 +178,7 @@ export function ShareListButton({
   }
 
   return (
-    <span className={cn('inline-flex gap-1', className, demo && 'h-auto flex-wrap items-center')}>
+    <span className={cn('inline-flex gap-1', className, demo && 'h-auto w-full flex-wrap items-center justify-end')}>
       {demo && text && <BillDesignPicker design={design} onChange={setDesign} name={personName} net={sumLines(owed) - sumLines(owing)} />}
       <Button
         type="button"
@@ -233,6 +234,7 @@ export function ShareListButton({
           </>
         )}
       </Button>
+      {demo && text && <small className="w-full text-right text-xs text-muted-foreground">{demoSharingNote}</small>}
     </span>
   );
 }

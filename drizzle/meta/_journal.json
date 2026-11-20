@@ -267,6 +267,13 @@
       "when": 1793996003610,
       "tag": "0037_reviews_point_out_closed",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1795188474610,
+      "tag": "0038_share_bill_paper",
+      "breakpoints": true
     }
   ]
 }

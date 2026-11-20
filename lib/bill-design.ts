@@ -2,7 +2,6 @@ export const billDesigns = {
   classic: 'Classic',
   flowers: 'Wildflowers',
   paws: 'Paw prints',
-  chiikawa: 'Chiikawa',
 } as const;
 
 export type BillDesign = keyof typeof billDesigns;
@@ -15,7 +14,9 @@ export function readBillDesign(value: unknown): BillDesign {
 
 export const guestCopy = {
   heading: (name: string) => `Our tab, ${name}`,
-  coveredByMe: 'I picked these up for you',
-  coveredByYou: 'You picked these up for me',
-  balance: (net: number) => net > 0 ? 'To send my way' : net < 0 ? 'Coming your way' : 'All square!',
+  coveredByMe: 'What I paid',
+  coveredByYou: 'What you paid',
+  balance: (net: number) => net > 0 ? 'to me' : net < 0 ? 'to you' : 'settled',
 };
+
+export const demoSharingNote = 'Demo bills open on this site. The personal app shares each bill on a separate, read-only site with no access to the private ledger.';

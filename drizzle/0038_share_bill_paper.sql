@@ -1,0 +1,1 @@
+ALTER TABLE "share_links" ADD COLUMN "paper" text DEFAULT 'classic' NOT NULL;

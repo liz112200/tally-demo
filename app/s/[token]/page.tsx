@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { guestCopy, readBillDesign } from '@/lib/bill-design';
+import { guestCopy, demoSharingNote } from '@/lib/bill-design';
 import { isDemoMode } from '@/lib/demo-mode';
 import { notFound } from 'next/navigation';
 import { getShareLinkByToken, type ShareSnapshotLine } from '@/db/queries';
@@ -104,10 +104,8 @@ function Section({
 
 export default async function SharedListPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ token: string }>;
-  searchParams: Promise<{ paper?: string | string[] }>;
 }) {
   const { token } = await params;
   const snapshot = await getShareLinkByToken(token);
@@ -115,35 +113,36 @@ export default async function SharedListPage({
 
   const { personName, owed, owing, owedCents, owingCents, netCents } = snapshot;
   const demo = isDemoMode();
-  const design = demo ? readBillDesign((await searchParams).paper) : 'classic';
   const itemCount = owed.length + owing.length;
 
   return (
-    <main className={demo ? "shared-check" : "mx-auto max-w-lg px-5 py-10"}>
-      {demo && design !== 'classic' && <div className="bill-trim" data-paper={design} aria-hidden="true" />}
+    <main data-paper={demo ? snapshot.paper : undefined} className={demo ? "shared-check bill-paper" : "mx-auto max-w-lg px-5 py-10"}>
       <header className="mb-5">
         {demo && <span className="guest-stamp">Guest check</span>}
         <h1 className="text-lg font-semibold tracking-tight">
           {demo ? guestCopy.heading(personName) : `Where we’re at, ${personName}`}
         </h1>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          {itemCount} item{itemCount === 1 ? '' : 's'} · shared{' '}
+          {itemCount} {demo && 'open '}item{itemCount === 1 ? '' : 's'} · shared{' '}
           {snapshot.createdAt.toISOString().slice(0, 10)}
         </p>
       </header>
 
       {/* The net leads, because it is the number the reader can act on. */}
       <div className="mb-5 rounded-xl border bg-card px-4 py-3">
-        <p className={demo ? "text-sm text-muted-foreground" : "text-[11px] uppercase tracking-wider text-muted-foreground"}>
-          {demo ? guestCopy.balance(netCents) : netCents > 0
-            ? 'You owe'
-            : netCents < 0
-              ? 'You are owed'
-              : 'Settled up'}
-        </p>
-        <p className="font-mono text-3xl">
-          {formatUSD(toCents(Math.abs(netCents)))}
-        </p>
+        {demo ? (
+          <p className="flex flex-wrap items-baseline gap-x-2 text-sm">
+            Total: <strong className="font-mono text-3xl">{formatUSD(toCents(Math.abs(netCents)))}</strong>
+            <span className="text-muted-foreground">{guestCopy.balance(netCents)}</span>
+          </p>
+        ) : (
+          <>
+            <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
+              {netCents > 0 ? 'You owe' : netCents < 0 ? 'You are owed' : 'Settled up'}
+            </p>
+            <p className="font-mono text-3xl">{formatUSD(toCents(Math.abs(netCents)))}</p>
+          </>
+        )}
         {!demo && owed.length > 0 && owing.length > 0 && (
           <p className="mt-1 text-xs text-muted-foreground">
             {formatUSD(toCents(owedCents))} owed less{' '}
@@ -166,7 +165,7 @@ export default async function SharedListPage({
       />
 
       <p className="mt-5 text-xs text-muted-foreground">
-        {demo ? 'A little keepsake of our tab on the day I shared it. Later payments won’t appear here.' :
+        {demo ? demoSharingNote :
           'A snapshot of the list as it was shared. It does not update as payments are made.'}
       </p>
     </main>

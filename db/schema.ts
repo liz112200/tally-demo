@@ -599,6 +599,7 @@ export const shareLinks = pgTable('share_links', {
   // URL path segment. Random, not derived from any row id, so links cannot
   // be enumerated or guessed from a person id.
   token: text('token').notNull().unique(),
+  paper: text('paper').notNull().default('classic'),
   // Names are copied, not referenced: the person may later be renamed or
   // soft-deleted, and the snapshot should still read as it was sent.
   personName: text('person_name').notNull(),

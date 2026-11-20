@@ -1,3 +1,4 @@
+import { readBillDesign, type BillDesign } from '@/lib/bill-design';
 import 'server-only';
 import {
   and,
@@ -2157,6 +2158,7 @@ export type ShareSnapshotLine = {
 };
 
 export type ShareLinkView = {
+  paper: BillDesign;
   token: string;
   personName: string;
   groupedByCategory: boolean;
@@ -2184,6 +2186,7 @@ function generateShareToken(): string {
 // than taken from the caller so the figure on the page always matches the
 // lines beside it.
 export async function insertShareLink(input: {
+  paper?: BillDesign;
   personName: string;
   groupedByCategory: boolean;
   owed: ShareSnapshotLine[];
@@ -2193,6 +2196,7 @@ export async function insertShareLink(input: {
   const sum = (ls: ShareSnapshotLine[]) =>
     ls.reduce((acc, l) => acc + l.outstandingCents, 0);
   await db.insert(shareLinks).values({
+    paper: input.paper,
     token,
     personName: input.personName,
     // Vestigial: a snapshot now carries both sides. Written as the dominant
@@ -2219,6 +2223,7 @@ export async function getShareLinkByToken(
   if (!row) return null;
   return {
     token: row.token,
+    paper: readBillDesign(row.paper),
     personName: row.personName,
     groupedByCategory: row.groupedByCategory,
     createdAt: row.createdAt,

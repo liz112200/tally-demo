@@ -1,3 +1,4 @@
+import { billDesigns, type BillDesign } from '@/lib/bill-design';
 import { z } from 'zod';
 import { tryParseDollars } from '@/lib/money';
 import type { DuplicateKind } from '@/lib/import-dedup';
@@ -463,6 +464,7 @@ export const shareLineSchema = z.object({
 // owes, while omitting what they are owed back, overstates the debt.
 export const shareLinkSchema = z
   .object({
+    paper: z.enum(Object.keys(billDesigns) as [BillDesign, ...BillDesign[]]).optional(),
     personName: z.string().min(1).max(120),
     groupedByCategory: z.boolean(),
     owed: z.array(shareLineSchema).max(SHARE_LINES_MAX),
