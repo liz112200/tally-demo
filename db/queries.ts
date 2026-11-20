@@ -2233,6 +2233,35 @@ export async function insertShareLink(input: {
   return { token };
 }
 
+// Owner-facing history uses the values captured when each link was created.
+export async function getSharedBillHistory(beforeId?: string) {
+  const pageSize = 20;
+  const rows = await db.select({
+    id: shareLinks.id,
+    token: shareLinks.token,
+    personName: shareLinks.personName,
+    paper: shareLinks.paper,
+    createdAt: shareLinks.createdAt,
+    revokedAt: shareLinks.revokedAt,
+    netCents: sql<number>`${shareLinks.totalCents} - ${shareLinks.owingCents}`,
+  }).from(shareLinks)
+    .where(beforeId ? sql`(${shareLinks.createdAt}, ${shareLinks.id}) <
+      (select created_at, id from share_links where id = ${beforeId})` : undefined)
+    .orderBy(desc(shareLinks.createdAt), desc(shareLinks.id))
+    .limit(pageSize + 1);
+  return {
+    bills: rows.slice(0, pageSize),
+    olderThan: rows.length > pageSize ? rows[pageSize - 1].id : null,
+  };
+}
+
+export async function revokeSharedBill(id: string) {
+  const [row] = await db.update(shareLinks).set({ revokedAt: sql`now()` })
+    .where(and(eq(shareLinks.id, id), isNull(shareLinks.revokedAt)))
+    .returning({ token: shareLinks.token });
+  return row;
+}
+
 // The public read path. A revoked link reads as missing, so the page can
 // treat null as "not found" without a second case.
 export async function getShareLinkByToken(

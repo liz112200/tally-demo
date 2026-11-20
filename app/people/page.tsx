@@ -1,3 +1,6 @@
+import Link from 'next/link';
+import { History } from 'lucide-react';
+import { isDemoMode } from '@/lib/demo-mode';
 import { Suspense } from 'react';
 import {
   getAllPersons,
@@ -186,7 +189,14 @@ export default async function PeoplePage() {
   return (
     <main className="mx-auto max-w-3xl px-6 py-8">
       <div className="mb-5">
-        <h1 className="text-xl font-semibold tracking-tight">People</h1>
+        <div className="flex flex-wrap items-baseline justify-between gap-3">
+          <h1 className="text-xl font-semibold tracking-tight">People</h1>
+          {isDemoMode() && (
+            <Link href="/people/shared-bills" className="inline-flex items-center gap-1.5 text-sm underline underline-offset-4">
+              <History size={15} aria-hidden /> Shared bill history
+            </Link>
+          )}
+        </div>
         <p className="mt-0.5 text-sm text-muted-foreground">
           {rows.length === 0
             ? 'Just you so far'
