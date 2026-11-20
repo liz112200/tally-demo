@@ -79,7 +79,15 @@ test('demo palettes change the drawer and survive reload and light mode', async 
   const background = () => page.locator('body').evaluate((el) => getComputedStyle(el).backgroundColor);
   expect(await background()).toBe('rgb(23, 23, 25)');
   await page.getByRole('button', { name: 'Toggle theme' }).click();
-  expect(await background()).toBe('rgb(243, 245, 245)');
+  await page.reload();
+  expect(await background()).toBe('rgb(246, 246, 246)');
+  await expect(page.locator('.ledger-nav')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+  await expect(page.locator('.ledger-nav nav [aria-current]')).toHaveCSS('background-color', 'rgb(231, 231, 231)');
+  await page.goto('/expenses/receipt/sample-dinner');
+  const lightDrawer = page.getByRole('dialog', { name: 'Dinner at Alba' });
+  await expect(lightDrawer).toHaveCSS('border-top', '1px solid rgb(220, 220, 220)');
+  await expect(lightDrawer.getByRole('button', { name: 'Save split' })).toHaveCSS('background-color', 'rgb(41, 41, 41)');
+  await lightDrawer.getByRole('button', { name: 'Close', exact: true }).click();
   await page.getByRole('button', { name: 'Toggle theme' }).click();
   await page.goto('/expenses/receipt/sample-dinner');
   const drawer = page.getByRole('dialog', { name: 'Dinner at Alba' });

@@ -1,26 +1,27 @@
 /* The Ledger review runs on the demo deployment. Keep its palette on the
    document so portaled menus, dialogs and tooltips share the same tokens. */
 html[data-demo] {
-  --background: #f3f5f5;
-  --foreground: #1b2831;
+  color-scheme: light;
+  --background: #f6f6f6;
+  --foreground: #202020;
   --card: #fff;
   --popover: #fff;
-  --primary: #215b52;
+  --primary: #292929;
   --primary-foreground: #fff;
-  --muted: #eaf0ee;
-  --muted-foreground: #53646b;
-  --accent: #e0eee9;
-  --accent-foreground: #194b44;
+  --muted: #efefef;
+  --muted-foreground: #5e5e5e;
+  --accent: #e7e7e7;
+  --accent-foreground: #202020;
   --secondary: var(--muted);
   --secondary-foreground: var(--foreground);
   --card-foreground: var(--foreground);
   --popover-foreground: var(--foreground);
-  --border: #d2dcda;
-  --input: #b9c8c4;
+  --border: #dcdcdc;
+  --input: #ababab;
   --ring: var(--primary);
   --chart-1: var(--primary);
   --radius: .55rem;
-  --ledger-rail: #1d3533;
+  --ledger-rail: #fff;
 }
 html.dark[data-demo], .palette-preview {
   color-scheme: dark;
@@ -119,20 +120,20 @@ html.dark[data-demo][data-dark-palette="cinder"], .palette-preview[data-dark-pal
 .palette-preview em { position: absolute; inset: auto 16% 31% auto; width: 20%; height: .35rem; border-radius: .2rem; background: var(--primary) }
 .ledger-nav {
   background: var(--ledger-rail);
-  color: #f0f7f1;
+  color: var(--foreground);
   display: flex;
   align-items: center;
   gap: .4rem;
   padding: .4rem .6rem;
 }
 .ledger-brand { display: inline-flex; align-items: center; gap: .6rem; font-weight: 650; letter-spacing: -.045em; font-size: 1.45rem }
-.ledger-brand svg { background: #a4e5d2; color: #214d41; width: 2rem; height: 2rem; padding: .35rem; border-radius: .5rem }
+.ledger-brand svg { background: var(--primary); color: var(--primary-foreground); width: 2rem; height: 2rem; padding: .35rem; border-radius: .5rem }
 .ledger-nav nav { display: flex; gap: .15rem; align-items: center }
-.ledger-nav nav a { display: flex; align-items: center; justify-content: center; gap: .7rem; border-radius: .45rem; font-size: .85rem; font-weight: 500; color: #ccdad5; padding: .45rem .7rem }
-.ledger-nav nav a[aria-current], .ledger-nav nav a:hover { background: #34534f; color: #fff }
+.ledger-nav nav a { display: flex; align-items: center; justify-content: center; gap: .7rem; border-radius: .45rem; font-size: .85rem; font-weight: 500; color: var(--muted-foreground); padding: .45rem .7rem }
+.ledger-nav nav a[aria-current], .ledger-nav nav a:hover { background: var(--accent); color: var(--accent-foreground) }
 .ledger-nav nav svg { width: 1rem; height: 1rem }
 .ledger-identity { display: flex; align-items: center; gap: .6rem; font-size: .85rem }
-.ledger-identity > span { display: grid; place-items: center; width: 1.8rem; height: 1.8rem; border-radius: 50%; background: #31514a; color: #cee9db }
+.ledger-identity > span { display: grid; place-items: center; width: 1.8rem; height: 1.8rem; border-radius: 50%; background: var(--accent); color: var(--accent-foreground) }
 .ledger-identity button { margin-left: auto }
 html[data-demo] main h1 { font-size: clamp(1.65rem, 3.5vw, 2.65rem); letter-spacing: -.05em; line-height: 1.12; font-weight: 625; overflow-wrap: anywhere }
 html[data-demo] main :is(a,button).text-blue-700 { color: var(--primary) }
@@ -148,7 +149,7 @@ html[data-demo] .ledger-card dl { background: var(--background); padding: .6rem 
 }
 .ledger-drawer [data-slot="dialog-header"] { padding: .55rem 1rem .95rem 0; border-bottom: 1px solid var(--border) }
 .ledger-drawer [data-slot="dialog-title"] { font-size: 1.45rem; letter-spacing: -.04em; line-height: 1.15; overflow-wrap: anywhere }
-[data-slot="dialog-portal"]:has(.ledger-drawer) [data-slot="dialog-overlay"] { backdrop-filter: none; background: #101c1b24 }
+[data-slot="dialog-portal"]:has(.ledger-drawer) [data-slot="dialog-overlay"] { backdrop-filter: none; background: rgb(0 0 0 / 14%) }
 .ledger-receipt { display: grid; gap: 1rem; min-width: 0 }
 .ledger-receipt > section { min-width: 0 }
 .ledger-drawer .ledger-method { min-height: 2.5rem; width: 100%; border: 1px solid var(--input); border-radius: .4rem; background: var(--card); color: var(--foreground); padding: .4rem .6rem }
@@ -158,7 +159,7 @@ html[data-demo] button[aria-label^="Split "] { opacity: 1 }
   .ledger-nav { position: fixed; inset: 0 auto 0 0; z-index: 40; width: 11rem; flex-direction: column; align-items: stretch; padding: 1.55rem .85rem; gap: 2rem }
   .ledger-nav nav { flex-direction: column; align-items: stretch; gap: .25rem }
   .ledger-nav nav a { justify-content: flex-start; padding: .65rem .75rem }
-  .ledger-identity { margin-top: auto; padding-top: 1rem; border-top: 1px solid #41615b }
+  .ledger-identity { margin-top: auto; padding-top: 1rem; border-top: 1px solid var(--border) }
   html[data-demo] th.sticky.top-12 { top: 0 }
 }
 @media (max-width: 849px) {
@@ -195,12 +196,21 @@ html[data-demo] main:has(> h1) { width: 100% }
   html[data-demo] .ledger-table:not([data-full]) .ledger-row-date { display: block; font-size: .7rem; color: var(--muted-foreground) }
 }
 
-html.dark[data-demo] .ledger-nav { color: var(--foreground) }
-html.dark[data-demo] .ledger-brand svg { color: var(--primary-foreground); background: var(--primary) }
-html.dark[data-demo] .ledger-nav nav a { color: var(--muted-foreground) }
-html.dark[data-demo] .ledger-nav nav a:is([aria-current], :hover),
-html.dark[data-demo] .ledger-identity > span { background: var(--accent); color: var(--accent-foreground) }
-html.dark[data-demo] .ledger-identity { border-color: var(--border) }
+html[data-demo]:not(.dark) {
+  & .ledger-drawer[data-slot="dialog-content"] {
+    border-top: 1px solid var(--border);
+    box-shadow: -6px 0 20px rgb(0 0 0 / 10%);
+  }
+  @media (width > 28rem) {
+    & .ledger-drawer[data-slot="dialog-content"] { border-left: 1px solid var(--border) }
+  }
+  @media (min-width: 850px) {
+    & .ledger-nav { border-right: 1px solid var(--border) }
+  }
+  @media (max-width: 849px) {
+    & .ledger-nav { border-bottom: 1px solid var(--border) }
+  }
+}
 html.dark[data-demo] [data-slot="dialog-portal"]:has(.ledger-drawer) [data-slot="dialog-overlay"] { background: #0004 }
 
 html.dark[data-demo]:is(:not([data-dark-palette]), [data-dark-palette="carbon"]) {
