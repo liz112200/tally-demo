@@ -29,4 +29,4 @@ export const guestCopy = {
   balance: (net: number) => net > 0 ? 'to me' : net < 0 ? 'to you' : 'settled',
 };
 
-export const demoSharingNote = 'Demo bills open here on tally-demo-one.vercel.app. Bills from the personal app open on a separate site, share-snowy-seven.vercel.app. Each link shows only the shared bill.';
+export const demoSharingNote = 'Demo bills open on tally-demo-one.vercel.app, the same site as the rest of the demo. Bills shared from the personal app open on a separate site. Recipients can view only the shared bill. The link gives them no access to the personal app or its other financial data.';

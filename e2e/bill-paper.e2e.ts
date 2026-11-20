@@ -1,10 +1,11 @@
-import { billDesigns } from '../lib/bill-design';
+import { billDesigns, demoSharingNote } from '../lib/bill-design';
 import { expect, test } from '@playwright/test';
 
 test('the recipient opens the paper chosen in People in light and dark', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await page.goto('/people');
   await page.getByRole('button', { name: /Alex/, expanded: false }).click();
+  await expect(page.getByText(demoSharingNote, { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Bill style' }).click();
   const picker = page.getByRole('dialog', { name: 'Choose bill paper' });
   await expect(picker.getByText('Shared bill', { exact: true })).toBeVisible();
@@ -28,7 +29,7 @@ test('the recipient opens the paper chosen in People in light and dark', async (
     await expect(page.getByRole('heading', { name: 'Our tab, Alex' })).toBeVisible();
     await expect(page.locator('.shared-check')).toHaveAttribute('data-paper', 'vinyl');
     await expect(page.getByText('Shared bill', { exact: true })).toBeVisible();
-    await expect(page.locator('.shared-check')).toContainText('share-snowy-seven.vercel.app');
+    await expect(page.locator('.shared-check')).toContainText(demoSharingNote);
     await expect(page.locator('.shared-check section').first()).toContainText(/What (I|you) paid/);
   }
   await page.goto(url.pathname + '?paper=flowers');
