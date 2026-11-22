@@ -60,6 +60,7 @@ export type PickerStart = {
   // Edit: the settlement's own allocations, and its cash when that cash
   // carried leftover credit (otherwise the payment follows the selection).
   selection: Selection | null;
+  pickedShares?: string[];
   pinnedCashText: string | null;
 };
 
@@ -152,6 +153,14 @@ function AllocatorBody({
   const [selection, setSelection] = useState<Selection>(() =>
     initialSelection(start, incoming, outgoing),
   );
+  const [picked, setPicked] = useState(() => new Set(start.pickedShares));
+  function markPicked(rows: readonly AllocatorShare[]) {
+    setPicked(before => new Set([...before, ...rows.map(row => row.shareId)]));
+  }
+  function selectRows(rows: readonly AllocatorShare[], include: boolean) {
+    if (include) markPicked(rows);
+    setSelection(sel => setShares(sel, rows, include));
+  }
   const [paymentPinned, setPaymentPinned] = useState(pinnedStart !== null);
   const [paymentText, setPaymentText] = useState(pinnedStart ?? '');
   const [date, setDate] = useState(start.date);
@@ -202,7 +211,7 @@ function AllocatorBody({
   const toggleRow = (share: AllocatorShare, shift: boolean) => {
     const select = !(share.shareId in selection);
     const run = shift ? rangeBetween(visible, anchorRef.current, share.shareId) : [share];
-    setSelection((sel) => setShares(sel, run, select));
+    selectRows(run, select);
     anchorRef.current = share.shareId;
   };
 
@@ -210,7 +219,7 @@ function AllocatorBody({
   // clears, anything less fills the whole group.
   const toggleGroup = (list: readonly AllocatorShare[]) => {
     const full = groupState(selection, list) === 'all';
-    setSelection((sel) => setShares(sel, list, !full));
+    selectRows(list, !full);
   };
 
   // Arrow keys walk the row checkboxes; Space (native) toggles.
@@ -255,6 +264,7 @@ function AllocatorBody({
     setDrafts(({ [share.shareId]: _, ...rest }) => rest);
     const cents = text.trim() === '' ? 0 : parseApplied(text, share.outstandingCents);
     if (cents === null) return;
+    markPicked([share]);
     setSelection((sel) => {
       const next: Record<string, number> = { ...sel };
       if (cents > 0) next[share.shareId] = cents;
@@ -312,6 +322,7 @@ function AllocatorBody({
       <input type="hidden" name="personId" value={personId} />
       <input type="hidden" name="cash" value={paymentPinned ? paymentText : ''} />
       <input type="hidden" name="fallbackDirection" value={start.direction} />
+      <input type="hidden" name="pickedShares" value={JSON.stringify([...picked].filter(id => id in selection))} />
       <input type="hidden" name="incoming" value={JSON.stringify(incomingPayload)} />
       <input type="hidden" name="outgoing" value={JSON.stringify(outgoingPayload)} />
       <input type="hidden" name="replaceId" value={start.replaceId ?? ''} />
@@ -444,7 +455,7 @@ function AllocatorBody({
             size="sm"
             className="h-7 text-xs"
             disabled={ranged.length === 0}
-            onClick={() => setSelection((sel) => setShares(sel, ranged, true))}
+            onClick={() => selectRows(ranged, true)}
           >
             {ranged.length > 0
               ? `Select ${ranged.length}${twoSided ? '' : ` · ${formatUSD(toCents(totalOutstanding(ranged)))}`}`

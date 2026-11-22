@@ -96,6 +96,7 @@ export default async function PeoplePage() {
         shareId: a.splitShareId,
         direction: s.direction,
         offset: s.isOffset,
+        picked: a.picked,
         description: a.shareDescription,
         date: a.shareDate,
         amountCents: a.amountCents,

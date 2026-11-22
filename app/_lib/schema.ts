@@ -361,6 +361,7 @@ export const settlementGroupSchema = z.object({
       return cents !== null && cents >= 0;
     }, 'Enter a dollar amount'),
   fallbackDirection: z.enum(SETTLEMENT_DIRECTIONS).default('incoming'),
+  pickedShares: z.array(z.string().uuid()).optional(),
   incoming: settlementAllocationsInputSchema,
   outgoing: settlementAllocationsInputSchema,
   replaceId: z.string().uuid().nullable(),

@@ -1,6 +1,6 @@
 import { readBillDesign } from '@shared/bill-design';
-import type { BillSnapshot, ShareSnapshotLine } from '@shared/bill-snapshot';
-import { and, eq, isNull } from 'drizzle-orm';
+import { availablePreviousBalances, type BillSnapshot, type PreviousBalance, type ShareSnapshotLine } from '@shared/bill-snapshot';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import {
@@ -20,6 +20,7 @@ import {
 // parent app; migrations are owned there and never run from this project.
 const shareLinks = pgTable('share_links', {
   id: uuid('id').primaryKey(),
+  previousBalances: jsonb('previous_balances').$type<PreviousBalance[]>(),
   paper: text('paper').notNull().default('classic'),
   token: text('token').notNull(),
   personName: text('person_name').notNull(),
@@ -46,15 +47,20 @@ export async function getSnapshot(token: string): Promise<BillSnapshot | null> {
     .from(shareLinks)
     .where(and(eq(shareLinks.token, token), isNull(shareLinks.revokedAt)));
   if (!row) return null;
+  const previousBalances = await availablePreviousBalances(row.previousBalances, tokens =>
+    db.select({ token: shareLinks.token }).from(shareLinks)
+      .where(and(inArray(shareLinks.token, tokens), isNull(shareLinks.revokedAt))));
+  const publicLines = (lines: ShareSnapshotLine[]) => previousBalances?.length ? lines.filter(line => !line.carried) : lines;
   return {
+    previousBalances,
     paper: readBillDesign(row.paper),
     personName: row.personName,
     groupedByCategory: row.groupedByCategory,
     createdAt: row.createdAt,
     owedCents: row.totalCents,
-    owed: row.lines as ShareSnapshotLine[],
+    owed: publicLines(row.lines as ShareSnapshotLine[]),
     owingCents: row.owingCents,
-    owing: row.owingLines as ShareSnapshotLine[],
+    owing: publicLines(row.owingLines as ShareSnapshotLine[]),
     netCents: row.totalCents - row.owingCents,
   };
 }

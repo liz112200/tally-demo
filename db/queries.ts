@@ -1,4 +1,4 @@
-import type { BillSnapshot, ShareSnapshotLine } from '../lib/bill-snapshot';
+import { availablePreviousBalances, type BillSnapshot, type ShareSnapshotLine } from '../lib/bill-snapshot';
 import { readBillDesign, type BillDesign } from '@/lib/bill-design';
 import 'server-only';
 import {
@@ -1230,6 +1230,7 @@ async function outstandingSharesFor(
 // the displayed allocations agree with the settlement's effective unallocated
 // amount). Ordered by the share's effective date.
 export type SettlementAllocationDetailRow = {
+  picked: boolean;
   settlementId: string;
   splitShareId: string;
   amountCents: number;
@@ -1244,7 +1245,7 @@ export async function getSettlementAllocationDetails(): Promise<
     SELECT
       sa.settlement_id,
       sa.split_share_id,
-      sa.amount_cents,
+      sa.amount_cents, sa.picked,
       COALESCE(t.date, sp.date)::text AS share_date,
       COALESCE(t.description_raw, sp.description, '') AS share_description
     FROM settlement_allocations sa
@@ -1258,6 +1259,7 @@ export async function getSettlementAllocationDetails(): Promise<
     settlementId: r.settlement_id as string,
     splitShareId: r.split_share_id as string,
     amountCents: Number(r.amount_cents),
+    picked: r.picked === true,
     shareDate: r.share_date as string,
     shareDescription: r.share_description as string,
   }));
@@ -1312,6 +1314,7 @@ export async function insertSettlementWithAllocations(input: {
       await tx.insert(settlementAllocations).values(
         allocations.map((a) => ({
           settlementId: settlement.id,
+          picked: Boolean(input.manualAllocations?.length),
           splitShareId: a.splitShareId,
           amountCents: a.amountCents,
         })),
@@ -1359,6 +1362,7 @@ export async function recordSettlementGroup(input: {
   pinnedCashCents: number | null;
   fallbackDirection: 'incoming' | 'outgoing';
   replaceId: string | null;
+  pickedShares?: string[];
 }): Promise<void> {
   await db.transaction(async (tx) => {
     if (input.replaceId) {
@@ -1407,6 +1411,7 @@ export async function recordSettlementGroup(input: {
     }
     const { cash, offset } = result.plan;
     const groupId = offset ? crypto.randomUUID() : null;
+    const picked = new Set(input.pickedShares);
 
     const insert = async (
       direction: 'incoming' | 'outgoing',
@@ -1430,6 +1435,7 @@ export async function recordSettlementGroup(input: {
         await tx.insert(settlementAllocations).values(
           allocations.map((a) => ({
             settlementId: row.id,
+            picked: picked.has(a.shareId),
             splitShareId: a.shareId,
             amountCents: a.amountCents,
           })),
@@ -2214,6 +2220,7 @@ export async function insertShareLink(input: {
   groupedByCategory: boolean;
   owed: ShareSnapshotLine[];
   owing: ShareSnapshotLine[];
+  previousBalances?: BillSnapshot['previousBalances'];
   review?: { personId: string; sources: import('../lib/bill-review').ReviewSource[]; requestId: string };
 }, connection: Tx | typeof db = db): Promise<{ token: string }> {
   const token = generateShareToken();
@@ -2223,6 +2230,7 @@ export async function insertShareLink(input: {
     id: input.review?.requestId,
     reviewPersonId: input.review?.personId,
     reviewSources: input.review?.sources,
+    previousBalances: input.previousBalances,
     paper: input.paper,
     token,
     personName: input.personName,
@@ -2277,16 +2285,21 @@ export async function getShareLinkByToken(
     .from(shareLinks)
     .where(and(eq(shareLinks.token, token), isNull(shareLinks.revokedAt)));
   if (!row) return null;
+  const previousBalances = await availablePreviousBalances(row.previousBalances, tokens =>
+    db.select({ token: shareLinks.token }).from(shareLinks)
+      .where(and(inArray(shareLinks.token, tokens), isNull(shareLinks.revokedAt))));
+  const publicLines = (lines: ShareSnapshotLine[]) => previousBalances?.length ? lines.filter(line => !line.carried) : lines;
   return {
+    previousBalances,
     token: row.token,
     paper: readBillDesign(row.paper),
     personName: row.personName,
     groupedByCategory: row.groupedByCategory,
     createdAt: row.createdAt,
     owedCents: row.totalCents,
-    owed: row.lines as ShareSnapshotLine[],
+    owed: publicLines(row.lines as ShareSnapshotLine[]),
     owingCents: row.owingCents,
-    owing: row.owingLines as ShareSnapshotLine[],
+    owing: publicLines(row.owingLines as ShareSnapshotLine[]),
     netCents: row.totalCents - row.owingCents,
   };
 }

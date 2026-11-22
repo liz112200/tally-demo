@@ -1,5 +1,5 @@
 import { guestCopy } from '../../../lib/bill-design';
-import type { BillSnapshot, ShareSnapshotLine } from '../../../lib/bill-snapshot';
+import type { BillSnapshot, PreviousBalance, ShareSnapshotLine } from '../../../lib/bill-snapshot';
 import { formatPayableUSD as formatUSD, toCents } from '../../../lib/money';
 
 function monthDay(date: string): string {
@@ -14,6 +14,7 @@ function LineRow({ line }: { line: ShareSnapshotLine }) {
         {monthDay(line.date)}
       </span>
       <span className="min-w-0 flex-1 break-words">{line.description}
+        {line.pickedPayment !== undefined && <small className="block text-xs text-muted-foreground">{formatUSD(toCents(line.pickedPayment))} paid toward this item</small>}
         {line.carried && <small className="block text-xs text-muted-foreground">
           From {monthDay(line.carried.date)} · {formatUSD(toCents(line.carried.previous))} previously
           {line.carried.cash > 0 && <> · {formatUSD(toCents(line.carried.cash))} paid since</>}
@@ -95,9 +96,40 @@ function Section({
   );
 }
 
+const money = (n: number) => formatUSD(toCents(n));
+const sum = (lines: ShareSnapshotLine[]) => lines.reduce((total, line) => total + line.outstandingCents, 0);
+
+function PreviousBillBalance({ group }: { group: PreviousBalance }) {
+  const { previous, payments, adjustments, omitted, included, assigned } = group;
+  return <section className="mb-4">
+    <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+      <h3 className="font-medium">{monthDay(group.date)} · {group.side === 'owed' ? guestCopy.coveredByMe : guestCopy.coveredByYou}</h3>
+      {group.token && <a className="text-xs underline underline-offset-2" href={'/s/' + encodeURIComponent(group.token)}>View previous bill</a>}
+    </div>
+    <dl className="space-y-1 text-sm">
+      <div className="flex justify-between gap-3"><dt>{group.partialSource ? 'Earlier entries' : 'Previous balance'}</dt><dd className="font-mono">{money(previous)}</dd></div>
+      {payments !== 0 && <div className="flex justify-between gap-3"><dt>{payments < 0 ? 'Payment reversed' : 'Payment received'}</dt><dd className="font-mono">{money(-payments)}</dd></div>}
+      {adjustments !== 0 && <div className="flex justify-between gap-3"><dt>Balance adjustments</dt><dd className="font-mono">{money(adjustments)}</dd></div>}
+      {omitted > 0 && <div className="flex justify-between gap-3"><dt>Left off this bill</dt><dd className="font-mono">{money(-omitted)}</dd></div>}
+      <div className="mt-2 flex justify-between gap-3 border-t pt-2 font-medium"><dt>Carried forward</dt><dd className="font-mono">{money(included)}</dd></div>
+    </dl>
+    {assigned.length > 0 && <div className="mt-3 text-sm">
+      <h4 className="mb-1 text-xs font-medium text-muted-foreground">Item-specific payments</h4>
+      <ul className="divide-y">{assigned.map((a, i) => <li key={i} className="flex flex-wrap items-baseline justify-between gap-x-3 py-1">
+        <span>{a.description} <small className="text-muted-foreground">{monthDay(a.date)}</small></span>
+        <span>{money(a.paid)} paid{a.remaining !== undefined && (a.remaining > 0 ? ' · ' + money(a.remaining) + ' left' : ' · paid in full')}</span>
+      </li>)}</ul>
+    </div>}
+  </section>;
+}
+
 export function SharedBill({ snapshot, note, embedded = false }: { snapshot: BillSnapshot; note?: string; embedded?: boolean }) {
   const { personName, owed, owing, owedCents, owingCents, netCents } = snapshot;
-  const itemCount = owed.length + owing.length;
+  const balances = snapshot.previousBalances ?? [];
+  const hasPrevious = balances.length > 0;
+  const newOwed = hasPrevious ? owed.filter(line => !line.carried) : owed;
+  const newOwing = hasPrevious ? owing.filter(line => !line.carried) : owing;
+  const itemCount = newOwed.length + newOwing.length;
   const Container = embedded ? 'article' : 'main';
   const Title = embedded ? 'h3' : 'h1';
 
@@ -109,7 +141,7 @@ export function SharedBill({ snapshot, note, embedded = false }: { snapshot: Bil
           {guestCopy.heading(personName)}
         </Title>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          {itemCount} open item{itemCount === 1 ? '' : 's'} · shared{' '}
+          {hasPrevious ? 'Shared ' : `${itemCount} open item${itemCount === 1 ? '' : 's'} · shared `}
           {snapshot.createdAt.toISOString().slice(0, 10)}
         </p>
       </header>
@@ -120,7 +152,7 @@ export function SharedBill({ snapshot, note, embedded = false }: { snapshot: Bil
           Total: <strong className="font-mono text-3xl">{formatUSD(toCents(Math.abs(netCents)))}</strong>
           <span className="text-muted-foreground">{guestCopy.balance(netCents)}</span>
         </p>
-        {[...owed,...owing].some(line => line.carried) && <div className="mt-2 border-t pt-2 text-xs text-muted-foreground">
+        {!hasPrevious && [...owed,...owing].some(line => line.carried) && <div className="mt-2 border-t pt-2 text-xs text-muted-foreground">
           {[true, false].map(carried => {
             const sum = (lines: ShareSnapshotLine[]) => lines.filter(l => Boolean(l.carried) === carried).reduce((s,l) => s + l.outstandingCents, 0);
             const amount = sum(owed) - sum(owing);
@@ -129,19 +161,24 @@ export function SharedBill({ snapshot, note, embedded = false }: { snapshot: Bil
         </div>}
       </div>
 
+      {hasPrevious && itemCount > 0 && <h2 className="mb-3 font-medium">New entries</h2>}
       <Section
         title={guestCopy.coveredByMe}
-        totalCents={owedCents}
-        lines={owed}
+        totalCents={hasPrevious ? sum(newOwed) : owedCents}
+        lines={newOwed}
         grouped={snapshot.groupedByCategory}
       />
       <Section
         title={guestCopy.coveredByYou}
-        totalCents={owingCents}
-        lines={owing}
+        totalCents={hasPrevious ? sum(newOwing) : owingCents}
+        lines={newOwing}
         grouped={snapshot.groupedByCategory}
       />
 
+      {hasPrevious && <div className="previous-bills mt-5 pt-4">
+        <h2 className="mb-3 font-medium">From earlier bills</h2>
+        {balances.map((group, index) => <PreviousBillBalance key={index} group={group} />)}
+      </div>}
       <p className="mt-5 text-xs text-muted-foreground">
         {note ?? 'Amounts are from the day this bill was shared.'}
       </p>

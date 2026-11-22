@@ -24,3 +24,28 @@ test('tracks prior shares across bills, partial payments, credits and duplicate 
   const legacy = compareBills({...data, bills:[{id:'legacy', date:'2026-01-10', tracked:false, items:[old]}]}, 'legacy');
   expect(legacy.fresh).toHaveLength(3);
 });
+
+test('automatic payments reconcile the whole earlier balance, including fully cleared shares', () => {
+  const first = item('first', 80000);
+  const second = item('second', 220000);
+  const data: BillReview = { personId: 'a', name: 'Alex', items: [
+    { ...first, outstandingCents: 0, cash: 80000, allocated: 80000 },
+    { ...second, outstandingCents: 200000, cash: 20000, allocated: 20000 }, item('new',40000),
+  ], bills: [{ id:'prior', token:'publicToken', date:'2026-11-01', tracked:true,
+    items:[{...first, source:first},{...second, source:second}] }] };
+  const draft = () => composeBill(data, compareBills(data, 'prior'), new Set(['second','new']), 'classic', false, new Date());
+  const group = () => draft().snapshot.previousBalances![0];
+  expect(draft().snapshot.netCents).toBe(240000);
+  expect(group()).toMatchObject({ previous:300000, payments:100000, included:200000, assigned:[], token:'publicToken' });
+  data.items[1].pickedCash = 20000;
+  expect(group().assigned).toEqual([{description:'Dinner', date:second.date, paid:20000, remaining:200000}]);
+  data.items[1].pickedCash = 5000;
+  expect(group().assigned[0]).toMatchObject({paid:5000, remaining:undefined});
+  data.items[0].pickedCash = 80000;
+  expect(group().assigned[0]).toMatchObject({paid:80000, remaining:0});
+  data.items[0].outstandingCents = 10000;
+  data.items[0].cash = 70000;
+  data.items[0].pickedCash = 70000;
+  expect(group()).toMatchObject({previous:300000, payments:90000, omitted:10000, included:200000});
+  expect(group().assigned).toHaveLength(1);
+});

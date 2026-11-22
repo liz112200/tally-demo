@@ -66,6 +66,7 @@ export type PersonSettlement = {
     shareId: string;
     direction: 'incoming' | 'outgoing';
     offset: boolean;
+    picked: boolean;
     description: string;
     date: string;
     amountCents: number;
@@ -948,6 +949,7 @@ function PersonLine({
         amountText: '',
         preselect: null,
         selection: Object.fromEntries(applied),
+        pickedShares: st.allocations.filter(a => a.picked).map(a => a.shareId),
         // Cash that exactly covered its shares follows the selection, so
         // adding the other side nets it down; cash that left credit is kept.
         pinnedCashText:

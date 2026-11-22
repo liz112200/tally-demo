@@ -12,12 +12,13 @@ export async function readBillReview(tx: Tx, personId: string) {
   const [person] = await tx.select({ name: persons.name, owner: persons.isOwner }).from(persons).where(eq(persons.id, personId));
   if (!person || person.owner) return null;
   const rows = await getDebtShares(tx, personId);
-  const paid = await tx.select({ id: allocations.splitShareId, cash: sql<number>`sum(${allocations.amountCents})`.mapWith(Number) })
+  const paid = await tx.select({ id: allocations.splitShareId, cash: sql<number>`sum(${allocations.amountCents})`.mapWith(Number),
+    pickedCash: sql<number>`coalesce(sum(${allocations.amountCents}) filter (where ${allocations.picked}), 0)`.mapWith(Number) })
     .from(allocations).innerJoin(settlements, eq(settlements.id, allocations.settlementId))
     .where(and(eq(settlements.personId, personId), eq(settlements.isOffset, false))).groupBy(allocations.splitShareId);
-  const cash = new Map(paid.map(row => [row.id, row.cash]));
+  const cash = new Map(paid.map(row => [row.id, row]));
   const bills = await tx.select({
-    id: shareLinks.id, date: shareLinks.createdAt, sources: shareLinks.reviewSources,
+    id: shareLinks.id, token: shareLinks.token, revoked: shareLinks.revokedAt, date: shareLinks.createdAt, sources: shareLinks.reviewSources,
     owed: shareLinks.lines, owing: shareLinks.owingLines,
   }).from(shareLinks).where(or(eq(shareLinks.reviewPersonId, personId),
     and(isNull(shareLinks.reviewPersonId), eq(shareLinks.personName, person.name))))
@@ -25,7 +26,7 @@ export async function readBillReview(tx: Tx, personId: string) {
   const data: BillReview = {
     personId, name: person.name,
     items: rows.reverse().map(row => ({
-      shareId: row.shareId, cash: cash.get(row.shareId) ?? 0, allocated: row.allocatedCents,
+      shareId: row.shareId, cash: cash.get(row.shareId)?.cash ?? 0, pickedCash: cash.get(row.shareId)?.pickedCash ?? 0, allocated: row.allocatedCents,
       date: row.date, description: row.merchantLabel || row.description, category: row.categoryName,
       outstandingCents: shareStatus(row).outstandingCents, side: row.direction === 'incoming' ? 'owed' : 'owing',
     })),
@@ -36,7 +37,7 @@ export async function readBillReview(tx: Tx, personId: string) {
           items.push({ ...line, side, source: bill.sources?.[items.length] });
         }
       }
-      return { id: bill.id, date: bill.date.toISOString(), tracked: bill.sources !== null, items };
+      return { id: bill.id, token: bill.revoked || !bill.sources ? undefined : bill.token, date: bill.date.toISOString(), tracked: bill.sources !== null, items };
     }),
   };
   const version = createHash('sha256').update(JSON.stringify(data)).digest('hex');

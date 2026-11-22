@@ -29,3 +29,6 @@ html[data-passbook] .shared-check.bill-paper:not([data-paper=classic]) { padding
   mask-image: linear-gradient(to right, black, transparent 1.5rem, transparent calc(100% - 1.5rem), black),
     linear-gradient(to bottom, black, #0002 1.8rem, #0002 calc(100% - 1.8rem), black);
 }
+
+.shared-check > .previous-bills { border-top:1px dashed var(--ticket-rule); padding-top:1rem }
+.shared-check .previous-bills > section:first-of-type { border-top:0; padding-top:0 }

@@ -15,11 +15,69 @@ test('review keeps the earlier balance optional and previews just the selected e
   await expect(total).not.toHaveText(freshTotal);
   await preview.getByText(/Full preview/).click();
   await expect(preview.locator('.shared-check')).toContainText('From earlier bills');
-  await expect(preview.locator('.shared-check')).toContainText('paid since');
+  const receipt = preview.locator('.shared-check');
+  await expect(receipt.getByRole('heading', { name: 'New entries' })).toBeVisible();
+  await expect(receipt.locator('.previous-bills')).toHaveCSS('border-top-style', 'dashed');
+  await expect(receipt.getByText('Payment received', { exact: true })).toBeVisible();
+  await expect(receipt.getByText('Item-specific payments')).toHaveCount(0);
+  const previousHref = await receipt.getByRole('link', { name: 'View previous bill' }).getAttribute('href');
+  expect(previousHref).toMatch(/^\/s\/[A-Za-z0-9_-]+$/);
+  expect((await page.request.get(previousHref!)).ok()).toBe(true);
   await carry.getByRole('button', { name: 'Exclude all' }).click();
   await expect(total).toHaveText(freshTotal);
   await expect(preview.locator('.shared-check')).not.toContainText('From earlier bills');
   await page.setViewportSize({ width: 375, height: 812 });
   await carry.getByText(/Compare items/).click();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('a chosen partial payment survives publication and an earlier link can be turned off', async ({ page }) => {
+  async function openPerson() {
+    await page.goto('/people');
+    await page.getByRole('button', { name: /Jordan/, expanded: false }).click();
+  }
+  async function publish() {
+    await page.getByRole('button', { name: 'Create link' }).click();
+    const href = await page.getByRole('link', { name: 'Open bill' }).getAttribute('href');
+    expect(href).toMatch(/^\/s\//);
+    return href!;
+  }
+  await openPerson();
+  await page.getByRole('link', { name: 'Create bill' }).click();
+  const previous = await publish();
+
+  await openPerson();
+  await page.getByRole('button', { name: /Pick shares/ }).click();
+  const picker = page.getByRole('dialog');
+  const apply = picker.getByRole('textbox', { name: /^Apply to / }).all();
+  let entered = false;
+  for (const field of await apply) {
+    if (Number((await field.getAttribute('placeholder'))?.replaceAll(',', '')) > 1) {
+      await field.fill('1.00');
+      await field.blur();
+      entered = true;
+      break;
+    }
+  }
+  expect(entered).toBe(true);
+  await picker.getByRole('button', { name: /Record payment/ }).click();
+  await expect(picker).toBeHidden();
+
+  await page.getByRole('link', { name: 'Create bill' }).click();
+  await page.getByRole('button', { name: 'Include all' }).first().click();
+  const current = await publish();
+  await page.goto(current);
+  const carry = page.locator('.previous-bills');
+  await expect(carry.getByText('Item-specific payments', { exact:true })).toBeVisible();
+  await expect(carry).toContainText('$1.00 paid');
+  await expect(carry.getByRole('link', { name:'View previous bill' }).first()).toHaveAttribute('href', previous);
+
+  await page.goto('/people/shared-bills');
+  const row = page.getByRole('listitem').filter({has:page.locator(`a[href="${previous}"]`)});
+  await row.getByRole('button', { name:'Turn off link' }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name:'Turn off link' }).click();
+  await expect(row).toHaveCount(0);
+  await page.goto(current);
+  await expect(page.locator('.previous-bills')).toContainText('$1.00 paid');
+  await expect(page.locator(`a[href="${previous}"]`)).toHaveCount(0);
 });
