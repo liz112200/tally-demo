@@ -13,7 +13,13 @@ function LineRow({ line }: { line: ShareSnapshotLine }) {
       <span className="w-11 shrink-0 font-mono text-xs text-muted-foreground">
         {monthDay(line.date)}
       </span>
-      <span className="min-w-0 flex-1 break-words">{line.description}</span>
+      <span className="min-w-0 flex-1 break-words">{line.description}
+        {line.carried && <small className="block text-xs text-muted-foreground">
+          From {monthDay(line.carried.date)} · {formatUSD(toCents(line.carried.previous))} previously
+          {line.carried.cash > 0 && <> · {formatUSD(toCents(line.carried.cash))} paid since</>}
+          {(line.carried.adjustment !== 0 || line.carried.cash < 0) && <> · balance adjusted</>}
+        </small>}
+      </span>
       <span className="shrink-0 font-mono">
         {formatUSD(toCents(line.outstandingCents))}
       </span>
@@ -89,17 +95,19 @@ function Section({
   );
 }
 
-export function SharedBill({ snapshot, note }: { snapshot: BillSnapshot; note?: string }) {
+export function SharedBill({ snapshot, note, embedded = false }: { snapshot: BillSnapshot; note?: string; embedded?: boolean }) {
   const { personName, owed, owing, owedCents, owingCents, netCents } = snapshot;
   const itemCount = owed.length + owing.length;
+  const Container = embedded ? 'article' : 'main';
+  const Title = embedded ? 'h3' : 'h1';
 
   return (
-    <main data-paper={snapshot.paper} className="shared-check bill-paper">
+    <Container data-paper={snapshot.paper} className="shared-check bill-paper">
       <header className="mb-5">
         <span className="guest-stamp">Shared bill</span>
-        <h1 className="text-lg font-semibold tracking-tight">
+        <Title className="text-lg font-semibold tracking-tight">
           {guestCopy.heading(personName)}
-        </h1>
+        </Title>
         <p className="mt-0.5 text-sm text-muted-foreground">
           {itemCount} open item{itemCount === 1 ? '' : 's'} · shared{' '}
           {snapshot.createdAt.toISOString().slice(0, 10)}
@@ -112,6 +120,13 @@ export function SharedBill({ snapshot, note }: { snapshot: BillSnapshot; note?: 
           Total: <strong className="font-mono text-3xl">{formatUSD(toCents(Math.abs(netCents)))}</strong>
           <span className="text-muted-foreground">{guestCopy.balance(netCents)}</span>
         </p>
+        {[...owed,...owing].some(line => line.carried) && <div className="mt-2 border-t pt-2 text-xs text-muted-foreground">
+          {[true, false].map(carried => {
+            const sum = (lines: ShareSnapshotLine[]) => lines.filter(l => Boolean(l.carried) === carried).reduce((s,l) => s + l.outstandingCents, 0);
+            const amount = sum(owed) - sum(owing);
+            return [...owed,...owing].some(l => Boolean(l.carried) === carried) && <p key={String(carried)} className="flex justify-between gap-2"><span>{carried ? 'From earlier bills' : 'Current items'}</span><span>{formatUSD(toCents(Math.abs(amount)))} {guestCopy.balance(amount)}</span></p>;
+          })}
+        </div>}
       </div>
 
       <Section
@@ -130,6 +145,6 @@ export function SharedBill({ snapshot, note }: { snapshot: BillSnapshot; note?: 
       <p className="mt-5 text-xs text-muted-foreground">
         {note ?? 'Amounts are from the day this bill was shared.'}
       </p>
-    </main>
+    </Container>
   );
 }

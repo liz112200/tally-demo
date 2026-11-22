@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { isDemoMode } from '@/lib/demo-mode';
 import { notFound } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { z } from 'zod';
@@ -36,7 +37,7 @@ export default async function SharedBillHistoryPage({ searchParams }: {
       {bills.length === 0 ? (
         <div className="mt-6 border-y py-8">
           <h2>{before ? 'No older bills' : 'No bill links yet'}</h2>
-          {!before && <p className="mt-1 text-sm">Open someone in People and choose <b>Copy link</b> to save your first bill here.</p>}
+          {!before && <p className="mt-1 text-sm">Open someone in People and choose <b>{isDemoMode() ? 'Create bill' : 'Copy link'}</b> to save your first bill here.</p>}
         </div>
       ) : (
         <ul className="mt-6 divide-y border-y" aria-label="Shared bills">

@@ -353,3 +353,27 @@ html[data-passbook] .guest-check[data-slot="dialog-content"] {
 .expense-categories li { display: flex; align-items: baseline; justify-content: space-between; gap: .75rem; padding: .65rem 0; font-size: .85rem; overflow-wrap: anywhere }
 .expense-categories li + li { border-top: 1px solid var(--border) }
 .expense-categories small { display: block; margin-top: .15rem; color: var(--muted-foreground) }
+
+.review-layout { display:grid; align-items:start; gap:2rem }
+.review-section { border-top:1px solid var(--border); padding-top:.85rem }
+.review-layout summary { cursor:pointer; font-size:.85rem; padding:.6rem 0; color:var(--muted-foreground) }
+.review-layout select { width:100%; min-width:0; border:1px solid var(--border); border-radius:.4rem; background:var(--card); color:var(--foreground); padding:.45rem }
+.review-items, .review-section details[open] { max-height:26rem; overflow:auto }
+.review-columns { display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:.75rem; border-top:1px solid var(--border); align-items:baseline; padding:.65rem 0; font-size:.875rem }
+.review-columns:not(.single-amount) { grid-template-columns:minmax(0,1fr) minmax(4.3rem,auto) minmax(4.3rem,auto) }
+.review-columns.single-amount { grid-template-columns:minmax(0,1fr) auto }
+.review-columns small,.review-history-line small { display:block; font-size:.75rem; color:var(--muted-foreground) }
+.review-amount,.review-before,.review-labels span:not(:first-child) { text-align:right; font-variant-numeric:tabular-nums }
+.review-before,.review-labels { color:var(--muted-foreground) }
+.review-columns input { margin-top:.25rem; accent-color:var(--primary) }
+.review-history-line { display:flex; flex-wrap:wrap; justify-content:space-between; gap:.5rem; padding:.45rem 0; border-top:1px solid var(--border) }
+.review-preview { min-width:0 }
+.review-preview .shared-check { width:100%; max-width:100%; margin:0; padding:1rem }
+@media(min-width:760px){ .review-layout { grid-template-columns:minmax(0,1.25fr) minmax(0,1fr) } }
+@media(max-width:520px){
+  .review-columns:not(.single-amount) { grid-template-columns:1fr auto; gap:.15rem .5rem }
+  .review-columns:not(.single-amount)>span:first-child { grid-row:span 2 }
+  .review-labels { display:none }
+  .review-before::before { content:'Last '; font-size:.75rem }
+  .review-columns:not(.single-amount) .review-amount::before { content:'Now '; font-size:.75rem }
+}

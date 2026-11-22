@@ -2,14 +2,25 @@ import { expect, test } from '@playwright/test';
 
 test('history reuses the original bill link and can turn off just that link', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await page.goto('/people');
-  await page.getByRole('button', { name: /Alex/, expanded: false }).click();
-  await page.getByRole('button', { name: 'Copy link', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Link copied' })).toBeVisible();
-  const earlier = await page.evaluate(() => navigator.clipboard.readText());
-  await page.getByRole('button', { name: 'Copy link', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Link copied' })).toBeVisible();
-  const original = await page.evaluate(() => navigator.clipboard.readText());
+  async function createBill() {
+    await page.goto('/people');
+    await page.getByRole('button', { name: /Alex/, expanded: false }).click();
+    await page.getByRole('link', { name: 'Create bill' }).click();
+    const earlierItems = page.locator('section.review-section').filter({ has: page.getByRole('heading', { name: /From the previous bill|On other earlier bills/ }) });
+    const group = earlierItems.first();
+    await group.getByText(/Compare items/).click();
+    const item = group.getByRole('checkbox').first();
+    await expect(item).not.toBeChecked();
+    await item.check();
+    await expect(group.getByText('Last bill', { exact: true })).toBeVisible();
+    await expect(group.getByText('Open now', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Create link' }).click();
+    await page.getByRole('button', { name: 'Copy link' }).click();
+    await expect(page.getByRole('button', { name: 'Link copied' })).toBeVisible();
+    return page.evaluate(() => navigator.clipboard.readText());
+  }
+  const earlier = await createBill();
+  const original = await createBill();
   expect(original).not.toBe(earlier);
 
   await page.getByRole('link', { name: 'Shared bill history' }).click();

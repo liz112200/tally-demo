@@ -5,6 +5,7 @@ export type ShareSnapshotLine = {
   description: string;
   outstandingCents: number;
   category: string | null;
+  carried?: { date: string; previous: number; cash: number; adjustment: number };
 };
 
 export type BillSnapshot = {

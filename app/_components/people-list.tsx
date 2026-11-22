@@ -3,7 +3,9 @@
 import { useActionState, useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronRight, HandCoins, ListChecks, Pencil, Trash2, UserRound } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
+import Link from 'next/link';
+import { useIsDemo } from '@/app/_lib/use-demo';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toCents, formatUSD, formatCents } from '@/lib/money';
@@ -887,6 +889,7 @@ function PersonLine({
   open: boolean;
   onToggle: () => void;
 }) {
+  const demo = useIsDemo();
   const displayName = person.deleted ? '(deleted person)' : person.name;
   const shareCount = person.incoming.length + person.outgoing.length;
   // One sort for both directions, so the two lists read consistently and the
@@ -1004,13 +1007,13 @@ function PersonLine({
               ) : (
                 <span />
               )}
-              <ShareListButton
+              {demo ? <Link className={buttonVariants({ size: 'sm' })} href={`/people/${person.id}/bill${sort.sort === 'category' ? '?group=category' : ''}`}>Create bill</Link> : <ShareListButton
                 className="h-6 px-1.5 text-[11px]"
                 personName={person.deleted ? person.name : displayName}
                 owed={toShareLines(outstandingIncoming)}
                 owing={toShareLines(outstandingOutgoing)}
                 groupBy={sort.sort === 'category' ? 'category' : null}
-              />
+              />}
             </div>
           )}
 

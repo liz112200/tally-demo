@@ -6,6 +6,7 @@
 // refuses unless the database carries the demo marker (db/demo-mark.ts runs
 // first, on the fresh database).
 import { config } from 'dotenv';
+import { addDemoBillExample } from './demo-bill-example';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import postgres from 'postgres';
@@ -25,6 +26,7 @@ async function main() {
   const client = postgres(process.env.DATABASE_URL!, { prepare: false, max: 1 });
   try {
     await migrate(drizzle(client), { migrationsFolder: './drizzle' });
+    await addDemoBillExample(drizzle(client));
     console.log('Demo database migrated.');
   } finally {
     await client.end();

@@ -5,6 +5,7 @@ test('the recipient opens the paper chosen in People in light and dark', async (
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await page.goto('/people');
   await page.getByRole('button', { name: /Alex/, expanded: false }).click();
+  await page.getByRole('link', { name: 'Create bill' }).click();
   await expect(page.getByText(demoSharingNote, { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Bill style' }).click();
   const picker = page.getByRole('dialog', { name: 'Choose bill paper' });
@@ -22,6 +23,7 @@ test('the recipient opens the paper chosen in People in light and dark', async (
   }
   await picker.getByRole('radio', { name: 'Vinyl records' }).check();
   await picker.getByRole('button', { name: 'Done' }).click();
+  await page.getByRole('button', { name: 'Create link' }).click();
   await page.getByRole('button', { name: 'Copy link' }).click();
   await expect(page.getByRole('button', { name: 'Link copied' })).toBeVisible();
   const url = new URL(await page.evaluate(() => navigator.clipboard.readText()));

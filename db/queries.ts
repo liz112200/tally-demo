@@ -1058,8 +1058,8 @@ export type DebtShareRow = {
   participantCount: number;
 };
 
-export async function getDebtShares(): Promise<DebtShareRow[]> {
-  const rows = (await db.execute(sql`
+export async function getDebtShares(connection: Tx | typeof db = db, personId?: string): Promise<DebtShareRow[]> {
+  const rows = (await connection.execute(sql`
     SELECT
       ss.id AS share_id,
       sp.id AS split_id,
@@ -1092,6 +1092,7 @@ export async function getDebtShares(): Promise<DebtShareRow[]> {
       GROUP BY split_share_id
     ) al ON al.split_share_id = ss.id
     WHERE (sp.transaction_id IS NULL OR t.deleted_at IS NULL)
+      ${personId ? sql`AND cp.id = ${personId}` : sql``}
       AND (
         (sp.payer_person_id = o.id AND ss.person_id <> o.id)
         OR (sp.payer_person_id <> o.id AND ss.person_id = o.id)
@@ -2213,11 +2214,15 @@ export async function insertShareLink(input: {
   groupedByCategory: boolean;
   owed: ShareSnapshotLine[];
   owing: ShareSnapshotLine[];
-}): Promise<{ token: string }> {
+  review?: { personId: string; sources: import('../lib/bill-review').ReviewSource[]; requestId: string };
+}, connection: Tx | typeof db = db): Promise<{ token: string }> {
   const token = generateShareToken();
   const sum = (ls: ShareSnapshotLine[]) =>
     ls.reduce((acc, l) => acc + l.outstandingCents, 0);
-  await db.insert(shareLinks).values({
+  const [saved] = await connection.insert(shareLinks).values({
+    id: input.review?.requestId,
+    reviewPersonId: input.review?.personId,
+    reviewSources: input.review?.sources,
     paper: input.paper,
     token,
     personName: input.personName,
@@ -2229,8 +2234,8 @@ export async function insertShareLink(input: {
     lines: input.owed,
     owingCents: sum(input.owing),
     owingLines: input.owing,
-  });
-  return { token };
+  }).returning({ token: shareLinks.token });
+  return saved;
 }
 
 // Owner-facing history uses the values captured when each link was created.

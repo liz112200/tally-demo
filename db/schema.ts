@@ -597,6 +597,9 @@ export const categorizationRules = pgTable(
 // that address anything else — the payload is denormalized display text —
 // so possessing a token reveals that one list and nothing more.
 export const shareLinks = pgTable('share_links', {
+  // Owner-only comparison metadata. The public viewer reads display lines only.
+  reviewPersonId: uuid('review_person_id'),
+  reviewSources: jsonb('review_sources').$type<import('../lib/bill-review').ReviewSource[]>(),
   id: uuid('id').primaryKey().defaultRandom(),
   // URL path segment. Random, not derived from any row id, so links cannot
   // be enumerated or guessed from a person id.

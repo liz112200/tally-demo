@@ -13,6 +13,7 @@
 //
 // Shared by the daily cron route, the banner's reset action, and the
 // `npm run demo:reset` CLI, so no 'server-only' and relative imports only.
+import { addDemoBillExample } from './demo-bill-example';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { sql } from 'drizzle-orm';
 import postgres from 'postgres';
@@ -90,6 +91,7 @@ export async function writeDemoSeed(tx: Tx, seed: DemoSeed, receiptUrls: Readonl
   await insert(schema.receiptItemAssignments, seed.receiptItemAssignments);
   await insert(schema.settlements, seed.settlements);
   await insert(schema.settlementAllocations, seed.settlementAllocations);
+  await addDemoBillExample(tx);
 }
 
 export async function resetDemo(env: {
