@@ -22,6 +22,7 @@ vi.mock('next/cache', () => ({ revalidatePath: () => {} }));
 // credential. This file wipes the database before and after itself; every
 // other file builds its own rows.
 
+const seedDay = '2026-11-02';
 let seed: DemoSeed;
 const urls = (s: DemoSeed) => new Map(s.receipts.map((r) => [r.id, `https://blob.example.invalid/${r.id}.svg`]));
 const reseed = () => db.transaction((tx) => writeDemoSeed(tx, seed, urls(seed)));
@@ -29,7 +30,7 @@ const login = (institution: string) => seed.bankConnections.find((c) => c.instit
 const accountOf = (institution: string) => seed.bankAccounts.find((a) => a.connectionId === login(institution).id)!;
 
 beforeAll(async () => {
-  seed = buildDemoSeed('2026-11-02');
+  seed = buildDemoSeed(seedDay);
   await reseed();
   process.env.DEMO_MODE = '1';
 });
@@ -226,7 +227,11 @@ describe('the demo bank', () => {
     expect((await db.select().from(transactions).where(eq(transactions.bankAccountId, amex.id))).length).toBe(before + 1);
   });
 
-  it('opens with a Needs you band a visitor can act on: the held row, a statement that disagrees, an account to verify', async () => {
+  it('opens with a Needs you band a visitor can act on: the held row, a statement that disagrees, an account to verify', async ({ onTestFinished }) => {
+    // Inspect the board on the day the fixture was seeded.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(seedDay + 'T12:00:00Z'));
+    onTestFinished(() => { vi.useRealTimers(); });
     await reseed();
     const band = async () => needsYouItems(needsYouFacts(await loadBoard()), { day: (iso) => iso, money: (n) => formatCents(toCents(n)) });
     const amexLedger = seed.ledgerAccounts.find((l) => l.csvSource === 'amex')!;
