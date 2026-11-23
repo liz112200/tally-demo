@@ -34,6 +34,8 @@ export async function addDemoBillExample(connection: Pick<ReturnType<typeof driz
     FROM entries GROUP BY id, name, at, person ON CONFLICT (id) DO NOTHING
   `);
   // A pre-tracking bill with one original label and one shorter receipt label.
+  const legacyId = sql`md5(person::text || 'older-bill-example')`;
+  const exampleId = sql`overlay(overlay(${legacyId} placing '4' from 13 for 1) placing '8' from 17 for 1)::uuid`;
   await connection.execute(sql`
     WITH expenses AS (
       SELECT p.id AS person, p.name, t.date, ss.id,
@@ -48,7 +50,7 @@ export async function addDemoBillExample(connection: Pick<ReturnType<typeof driz
       ORDER BY date DESC,id LIMIT 2
     )
     INSERT INTO share_links (id,token,person_name,direction,total_cents,lines)
-    SELECT md5(person::text || 'older-bill-example')::uuid, ${randomBytes(12).toString('base64url')},
+    SELECT ${exampleId}, ${randomBytes(12).toString('base64url')},
       name,'they-owe-me',sum(due),jsonb_agg(jsonb_build_object(
         'date',date,'description',CASE WHEN n=1 THEN label ELSE 'Card purchase' END,
         'category',NULL,'outstandingCents',due) ORDER BY n)
