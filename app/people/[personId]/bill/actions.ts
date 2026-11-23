@@ -56,7 +56,7 @@ export async function publishReviewedBill(input: unknown) {
 
 const matchSchema = z.object({
   personId: z.uuid(), billId: z.uuid(), line: z.int().nonnegative(),
-  shareId: z.uuid().nullable(), version: z.string().length(64),
+  shareId: z.union([z.uuid(), z.literal('reopen')]).nullable(), version: z.string().length(64),
 });
 
 export async function confirmOlderBillItem(input: unknown) {
@@ -68,15 +68,18 @@ export async function confirmOlderBillItem(input: unknown) {
     return await db.transaction(async tx => {
       const latest = await readBillReview(tx, personId);
       const bill = latest?.data.bills.find(b => b.id === billId);
-      const candidates = bill?.items[line]?.candidates;
-      if (!latest || latest.version !== version || !bill || !candidates?.length) {
+      const entry = bill?.items[line];
+      const candidates = entry?.candidates ?? [];
+      const reopen = shareId === 'reopen';
+      if (!latest || latest.version !== version || !bill || !entry?.editableMatch || (reopen ? !(entry.source || entry.skipped) : !candidates.length)) {
         return { stale: true, error: 'The bill history changed. Refresh to review the latest matches.' };
       }
       const match = candidates.find(candidate => candidate.shareId === shareId);
-      if (shareId !== null && !match) return { error: 'Choose an expense from this list.' };
+      if (!reopen && shareId !== null && !match) return { error: 'Choose an expense from this list.' };
       const sources = bill.items.map((item, i) => {
+        if (i === line && reopen) return { reconsider: true as const };
         if (i === line) return match ?? { skipped: true as const };
-        return item.source ?? (item.skipped ? { skipped: true as const } : null);
+        return item.source ?? (item.skipped ? { skipped: true as const } : item.reconsider ? { reconsider: true as const } : null);
       });
       // Owner-only metadata. Published amounts, line text and tokens stay frozen.
       await tx.update(shareLinks).set({ reviewPersonId: personId, reviewSources: sources }).where(eq(shareLinks.id, billId));

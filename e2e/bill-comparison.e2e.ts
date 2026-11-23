@@ -103,4 +103,19 @@ test('reviews an older receipt once and keeps its matched expenses out of new it
   await expect(prior.getByRole('checkbox')).toHaveCount(2);
   await expect(prior.getByRole('checkbox').first()).not.toBeChecked();
   await expect(prior.getByRole('checkbox').last()).not.toBeChecked();
+  async function reopen() {
+    const decisions = page.locator('details').filter({ has: page.getByText(/^Review past decisions/) });
+    await decisions.locator('summary').click();
+    const entry = decisions.locator('div.border-t').filter({ hasText: 'Card purchase' });
+    await entry.getByRole('button', { name: 'Change decision' }).click();
+    await review.locator('summary').click();
+  }
+  await reopen();
+  await review.getByRole('button', { name: 'None of these' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Marked as a different expense' })).toBeVisible();
+  await page.reload();
+  await reopen();
+  await review.getByLabel('Matching ledger expense').selectOption(id!);
+  await review.getByRole('button', { name: 'Confirm match' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Match saved' })).toBeVisible();
 });

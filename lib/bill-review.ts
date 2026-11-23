@@ -4,8 +4,8 @@ import type { BillDesign } from './bill-design';
 export type ReviewPayment = { id: string; date: string; amount: number; appliedAt: string };
 export type ReviewSource = { shareId: string; cash: number; pickedCash?: number; allocated: number; paymentIds?: string[] };
 export type ReviewItem = ReviewSource & ShareSnapshotLine & { side: 'owed' | 'owing'; payments?: ReviewPayment[] };
-export type StoredReviewSource = ReviewSource | { skipped: true } | null;
-export type PriorItem = ShareSnapshotLine & { side: ReviewItem['side']; source?: ReviewSource; skipped?: boolean; recognized?: boolean; candidates?: ReviewSource[] };
+export type StoredReviewSource = ReviewSource | { skipped: true } | { reconsider: true } | null;
+export type PriorItem = ShareSnapshotLine & { side: ReviewItem['side']; source?: ReviewSource; skipped?: boolean; reconsider?: boolean; editableMatch?: boolean; recognized?: boolean; candidates?: ReviewSource[] };
 export type PriorBill = { id: string; token?: string; date: string; items: PriorItem[]; tracked: boolean };
 export type BillReview = { personId: string; name: string; items: ReviewItem[]; bills: PriorBill[] };
 

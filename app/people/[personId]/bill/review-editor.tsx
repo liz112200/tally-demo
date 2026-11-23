@@ -43,6 +43,8 @@ export function ReviewEditor({ data: initialData, version: initialVersion, group
   const unknown = historic.filter(i => !i.candidates?.length && (!i.source || !current.has(i.source.shareId)));
   const pending = data.bills.flatMap(bill => bill.items.flatMap((item, index) =>
     item.candidates?.length ? [{ bill, item, index }] : []));
+  const decisions = data.bills.flatMap(bill => bill.items.flatMap((item, index) =>
+    item.editableMatch && (item.source || item.skipped) ? [{ bill, item, index }] : []));
   async function resolve(billId: string, index: number, shareId: string | null) {
     setWorking(true); setError(''); setMatchMessage('');
     try {
@@ -53,7 +55,12 @@ export function ReviewEditor({ data: initialData, version: initialVersion, group
       const next = compareBills(result.review.data, compareId);
       setSelected(before => new Set([...before].filter(id => !next.held.has(id) && (known.has(id) || !next.known.has(id)))));
       setReview(result.review);
-      setMatchMessage(shareId ? 'Match saved. The earlier expense stays off this bill unless you include it.' : 'Marked as a different expense.');
+      if (shareId === 'reopen') {
+        const reopened = result.review.data.bills.find(b => b.id === billId)?.items[index];
+        setMatchMessage(reopened?.candidates?.length ? 'Decision reopened. Choose an expense or select None of these.' : 'Decision cleared. There are currently no suggested expenses for this entry.');
+      } else {
+        setMatchMessage(shareId ? 'Match saved. The earlier expense stays off this bill unless you include it.' : 'Marked as a different expense.');
+      }
     } catch { setError('Couldn’t confirm the match. Try again.'); }
     finally { setWorking(false); }
   }
@@ -153,6 +160,15 @@ export function ReviewEditor({ data: initialData, version: initialVersion, group
             </form>)}
           </details>
         </section>}
+        {decisions.length > 0 && <details className="review-section">
+          <summary>Review past decisions · {decisions.length}</summary>
+          {decisions.map(({ bill, item, index }) => <div key={bill.id + index} className="flex flex-wrap items-center justify-between gap-2 border-t py-2 text-sm">
+            <div><strong>{item.description}</strong> · {money(item.outstandingCents)}
+              <small className="block text-muted-foreground">Bill shared {dateLabel(bill.date)} · {item.skipped ? 'Marked as different' : 'Matched to ' + (current.get(item.source!.shareId)?.description ?? 'an earlier expense')}</small>
+            </div>
+            <Button type="button" size="sm" variant="outline" onClick={() => resolve(bill.id, index, 'reopen')}>Change decision</Button>
+          </div>)}
+        </details>}
         {matchMessage && <p role="status" className="text-sm">{matchMessage}</p>}
         {previous && <section className="review-section">
           <label className="grid gap-2">Previous bill

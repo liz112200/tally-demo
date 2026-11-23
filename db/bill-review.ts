@@ -1,6 +1,6 @@
 import 'server-only';
 import { createHash } from 'node:crypto';
-import { and, asc, desc, eq, gte, isNull, or } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, isNull, or, sql } from 'drizzle-orm';
 import { db } from './index';
 import { persons, settlements, settlementAllocations as allocations, shareLinks } from './schema';
 import { getDebtShares, type Tx } from './queries';
@@ -38,7 +38,7 @@ export async function readBillReview(tx: Tx, personId: string) {
   // Legacy snapshots contain a name only. Never bind across namesakes.
   const namesakes = await tx.select({ id: persons.id }).from(persons).where(eq(persons.name, person.name)).limit(2);
   const bills = await tx.select({
-    id: shareLinks.id, token: shareLinks.token, revoked: shareLinks.revokedAt, date: shareLinks.createdAt, sources: shareLinks.reviewSources,
+    id: shareLinks.id, token: shareLinks.token, revoked: shareLinks.revokedAt, date: shareLinks.createdAt, sources: shareLinks.reviewSources, hasBalanceSnapshot: sql<boolean>`${shareLinks.previousBalances} is not null`,
     owed: shareLinks.lines, owing: shareLinks.owingLines,
   }).from(shareLinks).where(or(eq(shareLinks.reviewPersonId, personId),
     namesakes.length === 1 ? and(isNull(shareLinks.reviewPersonId), eq(shareLinks.personName, person.name), gte(shareLinks.createdAt, person.createdAt)) : undefined))
@@ -52,11 +52,17 @@ export async function readBillReview(tx: Tx, personId: string) {
       outstandingCents: shareStatus(row).outstandingCents, side: row.direction === 'incoming' ? 'owed' : 'owing',
     })),
     bills: bills.map(bill => {
+      // Builder receipts store previous_balances (including an empty list).
+      // Older receipts reviewed in the first demo stored only reconstructed
+      // sources with payment IDs, or a skipped marker. Original tracked
+      // receipts from before dated payments had neither.
+      const editable = demo && !bill.hasBalanceSnapshot && (!bill.sources || bill.sources.some(s =>
+        s && ('paymentIds' in s || 'skipped' in s || 'reconsider' in s)));
       const items: PriorItem[] = [];
       for (const side of ['owed', 'owing'] as const) {
         for (const line of bill[side] as ShareSnapshotLine[]) {
           const stored = bill.sources?.[items.length];
-          items.push({ ...line, side, source: stored && 'shareId' in stored ? stored : undefined,
+          items.push({ ...line, side, editableMatch: editable, reconsider: stored && 'reconsider' in stored ? true : undefined, source: stored && 'shareId' in stored ? stored : undefined,
             skipped: stored && 'skipped' in stored ? true : undefined });
         }
       }

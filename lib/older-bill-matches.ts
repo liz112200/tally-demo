@@ -50,7 +50,7 @@ export function matchOlderBill(bill: PriorBill, ledger: ReviewItem[], history: M
     const possible = choices[i];
     if (!possible.length) return line;
     const [only] = possible;
-    if (possible.length === 1 && only.exact && demand.get(only.source.shareId) === 1) {
+    if (!line.reconsider && possible.length === 1 && only.exact && demand.get(only.source.shareId) === 1) {
       return { ...line, source: only.source, recognized: true };
     }
     return { ...line, candidates: possible.map(c => c.source) };
