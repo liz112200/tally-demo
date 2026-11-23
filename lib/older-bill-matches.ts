@@ -33,7 +33,7 @@ export function matchOlderBill(bill: PriorBill, ledger: ReviewItem[], history: M
   });
   const demand = new Map<string, number>();
   const choices = bill.items.map(line => {
-    if (line.source || line.skipped) return [];
+    if (line.source) return [];
     const label = normalize(line.description);
     return entries.flatMap(({ item, source, amount, label: merchant }) => {
       if (line.side !== item.side) return [];
@@ -42,18 +42,26 @@ export function matchOlderBill(bill: PriorBill, ledger: ReviewItem[], history: M
       const sameAmount = amount === line.outstandingCents;
       const nearby = Math.abs(Date.parse(line.date) - Date.parse(item.date)) <= 7 * 86400000;
       if (!(sameDate && (sameLabel || sameAmount) || nearby && sameLabel && sameAmount)) return [];
-      demand.set(item.shareId, (demand.get(item.shareId) ?? 0) + 1);
+      if (!line.skipped) demand.set(item.shareId, (demand.get(item.shareId) ?? 0) + 1);
       return [{ source, exact: sameDate && sameLabel && sameAmount }];
     });
   });
   const items = bill.items.map((line, i): PriorItem => {
     const possible = choices[i];
-    if (!possible.length) return line;
+    if (line.skipped || !possible.length) return line;
     const [only] = possible;
     if (!line.reconsider && possible.length === 1 && only.exact && demand.get(only.source.shareId) === 1) {
+      taken.add(only.source.shareId);
       return { ...line, source: only.source, recognized: true };
     }
     return { ...line, candidates: possible.map(c => c.source) };
   });
+  // A previously dismissed suggestion can be chosen again without holding it
+  // out of a draft or offering an expense already assigned on this bill.
+  for (const [i, line] of items.entries()) {
+    if (line.skipped) {
+      items[i] = { ...line, alternatives: choices[i].map(c => c.source).filter(c => !taken.has(c.shareId)) };
+    }
+  }
   return { ...bill, items, tracked: items.every(line => Boolean(line.source)) };
 }

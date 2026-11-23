@@ -69,9 +69,12 @@ export async function confirmOlderBillItem(input: unknown) {
       const latest = await readBillReview(tx, personId);
       const bill = latest?.data.bills.find(b => b.id === billId);
       const entry = bill?.items[line];
-      const candidates = entry?.candidates ?? [];
+      const candidates = entry?.candidates ?? entry?.alternatives ?? [];
       const reopen = shareId === 'reopen';
-      if (!latest || latest.version !== version || !bill || !entry?.editableMatch || (reopen ? !(entry.source || entry.skipped) : !candidates.length)) {
+      const canDismiss = shareId === null && Boolean(entry?.source);
+      const canReopen = reopen && Boolean(entry?.source || entry?.skipped);
+      if (!latest || latest.version !== version || !bill || !entry?.editableMatch ||
+          !(canReopen || canDismiss || (!reopen && candidates.length))) {
         return { stale: true, error: 'The bill history changed. Refresh to review the latest matches.' };
       }
       const match = candidates.find(candidate => candidate.shareId === shareId);

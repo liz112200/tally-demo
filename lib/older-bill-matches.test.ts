@@ -18,6 +18,12 @@ test('matches the original balance after payment and holds ambiguous expenses ou
   const review = compareBills(data, 'old');
   expect(review.fresh).toEqual([]);
   expect(composeBill(data, review, new Set(['a','b']), 'classic', false, new Date()).sources).toEqual([]);
-  expect(matchOlderBill({ ...bill, items: [{ ...line, skipped: true }] }, items, history).items[0].candidates).toBeUndefined();
+  const skipped = { ...line, skipped: true };
+  const dismissed = matchOlderBill({ ...bill, items: [skipped] }, items, history);
+  expect(dismissed.items[0].alternatives?.map(c => c.shareId)).toEqual(['a', 'b']);
+  expect(compareBills({ ...data, bills: [dismissed] }, 'old').fresh).toEqual(items);
+  const claimed = matchOlderBill({ ...bill, items: [skipped, line] }, [item], history);
+  expect(claimed.items[0].alternatives).toEqual([]);
+  expect(claimed.items[1].source?.shareId).toBe('a');
   expect(matchOlderBill({ ...bill, items: [line, line] }, [item], history).items.every(i => !i.source)).toBe(true);
 });

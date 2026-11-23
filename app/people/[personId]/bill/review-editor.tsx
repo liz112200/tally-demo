@@ -6,7 +6,7 @@ import { Check, Link2 } from 'lucide-react';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { BillDesignPicker } from '@/app/_components/bill-design-picker';
 import { demoSharingNote, guestCopy, type BillDesign } from '@/lib/bill-design';
-import { billLine, compareBills, composeBill, type BillReview, type ReviewItem } from '@/lib/bill-review';
+import { billLine, compareBills, composeBill, type BillReview, type ReviewItem, type ReviewSource } from '@/lib/bill-review';
 import { formatUSD, toCents } from '@/lib/money';
 import { guestCheckBalance } from '@/lib/share-summary';
 import { SharedBill } from '@/share/app/_components/shared-bill';
@@ -21,12 +21,14 @@ const signed = (value: number) => guestCheckBalance(value) + ' ' + guestCopy.bal
 export function ReviewEditor({ data: initialData, version: initialVersion, grouped, billBase, demo }: { data: BillReview; version: string; grouped: boolean; billBase: string | null; demo: boolean }) {
   const [{ data, version }, setReview] = useState({ data: initialData, version: initialVersion });
   const [matchMessage, setMatchMessage] = useState('');
+  const [undo, setUndo] = useState<{ billId: string; index: number } | null>(null);
   const [compareId, setCompareId] = useState(data.bills[0]?.id ?? '');
   const comparison = compareBills(data, compareId);
   const { previous, known, current, open, fresh } = comparison;
   const [selected, setSelected] = useState(() => new Set(fresh.map(i => i.shareId)));
   const [paper, setPaper] = useState<BillDesign>('classic');
-  const [working, setWorking] = useState(false);
+  const [busyAction, setBusyAction] = useState<'match' | 'publish' | null>(null);
+  const working = busyAction !== null;
   const [error, setError] = useState('');
   const [stale, setStale] = useState(false);
   const [href, setHref] = useState('');
@@ -45,24 +47,44 @@ export function ReviewEditor({ data: initialData, version: initialVersion, group
     item.candidates?.length ? [{ bill, item, index }] : []));
   const decisions = data.bills.flatMap(bill => bill.items.flatMap((item, index) =>
     item.editableMatch && (item.source || item.skipped) ? [{ bill, item, index }] : []));
+  const [question] = pending;
   async function resolve(billId: string, index: number, shareId: string | null) {
-    setWorking(true); setError(''); setMatchMessage('');
+    setBusyAction('match'); setError(''); setMatchMessage('');
     try {
       const result = await confirmOlderBillItem({ personId: data.personId, billId, line: index, shareId, version });
       if (!result.review) {
         setError(result.error); setStale(Boolean(result.stale)); return;
       }
       const next = compareBills(result.review.data, compareId);
-      setSelected(before => new Set([...before].filter(id => !next.held.has(id) && (known.has(id) || !next.known.has(id)))));
+      setSelected(before => new Set([...before].filter(id => !next.held.has(id) && known.has(id) === next.known.has(id))));
       setReview(result.review);
+      setUndo(question?.bill.id === billId && question.index === index && shareId !== 'reopen' ? { billId, index } : null);
       if (shareId === 'reopen') {
         const reopened = result.review.data.bills.find(b => b.id === billId)?.items[index];
-        setMatchMessage(reopened?.candidates?.length ? 'Decision reopened. Choose an expense or select None of these.' : 'Decision cleared. There are currently no suggested expenses for this entry.');
+        setMatchMessage(reopened?.candidates?.length ? 'Ready to compare again.' : 'Decision cleared. No similar expense is available.');
       } else {
-        setMatchMessage(shareId ? 'Match saved. The earlier expense stays off this bill unless you include it.' : 'Marked as a different expense.');
+        setMatchMessage(shareId ? 'Saved as the same purchase. It counts as previously billed.' : 'Saved as different purchases. You can review them separately.');
       }
     } catch { setError('Couldn’t confirm the match. Try again.'); }
-    finally { setWorking(false); }
+    finally { setBusyAction(null); }
+  }
+  function purchaseChoices(billId: string, index: number, candidates: ReviewSource[], dismissed = false) {
+    return <div className="divide-y">
+      {candidates.map(candidate => {
+        const expense = current.get(candidate.shareId)!;
+        return <div key={expense.shareId} role="group" aria-label={expense.description} className="flex flex-wrap items-center justify-between gap-2 py-2">
+          <div className="min-w-0 break-words text-sm">
+            <strong>{expense.description}</strong>
+            <small className="block text-muted-foreground">{dateLabel(expense.date)} · {money(expense.outstandingCents)} open</small>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant={dismissed ? 'outline' : 'default'} onClick={() => resolve(billId, index, expense.shareId)}>Same purchase</Button>
+            {!dismissed && candidates.length === 1 && <Button size="sm" variant="outline" onClick={() => resolve(billId, index, null)}>Different purchase</Button>}
+          </div>
+        </div>;
+      })}
+      {!dismissed && candidates.length > 1 && <Button size="sm" variant="outline" onClick={() => resolve(billId, index, null)}>None of these</Button>}
+    </div>;
   }
   const payment = (side: ReviewItem['side']) => historic.reduce((sum, p) => {
     const item = p.source && current.get(p.source.shareId);
@@ -110,13 +132,13 @@ export function ReviewEditor({ data: initialData, version: initialVersion, group
   async function publish() {
     if (working || !selected.size) return;
     request.current ||= crypto.randomUUID();
-    setWorking(true); setError('');
+    setBusyAction('publish'); setError('');
     try {
       const result = await publishReviewedBill({ personId: data.personId, requestId: request.current, selected: [...selected], compareId, version, paper, grouped });
       if ('href' in result) setHref(result.href);
       else { setError(result.error ?? 'Please try again.'); setStale('stale' in result); }
     } catch { setError('Couldn’t confirm the link. Try again.'); }
-    finally { setWorking(false); }
+    finally { setBusyAction(null); }
   }
   async function copy() {
     try { await navigator.clipboard.writeText(new URL(href, location.origin).href); setCopied(true); }
@@ -135,41 +157,39 @@ export function ReviewEditor({ data: initialData, version: initialVersion, group
     <div className="review-layout">
       <fieldset disabled={working} className="min-w-0 space-y-5">
         <h2>Review with {data.name}</h2>
-        {pending.length > 0 && <section className="review-section" aria-label="Older bill matches">
-          <h2>Check older bill matches</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Possible duplicates stay off this bill while you review them.</p>
-          <details><summary>Review {pending.length} possible {pending.length === 1 ? 'match' : 'matches'}</summary>
-            {pending.map(({ bill, item, index }) => <form key={bill.id + index} className="space-y-2 border-t py-3" onSubmit={e => {
-              e.preventDefault();
-              const id = new FormData(e.currentTarget).get('candidate');
-              if (typeof id === 'string' && id) void resolve(bill.id, index, id);
-            }}>
-              <p className="text-xs text-muted-foreground">Bill shared {dateLabel(bill.date)} · {item.side === 'owed' ? 'I paid' : 'You paid'}</p>
-              <p className="text-sm"><strong>{item.description}</strong> · {dateLabel(item.date)} · {money(item.outstandingCents)}</p>
-              <label className="grid gap-1 text-sm">Matching ledger expense
-                <select name="candidate" required defaultValue="">
-                  <option value="">Choose an expense</option>
-                  {item.candidates!.map(c => {
-                    const entry = current.get(c.shareId)!;
-                    return <option key={c.shareId} value={c.shareId}>{entry.description} · {dateLabel(entry.date)} · {money(entry.outstandingCents)} open{entry.category ? ' · ' + entry.category : ''}</option>;
-                  })}
-                </select>
-              </label>
-              <div className="flex flex-wrap gap-2"><Button size="sm" type="submit">Confirm match</Button>
-                <Button size="sm" variant="ghost" type="button" onClick={() => resolve(bill.id, index, null)}>None of these</Button></div>
-            </form>)}
-          </details>
+        {question && <section className="review-section" aria-label="Older bill matches">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2>{question.item.candidates!.length === 1 ? 'Same purchase?' : 'Which expense was on this bill?'}</h2>
+            {pending.length > 1 && <small>{pending.length} to review</small>}
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">Possible repeats stay off your draft until you decide.</p>
+          <div className="mt-3 border-y py-3">
+            <p className="mb-1 text-xs text-muted-foreground">On the bill shared {dateLabel(question.bill.date)}</p>
+            <strong className="text-sm">{question.item.description}</strong>
+            <small className="block text-muted-foreground">{dateLabel(question.item.date)} · {money(question.item.outstandingCents)} on that bill</small>
+          </div>
+          <p className="mt-3 text-xs text-muted-foreground">In your expenses</p>
+          {purchaseChoices(question.bill.id, question.index, question.item.candidates!)}
         </section>}
         {decisions.length > 0 && <details className="review-section">
-          <summary>Review past decisions · {decisions.length}</summary>
-          {decisions.map(({ bill, item, index }) => <div key={bill.id + index} className="flex flex-wrap items-center justify-between gap-2 border-t py-2 text-sm">
-            <div><strong>{item.description}</strong> · {money(item.outstandingCents)}
-              <small className="block text-muted-foreground">Bill shared {dateLabel(bill.date)} · {item.skipped ? 'Marked as different' : 'Matched to ' + (current.get(item.source!.shareId)?.description ?? 'an earlier expense')}</small>
-            </div>
-            <Button type="button" size="sm" variant="outline" onClick={() => resolve(bill.id, index, 'reopen')}>Change decision</Button>
+          <summary>Past decisions · {decisions.length}</summary>
+          {decisions.map(({ bill, item, index }) => <div key={bill.id + index} className="border-t py-3 text-sm">
+            <small className="block text-muted-foreground">Bill shared {dateLabel(bill.date)}</small>
+            <strong>{item.description}</strong> · {dateLabel(item.date)} · {money(item.outstandingCents)}
+            {item.source ? <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+              <span>Same purchase as {current.get(item.source.shareId)?.description ?? 'a saved expense'}</span>
+              <Button size="sm" variant="outline" onClick={() => resolve(bill.id, index, null)}>Mark as different</Button>
+            </div> : <>
+              <p className="mt-1 text-muted-foreground">Marked as different</p>
+              {item.alternatives?.length ? purchaseChoices(bill.id, index, item.alternatives, true) :
+                <p className="text-xs text-muted-foreground">No similar expense is available.</p>}
+            </>}
           </div>)}
         </details>}
-        {matchMessage && <p role="status" className="text-sm">{matchMessage}</p>}
+        {matchMessage && <div className="flex items-center gap-3 text-sm">
+          <p role="status">{matchMessage}</p>
+          {undo && <Button size="sm" variant="outline" onClick={() => resolve(undo.billId, undo.index, 'reopen')}>Undo</Button>}
+        </div>}
         {previous && <section className="review-section">
           <label className="grid gap-2">Previous bill
             <select value={compareId} onChange={e => setCompareId(e.target.value)}>
@@ -177,7 +197,7 @@ export function ReviewEditor({ data: initialData, version: initialVersion, group
             </select>
           </label>
           <p className="mt-3 text-sm">{historic.length} items · Original total <strong>{signed(net(historic))}</strong></p>
-          {previous.items.some(i => i.recognized) && <p className="text-sm text-muted-foreground">{previous.items.filter(i => i.recognized).length} automatically matched to the ledger</p>}
+          {previous.items.some(i => i.recognized) && <p className="text-sm text-muted-foreground">{previous.items.filter(i => i.recognized).length} matched automatically to your expenses</p>}
           {previous.tracked && <div className="text-sm text-muted-foreground">
             {(['owed','owing'] as const).map(side => payment(side) > 0 && <p key={side}>{side === 'owed' ? 'Payments received' : 'Payments sent'} · {money(payment(side))}</p>)}
             {adjustment !== 0 && <p>Other balance changes · {money(adjustment)}</p>}
@@ -185,7 +205,7 @@ export function ReviewEditor({ data: initialData, version: initialVersion, group
           </div>}
           {closed.length > 0 && <details><summary>Settled items · {closed.length}</summary>{closed.map((p, i) => <p key={i} className="review-history-line">{p.description}<span>{money(p.outstandingCents)} → {money(0)}</span></p>)}</details>}
           {unknown.length > 0 && <details><summary>{previous.tracked ? 'Unavailable items' : 'Unmatched earlier entries'} · {unknown.length}</summary>
-            <p className="mb-2 text-xs text-muted-foreground">{previous.tracked ? 'These entries are no longer in the ledger.' : 'Review these earlier entries when choosing expenses for this bill.'}</p>
+            <p className="mb-2 text-xs text-muted-foreground">{previous.tracked ? 'These entries are no longer in your expenses.' : 'Review these earlier entries when choosing expenses for this bill.'}</p>
             {unknown.map((p, i) => <p key={i} className="review-history-line">{p.description}<small>{dateLabel(p.date)} · {p.side === 'owed' ? 'I paid' : 'You paid'} · {money(p.outstandingCents)}</small></p>)}
           </details>}
         </section>}
@@ -209,7 +229,7 @@ export function ReviewEditor({ data: initialData, version: initialVersion, group
           <p>Total <strong>{signed(snapshot.netCents)}</strong></p>
         </div></div>
         {selected.size > 0 && <details onToggle={e => setPreviewOpen(e.currentTarget.open)}><summary>Full preview · {selected.size} items</summary>{previewOpen && <SharedBill embedded snapshot={snapshot} billBase={billBase} note={demo ? demoSharingNote : undefined} />}</details>}
-        <Button className="mt-4 w-full" disabled={!selected.size || working || stale || billBase === null} onClick={publish}><Link2 />{working ? 'Creating…' : 'Create link'}</Button>
+        <Button className="mt-4 w-full" disabled={!selected.size || working || stale || billBase === null} onClick={publish}><Link2 />{busyAction === 'publish' ? 'Creating…' : 'Create link'}</Button>
         {!selected.size && open.length > 0 && <p className="mt-2 text-sm" role="status">Include at least one item to create a link.</p>}
         {error && <p role="alert" className="mt-2">{error} {stale && <Button variant="outline" onClick={() => window.location.reload()}>Refresh draft</Button>}</p>}
         <p className="mt-3 text-xs text-muted-foreground">{billBase === null ? 'Bill site unavailable.' : demo ? demoSharingNote : 'Recipients can view this bill on the separate bill site.'}</p>

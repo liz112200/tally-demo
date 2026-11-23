@@ -90,12 +90,18 @@ test('reviews an older receipt once and keeps its matched expenses out of new it
   await page.getByRole('button', { name: /Priya/, expanded: false }).click();
   await page.getByRole('link', { name: 'Create bill' }).click();
   const review = page.getByRole('region', { name: 'Older bill matches' });
-  await review.locator('summary').click();
-  const expense = review.getByLabel('Matching ledger expense').first();
-  const id = await expense.locator('option').nth(1).getAttribute('value');
-  await expense.selectOption(id!);
-  await review.getByRole('button', { name: 'Confirm match' }).first().click();
-  await expect(page.getByRole('status').filter({ hasText: 'Match saved' })).toBeVisible();
+  await expect(review.getByText('Card purchase')).toBeVisible();
+  await expect(review.getByRole('combobox')).toHaveCount(0);
+  const total = page.locator('.review-preview .bill-proof strong');
+  const initialTotal = await total.innerText();
+  const same = review.getByRole('button', { name: 'Same purchase', exact: true }).first();
+  await review.getByRole('button', { name: 'Different purchase', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Saved as different purchases' })).toBeVisible();
+  await expect(total).toHaveText(initialTotal);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(same).toBeVisible();
+  await same.click();
+  await expect(page.getByRole('status').filter({ hasText: 'Saved as the same purchase' })).toBeVisible();
   await page.reload();
   await expect(review).toHaveCount(0);
   const prior = page.locator('.review-section').filter({ has: page.getByRole('heading', { name: 'From the previous bill' }) });
@@ -103,19 +109,16 @@ test('reviews an older receipt once and keeps its matched expenses out of new it
   await expect(prior.getByRole('checkbox')).toHaveCount(2);
   await expect(prior.getByRole('checkbox').first()).not.toBeChecked();
   await expect(prior.getByRole('checkbox').last()).not.toBeChecked();
-  async function reopen() {
-    const decisions = page.locator('details').filter({ has: page.getByText(/^Review past decisions/) });
-    await decisions.locator('summary').click();
-    const entry = decisions.locator('div.border-t').filter({ hasText: 'Card purchase' });
-    await entry.getByRole('button', { name: 'Change decision' }).click();
-    await review.locator('summary').click();
-  }
-  await reopen();
-  await review.getByRole('button', { name: 'None of these' }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Marked as a different expense' })).toBeVisible();
+
+  const decisions = page.locator('details').filter({ has: page.getByText(/^Past decisions/) });
+  const entry = decisions.locator('div.border-t').filter({ hasText: 'Card purchase' });
+  await decisions.locator('summary').click();
+  await entry.getByRole('button', { name: 'Mark as different' }).click();
+  await expect(entry.getByText('Marked as different', { exact: true })).toBeVisible();
+  await expect(total).toHaveText(initialTotal);
   await page.reload();
-  await reopen();
-  await review.getByLabel('Matching ledger expense').selectOption(id!);
-  await review.getByRole('button', { name: 'Confirm match' }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Match saved' })).toBeVisible();
+  await decisions.locator('summary').click();
+  await entry.getByRole('button', { name: 'Same purchase' }).first().click();
+  await expect(entry.getByRole('button', { name: 'Mark as different' })).toBeVisible();
+  await expect(total).toHaveText(initialTotal);
 });
