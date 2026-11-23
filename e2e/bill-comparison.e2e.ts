@@ -18,7 +18,7 @@ test('review keeps the earlier balance optional and previews just the selected e
   const receipt = preview.locator('.shared-check');
   await expect(receipt.getByRole('heading', { name: 'New entries' })).toBeVisible();
   await expect(receipt.locator('.previous-bills')).toHaveCSS('border-top-style', 'dashed');
-  await expect(receipt.getByText('Payment received', { exact: true })).toBeVisible();
+  await expect(receipt.locator('dt').filter({ hasText: 'Payment from you' }).first()).toBeVisible();
   await expect(receipt.getByText('Item-specific payments')).toHaveCount(0);
   const previousHref = await receipt.getByRole('link', { name: 'View previous bill' }).getAttribute('href');
   expect(previousHref).toMatch(/^\/s\/[A-Za-z0-9_-]+$/);
@@ -49,6 +49,7 @@ test('a chosen partial payment survives publication and an earlier link can be t
   await openPerson();
   await page.getByRole('button', { name: /Pick shares/ }).click();
   const picker = page.getByRole('dialog');
+  await picker.locator('#alloc-date').fill('2025-04-03');
   const apply = picker.getByRole('textbox', { name: /^Apply to / }).all();
   let entered = false;
   for (const field of await apply) {
@@ -69,6 +70,8 @@ test('a chosen partial payment survives publication and an earlier link can be t
   await page.goto(current);
   const carry = page.locator('.previous-bills');
   await expect(carry.getByText('Item-specific payments', { exact:true })).toBeVisible();
+  await expect(carry.locator('time[datetime="2025-04-03"]').locator('..')).toHaveText('04/03Payment from you');
+  await expect(carry).not.toContainText('What I paid');
   await expect(carry).toContainText('$1.00 paid');
   await expect(carry.getByRole('link', { name:'View previous bill' }).first()).toHaveAttribute('href', previous);
 

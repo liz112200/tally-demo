@@ -1,10 +1,10 @@
 import 'server-only';
 import { createHash } from 'node:crypto';
-import { and, desc, eq, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, isNull, or } from 'drizzle-orm';
 import { db } from './index';
 import { persons, settlements, settlementAllocations as allocations, shareLinks } from './schema';
 import { getDebtShares, type Tx } from './queries';
-import type { BillReview, PriorItem } from '@/lib/bill-review';
+import type { BillReview, PriorItem, ReviewPayment } from '@/lib/bill-review';
 import type { ShareSnapshotLine } from '@/lib/bill-snapshot';
 import { shareStatus } from '@/lib/allocations';
 
@@ -12,11 +12,20 @@ export async function readBillReview(tx: Tx, personId: string) {
   const [person] = await tx.select({ name: persons.name, owner: persons.isOwner }).from(persons).where(eq(persons.id, personId));
   if (!person || person.owner) return null;
   const rows = await getDebtShares(tx, personId);
-  const paid = await tx.select({ id: allocations.splitShareId, cash: sql<number>`sum(${allocations.amountCents})`.mapWith(Number),
-    pickedCash: sql<number>`coalesce(sum(${allocations.amountCents}) filter (where ${allocations.picked}), 0)`.mapWith(Number) })
-    .from(allocations).innerJoin(settlements, eq(settlements.id, allocations.settlementId))
-    .where(and(eq(settlements.personId, personId), eq(settlements.isOffset, false))).groupBy(allocations.splitShareId);
-  const cash = new Map(paid.map(row => [row.id, row]));
+  const paid = await tx.select({
+    shareId: allocations.splitShareId, paymentId: settlements.id, amount: allocations.amountCents,
+    picked: allocations.picked, date: settlements.date, appliedAt: allocations.createdAt,
+  }).from(allocations).innerJoin(settlements, eq(settlements.id, allocations.settlementId))
+    .where(and(eq(settlements.personId, personId), eq(settlements.isOffset, false)))
+    .orderBy(asc(settlements.date), asc(settlements.id), asc(allocations.splitShareId));
+  const cash = new Map<string, { total: number; picked: number; payments: ReviewPayment[] }>();
+  for (const row of paid) {
+    const share = cash.get(row.shareId) ?? { total: 0, picked: 0, payments: [] };
+    share.total += row.amount;
+    if (row.picked) share.picked += row.amount;
+    share.payments.push({ id: row.paymentId, date: row.date, amount: row.amount, appliedAt: row.appliedAt.toISOString() });
+    cash.set(row.shareId, share);
+  }
   const bills = await tx.select({
     id: shareLinks.id, token: shareLinks.token, revoked: shareLinks.revokedAt, date: shareLinks.createdAt, sources: shareLinks.reviewSources,
     owed: shareLinks.lines, owing: shareLinks.owingLines,
@@ -26,7 +35,8 @@ export async function readBillReview(tx: Tx, personId: string) {
   const data: BillReview = {
     personId, name: person.name,
     items: rows.reverse().map(row => ({
-      shareId: row.shareId, cash: cash.get(row.shareId)?.cash ?? 0, pickedCash: cash.get(row.shareId)?.pickedCash ?? 0, allocated: row.allocatedCents,
+      shareId: row.shareId, payments: cash.get(row.shareId)?.payments ?? [],
+      cash: cash.get(row.shareId)?.total ?? 0, pickedCash: cash.get(row.shareId)?.picked ?? 0, allocated: row.allocatedCents,
       date: row.date, description: row.merchantLabel || row.description, category: row.categoryName,
       outstandingCents: shareStatus(row).outstandingCents, side: row.direction === 'incoming' ? 'owed' : 'owing',
     })),

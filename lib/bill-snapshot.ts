@@ -17,6 +17,7 @@ export type PreviousBalance = {
   previous: number;
   partialSource?: boolean;
   payments: number;
+  paymentDetails?: { date: string; amount: number }[];
   adjustments: number;
   omitted: number;
   included: number;

@@ -7,12 +7,14 @@ function monthDay(date: string): string {
   return m && d ? `${m}/${d}` : date;
 }
 
+function ReceiptDate({ date }: { date: string }) {
+  return <time dateTime={date} title={date} aria-label={date} className="w-11 shrink-0 font-mono text-xs text-muted-foreground">{monthDay(date)}</time>;
+}
+
 function LineRow({ line }: { line: ShareSnapshotLine }) {
   return (
     <li className="flex items-baseline gap-3 border-t py-2 text-sm first:border-t-0">
-      <span className="w-11 shrink-0 font-mono text-xs text-muted-foreground">
-        {monthDay(line.date)}
-      </span>
+      <ReceiptDate date={line.date} />
       <span className="min-w-0 flex-1 break-words">{line.description}
         {line.pickedPayment !== undefined && <small className="block text-xs text-muted-foreground">{formatUSD(toCents(line.pickedPayment))} paid toward this item</small>}
         {line.carried && <small className="block text-xs text-muted-foreground">
@@ -101,17 +103,32 @@ const sum = (lines: ShareSnapshotLine[]) => lines.reduce((total, line) => total 
 
 function PreviousBillBalance({ group }: { group: PreviousBalance }) {
   const { previous, payments, adjustments, omitted, included, assigned } = group;
+  const dated = group.paymentDetails ?? [];
+  const undated = payments - dated.reduce((total, entry) => total + entry.amount, 0);
+  const paymentLabel = group.side === 'owed' ? 'Payment from you' : 'Payment from me';
+
   return <section className="mb-4">
-    <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-      <h3 className="font-medium">{monthDay(group.date)} · {group.side === 'owed' ? guestCopy.coveredByMe : guestCopy.coveredByYou}</h3>
-      {group.token && <a className="text-xs underline underline-offset-2" href={'/s/' + encodeURIComponent(group.token)}>View previous bill</a>}
-    </div>
-    <dl className="space-y-1 text-sm">
-      <div className="flex justify-between gap-3"><dt>{group.partialSource ? 'Earlier entries' : 'Previous balance'}</dt><dd className="font-mono">{money(previous)}</dd></div>
-      {payments !== 0 && <div className="flex justify-between gap-3"><dt>{payments < 0 ? 'Payment reversed' : 'Payment received'}</dt><dd className="font-mono">{money(-payments)}</dd></div>}
-      {adjustments !== 0 && <div className="flex justify-between gap-3"><dt>Balance adjustments</dt><dd className="font-mono">{money(adjustments)}</dd></div>}
-      {omitted > 0 && <div className="flex justify-between gap-3"><dt>Left off this bill</dt><dd className="font-mono">{money(-omitted)}</dd></div>}
-      <div className="mt-2 flex justify-between gap-3 border-t pt-2 font-medium"><dt>Carried forward</dt><dd className="font-mono">{money(included)}</dd></div>
+    <dl className="text-sm">
+      <div className="flex items-baseline justify-between gap-3 py-2">
+        <dt className="flex min-w-0 items-baseline gap-3">
+          <ReceiptDate date={group.date} />
+          <span>{group.partialSource ? 'Earlier entries' : 'Previous balance'}
+            {group.token && <a className="mt-0.5 block text-xs text-muted-foreground underline underline-offset-2" href={'/s/' + encodeURIComponent(group.token)}>View previous bill</a>}
+          </span>
+        </dt>
+        <dd className="shrink-0 font-mono">{money(previous)}</dd>
+      </div>
+      {dated.map((payment, i) => <div key={i} className="flex items-baseline justify-between gap-3 border-t py-2">
+        <dt className="flex items-baseline gap-3"><ReceiptDate date={payment.date} />{paymentLabel}</dt>
+        <dd className="shrink-0 font-mono">{money(-payment.amount)}</dd>
+      </div>)}
+      {undated !== 0 && <div className="flex items-baseline justify-between gap-3 border-t py-2 pl-14">
+        <dt>{undated < 0 ? 'Payment reversed' : paymentLabel}<small className="block text-xs text-muted-foreground">Date unavailable</small></dt>
+        <dd className="shrink-0 font-mono">{money(-undated)}</dd>
+      </div>}
+      {adjustments !== 0 && <div className="flex justify-between gap-3 border-t py-2 pl-14"><dt>Balance adjustments</dt><dd className="font-mono">{money(adjustments)}</dd></div>}
+      {omitted > 0 && <div className="flex justify-between gap-3 border-t py-2 pl-14"><dt>Left off this bill</dt><dd className="font-mono">{money(-omitted)}</dd></div>}
+      <div className="flex justify-between gap-3 border-t pt-2 font-medium"><dt>Carried forward {group.side === 'owed' ? 'to me' : 'to you'}</dt><dd className="font-mono">{money(included)}</dd></div>
     </dl>
     {assigned.length > 0 && <div className="mt-3 text-sm">
       <h4 className="mb-1 text-xs font-medium text-muted-foreground">Item-specific payments</h4>

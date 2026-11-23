@@ -49,3 +49,25 @@ test('automatic payments reconcile the whole earlier balance, including fully cl
   expect(group()).toMatchObject({previous:300000, payments:90000, omitted:10000, included:200000});
   expect(group().assigned).toHaveLength(1);
 });
+
+test('dates receipts by the recorded payment day and counts a payment across expenses once', () => {
+  const prior = { ...item('hotel', 90000), cash: 10000, paymentIds: ['opening'] };
+  const dinner = item('dinner', 5000);
+  const receipt = (id: string, date: string, amount: number) =>
+    ({ id, date, amount, appliedAt: '2026-02-10T20:00:00.000Z' });
+  const data: BillReview = { personId: 'a', name: 'Alex', bills: [
+    { id: 'prior', date: '2026-02-01', tracked: true, items: [{ ...prior, source: prior }, { ...dinner, source: dinner }] },
+  ], items: [
+    { ...prior, outstandingCents: 75000, cash: 25000, payments: [
+      receipt('opening', '2026-01-25', 10000), receipt('shared', '2026-02-06', 8000), receipt('later', '2026-02-08', 7000),
+    ] },
+    { ...dinner, outstandingCents: 0, cash: 5000, payments: [receipt('shared', '2026-02-06', 5000)] },
+  ] };
+  const snapshot = () => composeBill(data, compareBills(data, 'prior'), new Set(['hotel']), 'classic', false, new Date()).snapshot;
+  expect(snapshot().previousBalances![0]).toMatchObject({ payments: 20000, paymentDetails: [
+    { date: '2026-02-06', amount: 13000 }, { date: '2026-02-08', amount: 7000 },
+  ] });
+  expect(JSON.stringify(snapshot())).not.toContain('"id"');
+  data.items[0].cash -= 1000;
+  expect(snapshot().previousBalances![0]).toMatchObject({ payments: 19000, paymentDetails: [{ date: '2026-02-06', amount: 5000 }] });
+});
