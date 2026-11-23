@@ -4,7 +4,8 @@ import type { BillDesign } from './bill-design';
 export type ReviewPayment = { id: string; date: string; amount: number; appliedAt: string };
 export type ReviewSource = { shareId: string; cash: number; pickedCash?: number; allocated: number; paymentIds?: string[] };
 export type ReviewItem = ReviewSource & ShareSnapshotLine & { side: 'owed' | 'owing'; payments?: ReviewPayment[] };
-export type PriorItem = ShareSnapshotLine & { side: ReviewItem['side']; source?: ReviewSource };
+export type StoredReviewSource = ReviewSource | { skipped: true } | null;
+export type PriorItem = ShareSnapshotLine & { side: ReviewItem['side']; source?: ReviewSource; skipped?: boolean; recognized?: boolean; candidates?: ReviewSource[] };
 export type PriorBill = { id: string; token?: string; date: string; items: PriorItem[]; tracked: boolean };
 export type BillReview = { personId: string; name: string; items: ReviewItem[]; bills: PriorBill[] };
 
@@ -21,8 +22,9 @@ export function compareBills(data: BillReview, billId: string) {
       }
     }
   }
+  const held = new Set(data.bills.flatMap(bill => bill.items.flatMap(line => (line.candidates ?? []).map(c => c.shareId))));
   const open = data.items.filter(item => item.outstandingCents > 0);
-  return { previous, current, known, open, fresh: open.filter(item => !known.has(item.shareId)) };
+  return { previous, current, known, open, held, fresh: open.filter(item => !known.has(item.shareId) && !held.has(item.shareId)) };
 }
 
 export function billLine(item: ReviewItem, prior?: { item: PriorItem; date: string }): ShareSnapshotLine {
@@ -62,7 +64,11 @@ function previousBalances(data: BillReview, comparison: ReturnType<typeof compar
       const dated = new Map<string, { date: string; amount: number }>();
       for (const line of bill.items) {
         const source = line.source;
-        if (line.side !== side || !source) continue;
+        if (line.side !== side) continue;
+        if (!source) {
+          group.partialSource = true;
+          continue;
+        }
         if (comparison.known.get(source.shareId)?.billId !== bill.id) {
           group.partialSource = true;
           continue;
@@ -104,7 +110,7 @@ export function composeBill(data: BillReview, comparison: ReturnType<typeof comp
   const sources: ReviewSource[] = [];
   for (const side of ['owed', 'owing'] as const) {
     for (const item of comparison.open) {
-      if (item.side !== side || !selected.has(item.shareId)) continue;
+      if (item.side !== side || !selected.has(item.shareId) || comparison.held.has(item.shareId)) continue;
       snapshot[side].push(billLine(item, comparison.known.get(item.shareId)));
       snapshot[side === 'owed' ? 'owedCents' : 'owingCents'] += item.outstandingCents;
       sources.push({ shareId: item.shareId, cash: item.cash, pickedCash: item.pickedCash ?? 0, allocated: item.allocated, paymentIds: item.payments?.map(payment => payment.id) });

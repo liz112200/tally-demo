@@ -602,7 +602,7 @@ export const shareLinks = pgTable('share_links', {
   // Owner-only comparison metadata. The public viewer reads display lines only.
   reviewPersonId: uuid('review_person_id'),
   previousBalances: jsonb('previous_balances').$type<import('../lib/bill-snapshot').PreviousBalance[]>(),
-  reviewSources: jsonb('review_sources').$type<import('../lib/bill-review').ReviewSource[]>(),
+  reviewSources: jsonb('review_sources').$type<import('../lib/bill-review').StoredReviewSource[]>(),
   id: uuid('id').primaryKey().defaultRandom(),
   // URL path segment. Random, not derived from any row id, so links cannot
   // be enumerated or guessed from a person id.

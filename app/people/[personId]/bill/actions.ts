@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { and, eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { requireUser } from '@/app/_lib/session';
+import { isDemoMode } from '@/lib/demo-mode';
 import { getBillLinkBase } from '@/app/_lib/bill-links';
 import { billHref } from '@/lib/share-summary';
 import { compareBills, composeBill } from '@/lib/bill-review';
@@ -50,5 +51,40 @@ export async function publishReviewedBill(input: unknown) {
     const [retry] = await existing();
     if (retry) return saved(retry.token);
     return { error: 'Couldn’t create the link. Your selection is still here.' };
+  }
+}
+
+const matchSchema = z.object({
+  personId: z.uuid(), billId: z.uuid(), line: z.int().nonnegative(),
+  shareId: z.uuid().nullable(), version: z.string().length(64),
+});
+
+export async function confirmOlderBillItem(input: unknown) {
+  await requireUser();
+  const parsed = matchSchema.safeParse(input);
+  if (!isDemoMode() || !parsed.success) return { error: 'This match is unavailable.' };
+  const { personId, billId, line, shareId, version } = parsed.data;
+  try {
+    return await db.transaction(async tx => {
+      const latest = await readBillReview(tx, personId);
+      const bill = latest?.data.bills.find(b => b.id === billId);
+      const candidates = bill?.items[line]?.candidates;
+      if (!latest || latest.version !== version || !bill || !candidates?.length) {
+        return { stale: true, error: 'The bill history changed. Refresh to review the latest matches.' };
+      }
+      const match = candidates.find(candidate => candidate.shareId === shareId);
+      if (shareId !== null && !match) return { error: 'Choose an expense from this list.' };
+      const sources = bill.items.map((item, i) => {
+        if (i === line) return match ?? { skipped: true as const };
+        return item.source ?? (item.skipped ? { skipped: true as const } : null);
+      });
+      // Owner-only metadata. Published amounts, line text and tokens stay frozen.
+      await tx.update(shareLinks).set({ reviewPersonId: personId, reviewSources: sources }).where(eq(shareLinks.id, billId));
+      const review = await readBillReview(tx, personId);
+      if (!review) throw new Error('Person unavailable');
+      return { review };
+    }, { isolationLevel: 'repeatable read' });
+  } catch {
+    return { stale: true, error: 'Couldn’t save this match. Refresh to try again.' };
   }
 }

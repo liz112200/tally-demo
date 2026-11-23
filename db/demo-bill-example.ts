@@ -33,4 +33,25 @@ export async function addDemoBillExample(connection: Pick<ReturnType<typeof driz
       at, person, jsonb_agg(jsonb_build_object('shareId',share,'cash',cash,'allocated',allocated) ORDER BY date DESC, share)
     FROM entries GROUP BY id, name, at, person ON CONFLICT (id) DO NOTHING
   `);
+  // A pre-tracking bill with one original label and one shorter receipt label.
+  await connection.execute(sql`
+    WITH expenses AS (
+      SELECT p.id AS person, p.name, t.date, ss.id,
+        COALESCE(NULLIF(t.merchant_normalized,''), t.description_raw) AS label,
+        ss.amount_cents - COALESCE((SELECT sum(a.amount_cents) FROM settlement_allocations a WHERE a.split_share_id=ss.id),0) AS due
+      FROM persons p JOIN split_shares ss ON ss.person_id=p.id
+      JOIN splits sp ON sp.id=ss.split_id JOIN persons payer ON payer.id=sp.payer_person_id AND payer.is_owner
+      JOIN transactions t ON t.id=sp.transaction_id AND t.deleted_at IS NULL
+      WHERE p.name='Priya' AND sp.created_at <= now()
+    ), examples AS (
+      SELECT *, row_number() OVER (ORDER BY date DESC,id) AS n FROM expenses WHERE due>0
+      ORDER BY date DESC,id LIMIT 2
+    )
+    INSERT INTO share_links (id,token,person_name,direction,total_cents,lines)
+    SELECT md5(person::text || 'older-bill-example')::uuid, ${randomBytes(12).toString('base64url')},
+      name,'they-owe-me',sum(due),jsonb_agg(jsonb_build_object(
+        'date',date,'description',CASE WHEN n=1 THEN label ELSE 'Card purchase' END,
+        'category',NULL,'outstandingCents',due) ORDER BY n)
+    FROM examples GROUP BY person,name HAVING count(*)=2 ON CONFLICT (id) DO NOTHING
+  `);
 }

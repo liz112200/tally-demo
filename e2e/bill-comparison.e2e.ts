@@ -84,3 +84,23 @@ test('a chosen partial payment survives publication and an earlier link can be t
   await expect(page.locator('.previous-bills')).toContainText('$1.00 paid');
   await expect(page.locator(`a[href="${previous}"]`)).toHaveCount(0);
 });
+
+test('reviews an older receipt once and keeps its matched expenses out of new items', async ({ page }) => {
+  await page.goto('/people');
+  await page.getByRole('button', { name: /Priya/, expanded: false }).click();
+  await page.getByRole('link', { name: 'Create bill' }).click();
+  const review = page.getByRole('region', { name: 'Older bill matches' });
+  await review.locator('summary').click();
+  const expense = review.getByLabel('Matching ledger expense').first();
+  const id = await expense.locator('option').nth(1).getAttribute('value');
+  await expense.selectOption(id!);
+  await review.getByRole('button', { name: 'Confirm match' }).first().click();
+  await expect(page.getByRole('status').filter({ hasText: 'Match saved' })).toBeVisible();
+  await page.reload();
+  await expect(review).toHaveCount(0);
+  const prior = page.locator('.review-section').filter({ has: page.getByRole('heading', { name: 'From the previous bill' }) });
+  await prior.getByText(/Compare items/).click();
+  await expect(prior.getByRole('checkbox')).toHaveCount(2);
+  await expect(prior.getByRole('checkbox').first()).not.toBeChecked();
+  await expect(prior.getByRole('checkbox').last()).not.toBeChecked();
+});

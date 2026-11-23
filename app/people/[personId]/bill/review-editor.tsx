@@ -10,7 +10,7 @@ import { billLine, compareBills, composeBill, type BillReview, type ReviewItem }
 import { formatUSD, toCents } from '@/lib/money';
 import { guestCheckBalance } from '@/lib/share-summary';
 import { SharedBill } from '@/share/app/_components/shared-bill';
-import { publishReviewedBill } from './actions';
+import { confirmOlderBillItem, publishReviewedBill } from './actions';
 
 const money = (n: number) => formatUSD(toCents(n));
 const dateLabel = (iso: string) => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
@@ -18,7 +18,9 @@ const sign = (i: {side: ReviewItem['side']}) => i.side === 'owed' ? 1 : -1;
 const net = (rows: {side: ReviewItem['side']; outstandingCents: number}[]) => rows.reduce((s, i) => s + sign(i) * i.outstandingCents, 0);
 const signed = (value: number) => guestCheckBalance(value) + ' ' + guestCopy.balance(value);
 
-export function ReviewEditor({ data, version, grouped, billBase, demo }: { data: BillReview; version: string; grouped: boolean; billBase: string | null; demo: boolean }) {
+export function ReviewEditor({ data: initialData, version: initialVersion, grouped, billBase, demo }: { data: BillReview; version: string; grouped: boolean; billBase: string | null; demo: boolean }) {
+  const [{ data, version }, setReview] = useState({ data: initialData, version: initialVersion });
+  const [matchMessage, setMatchMessage] = useState('');
   const [compareId, setCompareId] = useState(data.bills[0]?.id ?? '');
   const comparison = compareBills(data, compareId);
   const { previous, known, current, open, fresh } = comparison;
@@ -33,11 +35,28 @@ export function ReviewEditor({ data, version, grouped, billBase, demo }: { data:
   const request = useRef('');
   const [today] = useState(() => new Date());
   const { snapshot } = composeBill(data, comparison, selected, paper, grouped, today);
-  const carry = open.filter(i => known.get(i.shareId)?.billId === compareId);
-  const other = open.filter(i => known.has(i.shareId) && known.get(i.shareId)?.billId !== compareId);
+  const available = open.filter(i => !comparison.held.has(i.shareId));
+  const carry = available.filter(i => known.get(i.shareId)?.billId === compareId);
+  const other = available.filter(i => known.has(i.shareId) && known.get(i.shareId)?.billId !== compareId);
   const historic = previous?.items ?? [];
   const closed = historic.filter(i => i.source && current.get(i.source.shareId)?.outstandingCents === 0);
-  const unknown = historic.filter(i => !i.source || !current.has(i.source.shareId));
+  const unknown = historic.filter(i => !i.candidates?.length && (!i.source || !current.has(i.source.shareId)));
+  const pending = data.bills.flatMap(bill => bill.items.flatMap((item, index) =>
+    item.candidates?.length ? [{ bill, item, index }] : []));
+  async function resolve(billId: string, index: number, shareId: string | null) {
+    setWorking(true); setError(''); setMatchMessage('');
+    try {
+      const result = await confirmOlderBillItem({ personId: data.personId, billId, line: index, shareId, version });
+      if (!result.review) {
+        setError(result.error); setStale(Boolean(result.stale)); return;
+      }
+      const next = compareBills(result.review.data, compareId);
+      setSelected(before => new Set([...before].filter(id => !next.held.has(id) && (known.has(id) || !next.known.has(id)))));
+      setReview(result.review);
+      setMatchMessage(shareId ? 'Match saved. The earlier expense stays off this bill unless you include it.' : 'Marked as a different expense.');
+    } catch { setError('Couldn’t confirm the match. Try again.'); }
+    finally { setWorking(false); }
+  }
   const payment = (side: ReviewItem['side']) => historic.reduce((sum, p) => {
     const item = p.source && current.get(p.source.shareId);
     return sum + (item && p.source && item.side === side ? item.cash - p.source.cash : 0);
@@ -109,6 +128,32 @@ export function ReviewEditor({ data, version, grouped, billBase, demo }: { data:
     <div className="review-layout">
       <fieldset disabled={working} className="min-w-0 space-y-5">
         <h2>Review with {data.name}</h2>
+        {pending.length > 0 && <section className="review-section" aria-label="Older bill matches">
+          <h2>Check older bill matches</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Possible duplicates stay off this bill while you review them.</p>
+          <details><summary>Review {pending.length} possible {pending.length === 1 ? 'match' : 'matches'}</summary>
+            {pending.map(({ bill, item, index }) => <form key={bill.id + index} className="space-y-2 border-t py-3" onSubmit={e => {
+              e.preventDefault();
+              const id = new FormData(e.currentTarget).get('candidate');
+              if (typeof id === 'string' && id) void resolve(bill.id, index, id);
+            }}>
+              <p className="text-xs text-muted-foreground">Bill shared {dateLabel(bill.date)} · {item.side === 'owed' ? 'I paid' : 'You paid'}</p>
+              <p className="text-sm"><strong>{item.description}</strong> · {dateLabel(item.date)} · {money(item.outstandingCents)}</p>
+              <label className="grid gap-1 text-sm">Matching ledger expense
+                <select name="candidate" required defaultValue="">
+                  <option value="">Choose an expense</option>
+                  {item.candidates!.map(c => {
+                    const entry = current.get(c.shareId)!;
+                    return <option key={c.shareId} value={c.shareId}>{entry.description} · {dateLabel(entry.date)} · {money(entry.outstandingCents)} open{entry.category ? ' · ' + entry.category : ''}</option>;
+                  })}
+                </select>
+              </label>
+              <div className="flex flex-wrap gap-2"><Button size="sm" type="submit">Confirm match</Button>
+                <Button size="sm" variant="ghost" type="button" onClick={() => resolve(bill.id, index, null)}>None of these</Button></div>
+            </form>)}
+          </details>
+        </section>}
+        {matchMessage && <p role="status" className="text-sm">{matchMessage}</p>}
         {previous && <section className="review-section">
           <label className="grid gap-2">Previous bill
             <select value={compareId} onChange={e => setCompareId(e.target.value)}>
@@ -116,14 +161,15 @@ export function ReviewEditor({ data, version, grouped, billBase, demo }: { data:
             </select>
           </label>
           <p className="mt-3 text-sm">{historic.length} items · Original total <strong>{signed(net(historic))}</strong></p>
+          {previous.items.some(i => i.recognized) && <p className="text-sm text-muted-foreground">{previous.items.filter(i => i.recognized).length} automatically matched to the ledger</p>}
           {previous.tracked && <div className="text-sm text-muted-foreground">
             {(['owed','owing'] as const).map(side => payment(side) > 0 && <p key={side}>{side === 'owed' ? 'Payments received' : 'Payments sent'} · {money(payment(side))}</p>)}
             {adjustment !== 0 && <p>Other balance changes · {money(adjustment)}</p>}
             <p>Still open · {signed(net(carry))}</p>
           </div>}
           {closed.length > 0 && <details><summary>Settled items · {closed.length}</summary>{closed.map((p, i) => <p key={i} className="review-history-line">{p.description}<span>{money(p.outstandingCents)} → {money(0)}</span></p>)}</details>}
-          {unknown.length > 0 && <details><summary>{previous.tracked ? 'Unavailable items' : 'Compare older bill manually'} · {unknown.length}</summary>
-            <p className="mb-2 text-xs text-muted-foreground">{previous.tracked ? 'These entries are no longer in the ledger.' : 'This bill predates item tracking. Review these entries before choosing current items.'}</p>
+          {unknown.length > 0 && <details><summary>{previous.tracked ? 'Unavailable items' : 'Unmatched earlier entries'} · {unknown.length}</summary>
+            <p className="mb-2 text-xs text-muted-foreground">{previous.tracked ? 'These entries are no longer in the ledger.' : 'Review these earlier entries when choosing expenses for this bill.'}</p>
             {unknown.map((p, i) => <p key={i} className="review-history-line">{p.description}<small>{dateLabel(p.date)} · {p.side === 'owed' ? 'I paid' : 'You paid'} · {money(p.outstandingCents)}</small></p>)}
           </details>}
         </section>}

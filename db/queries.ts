@@ -1025,6 +1025,7 @@ export async function getAllPersons(): Promise<(PersonRow & { deleted: boolean }
 export type DebtShareRow = {
   shareId: string;
   splitId: string;
+  splitCreatedAt: Date;
   // The non-owner counterparty of the debt, regardless of direction.
   counterpartyId: string;
   counterpartyName: string;
@@ -1063,6 +1064,7 @@ export async function getDebtShares(connection: Tx | typeof db = db, personId?: 
     SELECT
       ss.id AS share_id,
       sp.id AS split_id,
+      sp.created_at AS split_created_at,
       (CASE WHEN sp.payer_person_id = o.id THEN ss.person_id ELSE sp.payer_person_id END) AS counterparty_id,
       cp.name AS counterparty_name,
       (cp.deleted_at IS NOT NULL) AS counterparty_deleted,
@@ -1102,6 +1104,7 @@ export async function getDebtShares(connection: Tx | typeof db = db, personId?: 
   return rows.map((r) => ({
     shareId: r.share_id as string,
     splitId: r.split_id as string,
+    splitCreatedAt: new Date(r.split_created_at as string),
     counterpartyId: r.counterparty_id as string,
     counterpartyName: r.counterparty_name as string,
     counterpartyDeleted: r.counterparty_deleted as boolean,
