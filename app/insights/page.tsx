@@ -1,3 +1,4 @@
+import { ownerToday } from '@/app/_lib/owner-day';
 import Link from 'next/link';
 import { SpendingReport } from '@/app/_components/spending-report';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
@@ -6,17 +7,6 @@ import { getInsightRows, getMyShareRows } from '@/db/queries';
 import { addMonths, isMonthKey, monthLabel } from '@/lib/insights';
 import { requireUser } from '@/app/_lib/session';
 
-// The month the dashboard anchors on when ?month= is absent: the owner's
-// calendar month (America/New_York), not UTC's, which flips early on
-// evenings at month boundaries. Transaction dates themselves are plain
-// YYYY-MM-DD strings, so this is the only timezone decision on the page.
-function currentDay(): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/New_York',
-  })
-    .format(new Date());
-}
-
 export default async function InsightsPage({
   searchParams,
 }: {
@@ -24,7 +14,7 @@ export default async function InsightsPage({
 }) {
   await requireUser();
   const params = await searchParams;
-  const today = currentDay();
+  const today = ownerToday();
   const thisMonth = today.slice(0, 7);
   const month =
     params.month && isMonthKey(params.month) ? params.month : thisMonth;

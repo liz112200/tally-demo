@@ -5,7 +5,6 @@ import { ChevronRight, HandCoins, ListChecks, Pencil, Trash2, UserRound } from '
 import { cn } from '@/lib/utils';
 import { Button, buttonVariants } from '@/components/ui/button';
 import Link from 'next/link';
-import { useIsDemo } from '@/app/_lib/use-demo';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toCents, formatUSD, formatCents } from '@/lib/money';
@@ -38,9 +37,7 @@ import { useTableState } from '@/app/_lib/use-table-state';
 import { SortBar } from '@/app/_components/sort-controls';
 import { ConfirmDialog } from '@/app/_components/confirm-dialog';
 import { ShareDetailDialog } from '@/app/_components/share-detail-dialog';
-import { ShareListButton } from '@/app/_components/share-list-button';
 import type { PersonShare } from '@/app/_lib/person-share';
-import type { ShareLine } from '@/lib/share-summary';
 import { useReportSuccess } from './page-result';
 
 // PersonShare lives in app/_lib/person-share.ts so the detail dialog can use
@@ -144,18 +141,6 @@ const SHARE_ACCESSORS: Record<string, (share: PersonShare) => unknown> = {
 
 function sortShares(list: PersonShare[], sort: SortState): PersonShare[] {
   return sortRows(list, SHARE_ACCESSORS[sort.sort], sort.dir);
-}
-
-// The share rows, as the plain-text summary wants them.
-function toShareLines(shares: PersonShare[]): ShareLine[] {
-  return shares.map((s) => ({
-    date: s.date,
-    // The shared text reads better with the normalized merchant than with
-    // the raw bank descriptor the on-screen row shows.
-    description: s.merchantLabel || s.description,
-    outstandingCents: s.outstandingCents,
-    category: s.category,
-  }));
 }
 
 const initialPersonState: PersonFormState = {};
@@ -890,7 +875,6 @@ function PersonLine({
   open: boolean;
   onToggle: () => void;
 }) {
-  const demo = useIsDemo();
   const displayName = person.deleted ? '(deleted person)' : person.name;
   const shareCount = person.incoming.length + person.outgoing.length;
   // One sort for both directions, so the two lists read consistently and the
@@ -899,16 +883,6 @@ function PersonLine({
     sort: SHARE_SORT.defaultSort,
     dir: SHARE_SORT.defaultDir,
   });
-  // Only outstanding rows are worth sending; settled ones are history.
-  const outstandingIncoming = sortShares(
-    person.incoming.filter((s) => s.status !== 'settled'),
-    sort,
-  );
-  const outstandingOutgoing = sortShares(
-    person.outgoing.filter((s) => s.status !== 'settled'),
-    sort,
-  );
-
   // The share picker, opened by "Pick shares…" and "Settle up" on the inline
   // form and by Edit on a settlement. The inline form remounts after a picker
   // save (formKey) so its fields clear.
@@ -1009,13 +983,7 @@ function PersonLine({
               ) : (
                 <span />
               )}
-              {demo ? <Link className={buttonVariants({ size: 'sm' })} href={`/people/${person.id}/bill${sort.sort === 'category' ? '?group=category' : ''}`}>Create bill</Link> : <ShareListButton
-                className="h-6 px-1.5 text-[11px]"
-                personName={person.deleted ? person.name : displayName}
-                owed={toShareLines(outstandingIncoming)}
-                owing={toShareLines(outstandingOutgoing)}
-                groupBy={sort.sort === 'category' ? 'category' : null}
-              />}
+              <Link className={buttonVariants({ size: 'sm' })} href={`/people/${person.id}/bill${sort.sort === 'category' ? '?group=category' : ''}`}>Create bill</Link>
             </div>
           )}
 

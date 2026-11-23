@@ -1,3 +1,4 @@
+import { billHref } from '../../../lib/share-summary';
 import { guestCopy } from '../../../lib/bill-design';
 import type { BillSnapshot, PreviousBalance, ShareSnapshotLine } from '../../../lib/bill-snapshot';
 import { formatPayableUSD as formatUSD, toCents } from '../../../lib/money';
@@ -101,7 +102,7 @@ function Section({
 const money = (n: number) => formatUSD(toCents(n));
 const sum = (lines: ShareSnapshotLine[]) => lines.reduce((total, line) => total + line.outstandingCents, 0);
 
-function PreviousBillBalance({ group }: { group: PreviousBalance }) {
+function PreviousBillBalance({ group, billBase }: { group: PreviousBalance; billBase: string | null }) {
   const { previous, payments, adjustments, omitted, included, assigned } = group;
   const dated = group.paymentDetails ?? [];
   const undated = payments - dated.reduce((total, entry) => total + entry.amount, 0);
@@ -113,7 +114,7 @@ function PreviousBillBalance({ group }: { group: PreviousBalance }) {
         <dt className="flex min-w-0 items-baseline gap-3">
           <ReceiptDate date={group.date} />
           <span>{group.partialSource ? 'Earlier entries' : 'Previous balance'}
-            {group.token && <a className="mt-0.5 block text-xs text-muted-foreground underline underline-offset-2" href={'/s/' + encodeURIComponent(group.token)}>View previous bill</a>}
+            {group.token && billBase !== null && <a className="mt-0.5 block text-xs text-muted-foreground underline underline-offset-2" href={billHref(billBase, group.token)} rel="noreferrer">View previous bill</a>}
           </span>
         </dt>
         <dd className="shrink-0 font-mono">{money(previous)}</dd>
@@ -140,7 +141,7 @@ function PreviousBillBalance({ group }: { group: PreviousBalance }) {
   </section>;
 }
 
-export function SharedBill({ snapshot, note, embedded = false }: { snapshot: BillSnapshot; note?: string; embedded?: boolean }) {
+export function SharedBill({ snapshot, billBase, note, embedded = false }: { snapshot: BillSnapshot; billBase: string | null; note?: string; embedded?: boolean }) {
   const { personName, owed, owing, owedCents, owingCents, netCents } = snapshot;
   const balances = snapshot.previousBalances ?? [];
   const hasPrevious = balances.length > 0;
@@ -194,7 +195,7 @@ export function SharedBill({ snapshot, note, embedded = false }: { snapshot: Bil
 
       {hasPrevious && <div className="previous-bills mt-5 pt-4">
         <h2 className="mb-3 font-medium">From earlier bills</h2>
-        {balances.map((group, index) => <PreviousBillBalance key={index} group={group} />)}
+        {balances.map((group, index) => <PreviousBillBalance key={index} group={group} billBase={billBase} />)}
       </div>}
       <p className="mt-5 text-xs text-muted-foreground">
         {note ?? 'Amounts are from the day this bill was shared.'}

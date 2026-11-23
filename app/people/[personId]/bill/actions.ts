@@ -4,7 +4,8 @@ import { z } from 'zod';
 import { and, eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { requireUser } from '@/app/_lib/session';
-import { isDemoMode } from '@/lib/demo-mode';
+import { getBillLinkBase } from '@/app/_lib/bill-links';
+import { billHref } from '@/lib/share-summary';
 import { compareBills, composeBill } from '@/lib/bill-review';
 import { billDesigns, type BillDesign } from '@/lib/bill-design';
 import { db } from '@/db';
@@ -21,13 +22,15 @@ const inputSchema = z.object({
 export async function publishReviewedBill(input: unknown) {
   await requireUser();
   const parsed = inputSchema.safeParse(input);
-  if (!isDemoMode() || !parsed.success) return { error: 'Choose between 1 and 1,000 open items.' };
+  if (!parsed.success) return { error: 'Choose between 1 and 1,000 open items.' };
+  const base = await getBillLinkBase();
+  if (base === null) return { error: 'Bill site unavailable.' };
   const draft = parsed.data;
   const existing = () => db.select({ token: shareLinks.token }).from(shareLinks)
     .where(and(eq(shareLinks.id, draft.requestId), eq(shareLinks.reviewPersonId, draft.personId))).limit(1);
   const saved = async (token: string) => {
     revalidatePath('/people/shared-bills');
-    return { href: '/s/' + token };
+    return { href: billHref(base, token) };
   };
   try {
     const [prior] = await existing();

@@ -1,3 +1,4 @@
+import { ownerToday } from '@/app/_lib/owner-day';
 import Link from 'next/link';
 import { History } from 'lucide-react';
 import { Suspense } from 'react';
@@ -171,7 +172,7 @@ export default async function PeoplePage() {
   const owedByOwner = rows.reduce((acc, r) => acc + Math.max(0, -r.netCents), 0);
   const debtorCount = rows.filter((r) => r.netCents > 0).length;
   const creditorCount = rows.filter((r) => r.netCents < 0).length;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = ownerToday();
 
   // Debt simplification over everyone shown. A suggestion only; hidden when
   // nothing is owed in either direction.

@@ -18,7 +18,7 @@ const sign = (i: {side: ReviewItem['side']}) => i.side === 'owed' ? 1 : -1;
 const net = (rows: {side: ReviewItem['side']; outstandingCents: number}[]) => rows.reduce((s, i) => s + sign(i) * i.outstandingCents, 0);
 const signed = (value: number) => guestCheckBalance(value) + ' ' + guestCopy.balance(value);
 
-export function ReviewEditor({ data, version, grouped }: { data: BillReview; version: string; grouped: boolean }) {
+export function ReviewEditor({ data, version, grouped, billBase, demo }: { data: BillReview; version: string; grouped: boolean; billBase: string | null; demo: boolean }) {
   const [compareId, setCompareId] = useState(data.bills[0]?.id ?? '');
   const comparison = compareBills(data, compareId);
   const { previous, known, current, open, fresh } = comparison;
@@ -146,11 +146,11 @@ export function ReviewEditor({ data, version, grouped }: { data: BillReview; ver
           })}
           <p>Total <strong>{signed(snapshot.netCents)}</strong></p>
         </div></div>
-        {selected.size > 0 && <details onToggle={e => setPreviewOpen(e.currentTarget.open)}><summary>Full preview · {selected.size} items</summary>{previewOpen && <SharedBill embedded snapshot={snapshot} note={demoSharingNote} />}</details>}
-        <Button className="mt-4 w-full" disabled={!selected.size || working || stale} onClick={publish}><Link2 />{working ? 'Creating…' : 'Create link'}</Button>
+        {selected.size > 0 && <details onToggle={e => setPreviewOpen(e.currentTarget.open)}><summary>Full preview · {selected.size} items</summary>{previewOpen && <SharedBill embedded snapshot={snapshot} billBase={billBase} note={demo ? demoSharingNote : undefined} />}</details>}
+        <Button className="mt-4 w-full" disabled={!selected.size || working || stale || billBase === null} onClick={publish}><Link2 />{working ? 'Creating…' : 'Create link'}</Button>
         {!selected.size && open.length > 0 && <p className="mt-2 text-sm" role="status">Include at least one item to create a link.</p>}
         {error && <p role="alert" className="mt-2">{error} {stale && <Button variant="outline" onClick={() => window.location.reload()}>Refresh draft</Button>}</p>}
-        <p className="mt-3 text-xs text-muted-foreground">{demoSharingNote}</p>
+        <p className="mt-3 text-xs text-muted-foreground">{billBase === null ? 'Bill site unavailable.' : demo ? demoSharingNote : 'Recipients can view this bill on the separate bill site.'}</p>
       </section>
     </div>
   </>;

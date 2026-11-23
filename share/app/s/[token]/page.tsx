@@ -20,5 +20,5 @@ export default async function SharedListPage({
   const snapshot = await getSnapshot(token);
   if (!snapshot) notFound();
 
-  return <SharedBill snapshot={snapshot} />;
+  return <SharedBill snapshot={snapshot} billBase="" />;
 }
