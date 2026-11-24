@@ -4,7 +4,6 @@ import { z } from 'zod';
 import { and, eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { requireUser } from '@/app/_lib/session';
-import { isDemoMode } from '@/lib/demo-mode';
 import { getBillLinkBase } from '@/app/_lib/bill-links';
 import { billHref } from '@/lib/share-summary';
 import { compareBills, composeBill } from '@/lib/bill-review';
@@ -62,7 +61,7 @@ const matchSchema = z.object({
 export async function confirmOlderBillItem(input: unknown) {
   await requireUser();
   const parsed = matchSchema.safeParse(input);
-  if (!isDemoMode() || !parsed.success) return { error: 'This match is unavailable.' };
+  if (!parsed.success) return { error: 'This match is unavailable.' };
   const { personId, billId, line, shareId, version } = parsed.data;
   try {
     return await db.transaction(async tx => {

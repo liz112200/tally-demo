@@ -7,14 +7,12 @@ import { getDebtShares, type Tx } from './queries';
 import type { BillReview, PriorItem, ReviewPayment } from '@/lib/bill-review';
 import type { ShareSnapshotLine } from '@/lib/bill-snapshot';
 import { matchOlderBill, type ShareHistory } from '@/lib/older-bill-matches';
-import { isDemoMode } from '@/lib/demo-mode';
 import { shareStatus } from '@/lib/allocations';
 
 export async function readBillReview(tx: Tx, personId: string) {
   const [person] = await tx.select({ name: persons.name, owner: persons.isOwner, createdAt: persons.createdAt }).from(persons).where(eq(persons.id, personId));
   if (!person || person.owner) return null;
   const rows = await getDebtShares(tx, personId);
-  const demo = isDemoMode();
   const history = new Map<string, ShareHistory>(rows.map(row => [row.shareId, {
     createdAt: row.splitCreatedAt.toISOString(), allocations: [],
   }]));
@@ -56,7 +54,7 @@ export async function readBillReview(tx: Tx, personId: string) {
       // Older receipts reviewed in the first demo stored only reconstructed
       // sources with payment IDs, or a skipped marker. Original tracked
       // receipts from before dated payments had neither.
-      const editable = demo && !bill.hasBalanceSnapshot && (!bill.sources || bill.sources.some(s =>
+      const editable = !bill.hasBalanceSnapshot && (!bill.sources || bill.sources.some(s =>
         s && ('paymentIds' in s || 'skipped' in s || 'reconsider' in s)));
       const items: PriorItem[] = [];
       for (const side of ['owed', 'owing'] as const) {
@@ -66,10 +64,10 @@ export async function readBillReview(tx: Tx, personId: string) {
             skipped: stored && 'skipped' in stored ? true : undefined });
         }
       }
-      return { id: bill.id, token: bill.revoked || (!demo && !bill.sources) ? undefined : bill.token, date: bill.date.toISOString(), tracked: items.every(line => Boolean(line.source)), items };
+      return { id: bill.id, token: bill.revoked ? undefined : bill.token, date: bill.date.toISOString(), tracked: items.every(line => Boolean(line.source)), items };
     }),
   };
-  if (demo) data.bills = data.bills.map(bill => {
+  data.bills = data.bills.map(bill => {
     if (bill.tracked) return bill;
     const matched = matchOlderBill(bill, data.items, history);
     // An earlier link discloses its entire receipt, including unresolved rows.

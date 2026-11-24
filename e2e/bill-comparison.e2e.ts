@@ -90,7 +90,7 @@ test('reviews an older receipt once and keeps its matched expenses out of new it
   await page.getByRole('button', { name: /Priya/, expanded: false }).click();
   await page.getByRole('link', { name: 'Create bill' }).click();
   const review = page.getByRole('region', { name: 'Older bill matches' });
-  await expect(review.getByText('Card purchase')).toBeVisible();
+  await expect(review.getByText('Shared expense')).toBeVisible();
   await expect(review.getByRole('combobox')).toHaveCount(0);
   const total = page.locator('.review-preview .bill-proof strong');
   const initialTotal = await total.innerText();
@@ -111,7 +111,7 @@ test('reviews an older receipt once and keeps its matched expenses out of new it
   await expect(prior.getByRole('checkbox').last()).not.toBeChecked();
 
   const decisions = page.locator('details').filter({ has: page.getByText(/^Past decisions/) });
-  const entry = decisions.locator('div.border-t').filter({ hasText: 'Card purchase' });
+  const entry = decisions.locator('div.border-t').filter({ hasText: 'Shared expense' });
   await decisions.locator('summary').click();
   await entry.getByRole('button', { name: 'Mark as different' }).click();
   await expect(entry.getByText('Marked as different', { exact: true })).toBeVisible();
