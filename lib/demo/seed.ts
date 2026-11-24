@@ -13,9 +13,7 @@
 //
 // Shape: about 90 days, three bank sources plus a few manual entries, at the
 // per-source volume, category mix, and split rate of a real ledger. Balances
-// are arranged so debt simplification visibly helps: the owner ends up even,
-// one creditor's balance exactly matches one debtor's, and settling person by
-// person takes more payments than the simplified set.
+// include one matching debtor and creditor so simplification saves payments.
 import { createRng, type Rng } from './rng';
 import {
   CATEGORY_NAMES,
@@ -779,10 +777,8 @@ export function buildDemoSeed(today: string, seed: number = DEMO_SEED): DemoSeed
     }
   }
 
-  // 6. Tune the last two external expenses so simplification has something
-  // to show: Sam ends up owed exactly what Alex owes (one direct transfer
-  // clears both) and Priya what Jordan and Morgan owe together (the owner
-  // drops out of the middle entirely).
+  // 6. Alex can pay Sam directly to clear both balances. The lake house
+  // has its own price, independent of what everyone else owes.
   const netOf = () =>
     new Map(
       computeBidirectionalBalances(
@@ -800,12 +796,11 @@ export function buildDemoSeed(today: string, seed: number = DEMO_SEED): DemoSeed
   const before = netOf();
   const net = (k: PersonKey) => before.get(personId[k]) ?? 0;
   const samTopUp = net('alex') + net('sam');
-  const priyaTopUp = net('jordan') + net('morgan') + net('priya');
-  if (net('alex') <= 0 || net('jordan') + net('morgan') <= 0 || samTopUp <= 0 || priyaTopUp <= 0) {
+  if (net('alex') <= 0 || samTopUp <= 0) {
     throw new Error('Seed balances cannot be arranged for simplification; adjust the seed');
   }
   external('sam', 6, 'Concert tickets for the three of us', samTopUp);
-  external('priya', 3, 'Lake house weekend', priyaTopUp);
+  external('priya', 3, 'Lake house weekend', 218_750);
 
   // 7. Statements: one import per source per period, rendered as the bank's
   // CSV and parsed back through the real importer path. Rows that would

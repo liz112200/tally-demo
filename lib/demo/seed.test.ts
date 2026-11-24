@@ -165,7 +165,9 @@ describe('buildDemoSeed', () => {
     for (let i = 0; i < 366; i += 3) {
       const day = new Date(start.getTime() + i * 86_400_000).toISOString().slice(0, 10);
       const s = buildDemoSeed(day);
-      const { view, byName } = derive(s);
+      const { view, byName, nets } = derive(s);
+      const ownerNet = [...nets.values()].reduce((total, amount) => total + amount, 0);
+      expect(ownerNet, day).not.toBe(0);
       expect(view.transfers.length, day).toBeLessThan(view.perPersonPayments.length);
       expect(byName('Casey'), day).toBe(0);
       expect(new Set(s.splits.map((x) => x.method)).size, day).toBe(4);
